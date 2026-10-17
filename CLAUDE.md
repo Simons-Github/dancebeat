@@ -96,6 +96,22 @@ das im Bericht ausdrücklich sagen statt es als getestet auszugeben.
 - Farben, Fonts und Animationskonstanten nur in `src/theme.ts`.
 - `bunfig.toml` blockt Paketversionen, die jünger als 24 h sind. Keine Ausnahmen eintragen.
 
+## Browser-Tests mit Playwright MCP
+
+Projektlokal in `.mcp.json` (Version fest), Konfiguration in `.claude/playwright-mcp.json`:
+headless Chromium, isoliertes Profil, Fake-Kamera (640×480) mit erteilter Kamera-Berechtigung.
+
+- Vorher `bun run dev` starten und `http://localhost:5173` öffnen. Nur localhost und 127.0.0.1
+  sind erlaubt; andere Origins blockiert der Browser (`ERR_BLOCKED_BY_CLIENT`). Für Etappe 2
+  `https://cdn.jsdelivr.net` und `https://storage.googleapis.com` in `network.allowedOrigins`
+  ergänzen. Die Sperre ist eine Schutzhilfe, keine Sicherheitsgrenze.
+- Jeden Screen in Hochformat 390×844 (Standard) und Querformat 844×390 (`browser_resize`)
+  prüfen, per Snapshot und bei Layoutfragen per Screenshot.
+- Nach jeder Navigation und Interaktion `browser_console_messages` lesen; Fehler und Warnungen
+  aus eigenem Code müssen vor dem Commit weg.
+- Ausgaben landen in `.playwright-mcp/` (ignoriert). Echte Kamera, Audio-Latenz und iOS bleiben
+  Gerätetests.
+
 ## Arbeitsweise
 
 - Neue Abhängigkeiten, große Refactorings und Löschungen nur nach Rückfrage, mit Begründung.

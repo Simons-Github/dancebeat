@@ -49,3 +49,6 @@ coverage
 
 # Personal Claude Code settings
 .claude/settings.local.json
+
+# Playwright MCP screenshots and traces
+.playwright-mcp/
