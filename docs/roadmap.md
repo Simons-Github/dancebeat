@@ -5,6 +5,22 @@ und einem eigenen Commit. Befundkennungen (K…, W…, N…) siehe [Offene Befun
 
 Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
+## Übersicht
+
+| Etappe                                       | Status | Empfohlenes Modell                                                    |
+| -------------------------------------------- | ------ | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | 🔜     | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ⏳     | Sonnet                                                                |
+| 3. Gameplay                                  | ⏳     | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ⏳     | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳     | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ⏳     | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ⏳     | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳     | Opus                                                                  |
+| 9. Typen und Lint                            | ✅     | –                                                                     |
+| 10. Spotify                                  | ⏳     | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳     | je nach Punkt                                                         |
+
 ## Erledigt: Grundlagen
 
 ✅ Umstieg auf reines Vite + TanStack Router (kein TanStack Start, normale `index.html`).
