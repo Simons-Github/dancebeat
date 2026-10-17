@@ -46,3 +46,6 @@ dist-ssr
 
 # Misc
 coverage
+
+# Personal Claude Code settings
+.claude/settings.local.json
