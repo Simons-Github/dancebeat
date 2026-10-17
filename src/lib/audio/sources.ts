@@ -53,7 +53,6 @@ class ElementSource implements AudioSource {
   }
   async load() {
     const url = await this.getUrl();
-    if (this.type === "url") this.el.crossOrigin = "anonymous";
     this.el.src = url;
     await new Promise<void>((res, rej) => {
       this.el.oncanplay = () => res();
@@ -61,7 +60,7 @@ class ElementSource implements AudioSource {
         rej(
           new Error(
             this.type === "url"
-              ? "Die Audio-URL konnte nicht geladen werden. Vermutlich blockiert der Server den Zugriff (CORS) oder die Datei existiert nicht."
+              ? "Die Audio-URL konnte nicht geladen werden. Prüfe den Link und ob die Datei öffentlich erreichbar ist."
               : "Die Audiodatei konnte nicht dekodiert werden. Bitte MP3, M4A, WAV oder OGG verwenden.",
           ),
         );
@@ -379,7 +378,7 @@ export function createSource(song: Song): AudioSource {
         song.playbackRate ?? 1,
       );
     case "url":
-      return new ElementSource("url", async () => s.url);
+      return new ElementSource("url", async () => s.url, song.playbackRate ?? 1);
     case "youtube":
       return new YouTubeSource(s.videoId);
     case "spotify":

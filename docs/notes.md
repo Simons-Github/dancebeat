@@ -3,8 +3,8 @@
 ## Stack und Build
 
 - React 19, TypeScript (strict, inkl. `noUncheckedIndexedAccess` – nicht lockern), Tailwind 4, shadcn/ui (new-york), Framer Motion.
-- TanStack Start im **SPA-Modus** (`vite.config.ts`): kein Server, kein Nitro. Der Build erzeugt `dist/client/_shell.html`.
-- Routing dateibasiert in `src/routes/` (`__root.tsx` ist die App-Hülle, `routeTree.gen.ts` wird generiert und nicht von Hand bearbeitet). Details: `src/routes/README.md`.
+- Reines Vite mit TanStack Router (`@tanstack/router-plugin`): kein Server. Einstieg `index.html` → `src/main.tsx`, Build nach `dist/`.
+- Routing dateibasiert in `src/routes/` (`__root.tsx` ist die App-Hülle, `routeTree.gen.ts` wird generiert und nicht von Hand bearbeitet). Konventionen: siehe unten.
 - Paketmanager: bun. `bunfig.toml` setzt eine 24h-Schutzfrist für neue Paketversionen; keine Ausnahmen eintragen.
 - Pfad-Alias `@` -> `src/` (tsconfig `paths`, in Vite über `resolve.tsconfigPaths`).
 

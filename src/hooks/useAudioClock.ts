@@ -8,6 +8,13 @@ export function useAudioClock(song: Song | null, latencyMs: number, volume: numb
   const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [error, setError] = useState("");
   const [ended, setEnded] = useState(false);
+  // Latest volume for the load/start callbacks, which are not re-created on volume changes.
+  const volumeRef = useRef(volume);
+  volumeRef.current = volume;
+
+  useEffect(() => {
+    src.current?.setVolume(volume);
+  }, [volume]);
 
   useEffect(() => {
     if (!song) return;
@@ -18,7 +25,7 @@ export function useAudioClock(song: Song | null, latencyMs: number, volume: numb
     if (song.source.type !== "spotify") {
       s.load()
         .then(() => {
-          s.setVolume(volume);
+          s.setVolume(volumeRef.current);
           setState("ready");
         })
         .catch((e) => {
@@ -34,10 +41,10 @@ export function useAudioClock(song: Song | null, latencyMs: number, volume: numb
   const start = useCallback(async () => {
     const s = src.current!;
     if (song?.source.type === "spotify") await s.load();
-    s.setVolume(volume);
+    s.setVolume(volumeRef.current);
     if (song?.startOffsetMs) s.seek(song.startOffsetMs);
     await s.play();
-  }, [song, volume]);
+  }, [song]);
 
   const timeMs = useCallback(
     () =>
