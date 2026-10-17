@@ -31,15 +31,27 @@ export const BONES: [number, number][] = [
   [26, 28],
 ];
 
-export const ANGLE_DEFS: Record<Exclude<AngleKey, "torsoLean">, [number, number, number]> = {
-  leftElbow: [11, 13, 15],
-  rightElbow: [12, 14, 16],
-  leftShoulder: [23, 11, 13],
-  rightShoulder: [24, 12, 14],
-  leftHip: [11, 23, 25],
-  rightHip: [12, 24, 26],
-  leftKnee: [23, 25, 27],
-  rightKnee: [24, 26, 28],
+/**
+ * Signed joint angles. Each angle is the rotation from a reference direction `ref` to a limb
+ * segment `seg` ([from, to] landmark indices), in degrees within (-180, 180]. The reference is
+ * either a segment or the torso axis (shoulder midpoint to hip midpoint).
+ * - Shoulder/hip: 0 = limb along the torso axis, positive = away from the body (abduction).
+ * - Elbow/knee: 0 = straight; the sign tells the bend direction, mirrored per side.
+ * Signs are anatomical: they follow the body's own left/right axis, not the screen, so a raw
+ * camera frame and its mirror image yield the same angles.
+ */
+export const ANGLE_SEGMENTS: Record<
+  Exclude<AngleKey, "torsoLean">,
+  { ref: [number, number] | "torso"; seg: [number, number]; side: 1 | -1 }
+> = {
+  leftShoulder: { ref: "torso", seg: [11, 13], side: 1 },
+  rightShoulder: { ref: "torso", seg: [12, 14], side: -1 },
+  leftElbow: { ref: [11, 13], seg: [13, 15], side: 1 },
+  rightElbow: { ref: [12, 14], seg: [14, 16], side: -1 },
+  leftHip: { ref: "torso", seg: [23, 25], side: 1 },
+  rightHip: { ref: "torso", seg: [24, 26], side: -1 },
+  leftKnee: { ref: [23, 25], seg: [25, 27], side: 1 },
+  rightKnee: { ref: [24, 26], seg: [26, 28], side: -1 },
 };
 
 export const ARM_KEYS: AngleKey[] = ["leftElbow", "rightElbow", "leftShoulder", "rightShoulder"];
@@ -48,13 +60,15 @@ export const LEG_KEYS: AngleKey[] = ["leftHip", "rightHip", "leftKnee", "rightKn
 const vis = (p?: Landmark) => (p ? (p.length > 2 ? (p[2] as number) : 1) : 0);
 export const isVisible = (p?: Landmark, min = 0.5) => !!p && vis(p) >= min;
 
-function angleAt(a: Landmark, b: Landmark, c: Landmark, aspect: number) {
-  const v1x = (a[0] - b[0]) * aspect,
-    v1y = a[1] - b[1],
-    v2x = (c[0] - b[0]) * aspect,
-    v2y = c[1] - b[1];
-  const d = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y) || 1;
-  return (Math.acos(Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / d))) * 180) / Math.PI;
+const DEG = 180 / Math.PI;
+
+/** Shortest signed difference a - b in degrees, in [-180, 180). */
+export const angleDiff = (a: number, b: number) => ((((a - b + 180) % 360) + 360) % 360) - 180;
+
+/** Interpolates along the shortest arc and returns a value in (-180, 180]. */
+export function lerpAngle(a: number, b: number, t: number) {
+  const r = a + angleDiff(b, a) * t;
+  return r > 180 ? r - 360 : r <= -180 ? r + 360 : r;
 }
 
 export interface AngleOptions {
@@ -72,24 +86,48 @@ export function computeAngles(lm: Landmark[], opts: AngleOptions = {}): Angles {
   const aspect = opts.aspect ?? 1;
   const minVis = opts.minVis ?? 0.5;
   const out: Angles = {};
-  for (const [k, [a, b, c]] of Object.entries(ANGLE_DEFS)) {
-    const pa = lm[a],
-      pb = lm[b],
-      pc = lm[c];
+  const pt = (i: number): [number, number] | null => {
+    const p = lm[i];
+    return p && isVisible(p, minVis) ? [p[0] * aspect, p[1]] : null;
+  };
+  const ls = pt(11),
+    rs = pt(12),
+    lh = pt(23),
+    rh = pt(24);
+  // Body orientation needs both shoulders; without it no signed angle is defined.
+  if (!ls || !rs) return out;
+  const sx = (ls[0] + rs[0]) / 2,
+    sy = (ls[1] + rs[1]) / 2;
+  // Torso "down" axis; image down when the hips are not visible.
+  const down: [number, number] =
+    lh && rh ? [(lh[0] + rh[0]) / 2 - sx, (lh[1] + rh[1]) / 2 - sy] : [0, 1];
+  const lateral: [number, number] = [ls[0] - rs[0], ls[1] - rs[1]];
+  const turn = down[0] * lateral[1] - down[1] * lateral[0];
+  if (turn === 0) return out;
+  const h = Math.sign(turn);
+
+  for (const [k, { ref, seg, side }] of Object.entries(ANGLE_SEGMENTS)) {
+    const s0 = pt(seg[0]),
+      s1 = pt(seg[1]);
     // Missing or low-visibility landmarks: the angle is unavailable and omitted.
-    if (pa && pb && pc && isVisible(pa, minVis) && isVisible(pb, minVis) && isVisible(pc, minVis))
-      out[k as AngleKey] = angleAt(pa, pb, pc, aspect);
+    if (!s0 || !s1) continue;
+    let rx = down[0],
+      ry = down[1];
+    if (ref !== "torso") {
+      const r0 = pt(ref[0]),
+        r1 = pt(ref[1]);
+      if (!r0 || !r1) continue;
+      rx = r1[0] - r0[0];
+      ry = r1[1] - r0[1];
+    }
+    const vx = s1[0] - s0[0],
+      vy = s1[1] - s0[1];
+    const a = Math.atan2(rx * vy - ry * vx, rx * vx + ry * vy) * DEG * h * side;
+    out[k as AngleKey] = a <= -180 ? a + 360 : a;
   }
-  const ls = lm[11],
-    rs = lm[12],
-    lh = lm[23],
-    rh = lm[24];
-  if (ls && rs && lh && rh && [ls, rs, lh, rh].every((p) => isVisible(p, minVis))) {
-    const sx = (ls[0] + rs[0]) / 2,
-      sy = (ls[1] + rs[1]) / 2;
-    const hx = (lh[0] + rh[0]) / 2,
-      hy = (lh[1] + rh[1]) / 2;
-    out.torsoLean = (Math.atan2((sx - hx) * aspect, hy - sy) * 180) / Math.PI;
+  if (lh && rh) {
+    // Positive = leaning toward the body's left side.
+    out.torsoLean = Math.atan2(-down[0], down[1]) * DEG * -h;
   }
   return out;
 }
@@ -149,7 +187,7 @@ export function frameAt(frames: Frame[], t: number): Frame | null {
   for (const key of Object.keys(a.angles) as AngleKey[]) {
     const va = a.angles[key],
       vb = b.angles[key];
-    if (va != null && vb != null) angles[key] = lerp(va, vb, e);
+    if (va != null && vb != null) angles[key] = lerpAngle(va, vb, e);
   }
   return { timeMs: t, landmarks, angles };
 }

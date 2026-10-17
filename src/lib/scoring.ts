@@ -1,5 +1,5 @@
 import type { AngleKey, Angles, Rating } from "./types";
-import { ARM_KEYS } from "./pose";
+import { ARM_KEYS, angleDiff } from "./pose";
 
 export type Difficulty = "leicht" | "normal" | "schwer";
 export const TOLERANCE: Record<Difficulty, number> = { leicht: 1.3, normal: 1, schwer: 0.8 };
@@ -18,7 +18,7 @@ export const MIN_COVERAGE = 0.5;
 const weightOf = (k: AngleKey) => (ARM_KEYS.includes(k) ? 2 : k === "torsoLean" ? 0.5 : 1);
 
 /**
- * Gewichtete mittlere Abweichung in Grad. Arme zählen doppelt, Rumpfneigung halb.
+ * Gewichtete mittlere Abweichung in Grad (kürzester Bogen). Arme zählen doppelt, Rumpfneigung halb.
  * null = nicht bewertbar: weniger als MIN_COVERAGE des Zielgewichts sichtbar oder kein Armwinkel.
  */
 export function angleDeviation(player: Angles, target: Angles): number | null {
@@ -33,7 +33,7 @@ export function angleDeviation(player: Angles, target: Angles): number | null {
     total += weight;
     const p = player[k];
     if (p == null) continue;
-    sum += Math.abs(p - t) * weight;
+    sum += Math.abs(angleDiff(p, t)) * weight;
     w += weight;
     if (ARM_KEYS.includes(k)) arm = true;
   }
