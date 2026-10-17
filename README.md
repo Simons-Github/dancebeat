@@ -42,12 +42,15 @@ src/
   routes/       Seiten (TanStack Router, dateibasiert; __root.tsx = App-Hülle)
   components/   UI-Bausteine (components/ui = shadcn/ui)
   hooks/        usePoseTracking, useScoring, useAudioClock, useSongLibrary
-  lib/          Pose-Mathematik, Beat, Scoring, MediaPipe, Audio-Quellen, IndexedDB
+  lib/          Pose-Mathematik, Beat, Scoring, MediaPipe, Audio-Quellen, Bibliothek (SongRepository)
   data/         Demo-Choreografie
   test/         Tests
 docs/
-  spec.md       Ursprüngliche Projektbeschreibung
-  notes.md      Entwicklungsnotizen und bekannte Punkte
+  architecture.md         Schichten, Datenfluss, Speicher, externe Abrufe
+  choreography-format.md  Datenformat und Winkel-Konvention
+  scoring.md              Bewertung
+  design.md               Visueller Stil
+  roadmap.md              Etappen und Status
 ```
 
 ## Stack
