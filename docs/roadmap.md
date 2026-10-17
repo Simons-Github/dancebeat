@@ -12,7 +12,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 K3 Mindestabdeckung beim Scoring.
 ✅ W1 vorzeichenbehaftete Winkel, kürzester Bogen · W2 `mirrorChoreo`.
 ✅ Choreografie-Format v1 mit zod, `SongRepository`, IndexedDB-Migration, Export/Import-Logik,
-Speicher-Helfer (W11 teilweise).
+Speicher-Helfer (W11 teilweise), Repository-Tests mit `fake-indexeddb`.
 ✅ SDK-Typen, Lint sauber · Quick Fixes (URL ohne CORS-Zwang, Lautstärke live, W8 teilweise) ·
 Combo-Regel (OK hält, X bricht).
 
@@ -150,6 +150,5 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen              | 11     |
 | N3  | `seedDemos` vertraut nur dem localStorage-Marker                          | 11     |
 | N4  | `AudioContext` der Soundeffekte wird nicht per `resume()` entsperrt (iOS) | 11     |
-| N5  | Dauerhafte Repository-Tests brauchen `fake-indexeddb` (Freigabe offen)    | 11     |
 | N6  | `@tanstack/react-query` bisher ungenutzt                                  | 11     |
 | N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert        | 11     |
