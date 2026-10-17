@@ -25,15 +25,15 @@ Dann am Handy `https://<LAN-IP-des-Rechners>:5173` öffnen und die Zertifikatswa
 
 ## Befehle
 
-| Befehl              | Zweck                                                                    |
-| ------------------- | ------------------------------------------------------------------------ |
-| `bun run dev`       | Dev-Server (HTTP)                                                        |
-| `bun run dev:https` | Dev-Server mit HTTPS                                                     |
-| `bun run build`     | Produktions-Build nach `dist/` (SPA, Einstieg `dist/client/_shell.html`) |
-| `bun run preview`   | Build lokal ansehen                                                      |
-| `bun run typecheck` | TypeScript-Prüfung                                                       |
-| `bun run lint`      | ESLint                                                                   |
-| `bun run test`      | Vitest                                                                   |
+| Befehl              | Zweck                                                            |
+| ------------------- | ---------------------------------------------------------------- |
+| `bun run dev`       | Dev-Server (HTTP)                                                |
+| `bun run dev:https` | Dev-Server mit HTTPS                                             |
+| `bun run build`     | Produktions-Build nach `dist/` (SPA, Einstieg `dist/index.html`) |
+| `bun run preview`   | Build lokal ansehen                                              |
+| `bun run typecheck` | TypeScript-Prüfung                                               |
+| `bun run lint`      | ESLint                                                           |
+| `bun run test`      | Vitest                                                           |
 
 ## Struktur
 
@@ -52,4 +52,4 @@ docs/
 
 ## Stack
 
-React 19, TypeScript (strict), Vite, TanStack Start (SPA-Modus), Tailwind 4, shadcn/ui, Framer Motion, MediaPipe Pose Landmarker.
+React 19, TypeScript (strict), Vite, TanStack Router (SPA), Tailwind 4, shadcn/ui, Framer Motion, MediaPipe Pose Landmarker.
