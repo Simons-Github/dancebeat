@@ -48,17 +48,29 @@ export const LEG_KEYS: AngleKey[] = ["leftHip", "rightHip", "leftKnee", "rightKn
 const vis = (p?: Landmark) => (p ? (p.length > 2 ? (p[2] as number) : 1) : 0);
 export const isVisible = (p?: Landmark, min = 0.5) => !!p && vis(p) >= min;
 
-function angleAt(a: Landmark, b: Landmark, c: Landmark) {
-  const v1x = a[0] - b[0],
+function angleAt(a: Landmark, b: Landmark, c: Landmark, aspect: number) {
+  const v1x = (a[0] - b[0]) * aspect,
     v1y = a[1] - b[1],
-    v2x = c[0] - b[0],
+    v2x = (c[0] - b[0]) * aspect,
     v2y = c[1] - b[1];
   const d = Math.hypot(v1x, v1y) * Math.hypot(v2x, v2y) || 1;
   return (Math.acos(Math.max(-1, Math.min(1, (v1x * v2x + v1y * v2y) / d))) * 180) / Math.PI;
 }
 
+export interface AngleOptions {
+  /**
+   * Source image width / height. Landmarks are normalized per axis (x by width, y by height),
+   * so x must be stretched by this factor before measuring angles. Choreography landmarks
+   * are stored in square space (aspect 1).
+   */
+  aspect?: number;
+  minVis?: number;
+}
+
 /** Winkel sind skaleninvariant: Abstand zur Kamera spielt keine Rolle. Unsichtbare Gelenke fehlen. */
-export function computeAngles(lm: Landmark[], minVis = 0.5): Angles {
+export function computeAngles(lm: Landmark[], opts: AngleOptions = {}): Angles {
+  const aspect = opts.aspect ?? 1;
+  const minVis = opts.minVis ?? 0.5;
   const out: Angles = {};
   for (const [k, [a, b, c]] of Object.entries(ANGLE_DEFS)) {
     const pa = lm[a],
@@ -66,7 +78,7 @@ export function computeAngles(lm: Landmark[], minVis = 0.5): Angles {
       pc = lm[c];
     // Missing or low-visibility landmarks: the angle is unavailable and omitted.
     if (pa && pb && pc && isVisible(pa, minVis) && isVisible(pb, minVis) && isVisible(pc, minVis))
-      out[k as AngleKey] = angleAt(pa, pb, pc);
+      out[k as AngleKey] = angleAt(pa, pb, pc, aspect);
   }
   const ls = lm[11],
     rs = lm[12],
@@ -77,7 +89,7 @@ export function computeAngles(lm: Landmark[], minVis = 0.5): Angles {
       sy = (ls[1] + rs[1]) / 2;
     const hx = (lh[0] + rh[0]) / 2,
       hy = (lh[1] + rh[1]) / 2;
-    out.torsoLean = (Math.atan2(sx - hx, hy - sy) * 180) / Math.PI;
+    out.torsoLean = (Math.atan2((sx - hx) * aspect, hy - sy) * 180) / Math.PI;
   }
   return out;
 }

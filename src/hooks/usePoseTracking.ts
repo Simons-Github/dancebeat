@@ -1,60 +1,88 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 import { createPoseLandmarker } from "@/lib/mediapipe";
 import type { Landmark } from "@/lib/types";
 
 export type PoseStatus = "idle" | "loading" | "ready" | "denied" | "nocamera" | "error";
 
+/** Latest detection: normalized landmarks plus the video aspect (width / height) they refer to. */
+export interface PoseFrame {
+  landmarks: Landmark[];
+  aspect: number;
+}
+
+const stopStream = (s: MediaStream | null) => s?.getTracks().forEach((t) => t.stop());
+
 /** Frontkamera + MediaPipe Pose (VIDEO-Modus, ~30 FPS). Alles lokal. */
 export function usePoseTracking(opts: { cameraId?: string; enabled: boolean }) {
   const videoRef = useRef<HTMLVideoElement>(null);
-  const landmarksRef = useRef<Landmark[] | null>(null);
+  const poseRef = useRef<PoseFrame | null>(null);
   const [status, setStatus] = useState<PoseStatus>("idle");
   const [error, setError] = useState<string>("");
   const [lowLight, setLowLight] = useState(false);
   const [tick, setTick] = useState(0);
-  const lmRef = useRef<PoseLandmarker | null>(null);
-
-  const start = useCallback(async () => {
-    setStatus("loading");
-    let stream: MediaStream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({
-        video: opts.cameraId
-          ? { deviceId: { exact: opts.cameraId } }
-          : { facingMode: "user", width: { ideal: 960 }, height: { ideal: 720 } },
-        audio: false,
-      });
-    } catch (e: any) {
-      if (e?.name === "NotAllowedError") {
-        setStatus("denied");
-        setError(
-          "Kamera-Zugriff verweigert. Erlaube die Kamera in den Browser-Einstellungen oder nutze den Bewegungsmodus.",
-        );
-      } else {
-        setStatus("nocamera");
-        setError("Keine Kamera gefunden.");
-      }
-      return;
-    }
-    const v = videoRef.current!;
-    v.srcObject = stream;
-    await v.play().catch(() => {});
-    try {
-      lmRef.current = await createPoseLandmarker({ mode: "VIDEO", model: "full" });
-    } catch {
-      setStatus("error");
-      setError(
-        "Die Posen-Erkennung konnte nicht geladen werden. Prüfe deine Internetverbindung beim ersten Start.",
-      );
-      return;
-    }
-    setStatus("ready");
-  }, [opts.cameraId]);
+  const { cameraId, enabled } = opts;
 
   useEffect(() => {
-    if (!opts.enabled) return;
-    start();
+    if (!enabled) return;
+    const video = videoRef.current;
+    // Every await below may finish after cleanup (StrictMode remount, camera switch, disable):
+    // `cancelled` makes late results release themselves instead of leaking.
+    let cancelled = false;
+    let stream: MediaStream | null = null;
+    let landmarker: PoseLandmarker | null = null;
+
+    const init = async () => {
+      setStatus("loading");
+      try {
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: cameraId
+            ? { deviceId: { exact: cameraId } }
+            : { facingMode: "user", width: { ideal: 960 }, height: { ideal: 720 } },
+          audio: false,
+        });
+      } catch (e: unknown) {
+        if (cancelled) return;
+        if (e instanceof DOMException && e.name === "NotAllowedError") {
+          setStatus("denied");
+          setError(
+            "Kamera-Zugriff verweigert. Erlaube die Kamera in den Browser-Einstellungen oder nutze den Bewegungsmodus.",
+          );
+        } else {
+          setStatus("nocamera");
+          setError("Keine Kamera gefunden.");
+        }
+        return;
+      }
+      if (cancelled || !video) {
+        stopStream(stream);
+        stream = null;
+        return;
+      }
+      video.srcObject = stream;
+      await video.play().catch(() => {});
+      if (cancelled) return;
+
+      let lm: PoseLandmarker;
+      try {
+        lm = await createPoseLandmarker({ mode: "VIDEO", model: "full" });
+      } catch {
+        if (cancelled) return;
+        setStatus("error");
+        setError(
+          "Die Posen-Erkennung konnte nicht geladen werden. Prüfe deine Internetverbindung beim ersten Start.",
+        );
+        return;
+      }
+      if (cancelled) {
+        lm.close();
+        return;
+      }
+      landmarker = lm;
+      setStatus("ready");
+    };
+    void init();
+
     let raf = 0,
       last = 0,
       lightCheck = 0;
@@ -64,21 +92,23 @@ export function usePoseTracking(opts: { cameraId?: string; enabled: boolean }) {
     const cctx = canvas.getContext("2d", { willReadFrequently: true });
     const loop = (now: number) => {
       raf = requestAnimationFrame(loop);
-      const v = videoRef.current,
-        lm = lmRef.current;
-      if (!v || !lm || v.readyState < 2 || now - last < 33) return;
+      const lm = landmarker;
+      if (!video || !lm || video.readyState < 2 || now - last < 33) return;
       last = now;
       try {
-        const r = lm.detectForVideo(v, now);
+        const r = lm.detectForVideo(video, now);
         const p = r.landmarks[0];
-        landmarksRef.current = p ? p.map((q) => [q.x, q.y, q.visibility ?? 1] as Landmark) : null;
+        const aspect = video.videoHeight ? video.videoWidth / video.videoHeight : 1;
+        poseRef.current = p
+          ? { landmarks: p.map((q) => [q.x, q.y, q.visibility ?? 1] as Landmark), aspect }
+          : null;
         setTick((t) => (t + 1) % 1e6);
       } catch {
         /* Frame überspringen */
       }
       if (now - lightCheck > 2000 && cctx) {
         lightCheck = now;
-        cctx.drawImage(v, 0, 0, 16, 12);
+        cctx.drawImage(video, 0, 0, 16, 12);
         const d = cctx.getImageData(0, 0, 16, 12).data;
         let s = 0;
         for (let i = 0; i < d.length; i += 4) {
@@ -91,13 +121,18 @@ export function usePoseTracking(opts: { cameraId?: string; enabled: boolean }) {
       }
     };
     raf = requestAnimationFrame(loop);
-    return () => {
-      cancelAnimationFrame(raf);
-      (videoRef.current?.srcObject as MediaStream | null)?.getTracks().forEach((t) => t.stop());
-      lmRef.current?.close();
-      lmRef.current = null;
-    };
-  }, [opts.enabled, start]);
 
-  return { videoRef, landmarksRef, status, error, lowLight, tick };
+    return () => {
+      cancelled = true;
+      cancelAnimationFrame(raf);
+      stopStream(stream);
+      stream = null;
+      if (video) video.srcObject = null;
+      landmarker?.close();
+      landmarker = null;
+      poseRef.current = null;
+    };
+  }, [enabled, cameraId]);
+
+  return { videoRef, poseRef, status, error, lowLight, tick };
 }

@@ -26,3 +26,37 @@ describe("Bewertung", () => {
     expect(angleDeviation({ leftElbow: 30, leftKnee: 0 }, { leftElbow: 0, leftKnee: 0 })).toBe(20);
   });
 });
+
+describe("Mindestabdeckung", () => {
+  const target = {
+    leftElbow: 90,
+    rightElbow: 90,
+    leftShoulder: 90,
+    rightShoulder: 90,
+    leftHip: 170,
+    rightHip: 170,
+    leftKnee: 175,
+    rightKnee: 175,
+    torsoLean: 0,
+  };
+
+  it("nur Rumpfneigung sichtbar: nicht bewertbar (X statt PERFECT)", () => {
+    expect(angleDeviation({ torsoLean: 0 }, target)).toBeNull();
+    expect(judge(angleDeviation({ torsoLean: 0 }, target))).toBe("X");
+  });
+
+  it("nur Beine sichtbar: kein Armwinkel, nicht bewertbar", () => {
+    expect(
+      angleDeviation({ leftHip: 170, rightHip: 170, leftKnee: 175, rightKnee: 175 }, target),
+    ).toBeNull();
+  });
+
+  it("ein Arm reicht nicht unter 50 % des Zielgewichts", () => {
+    expect(angleDeviation({ leftElbow: 90, leftShoulder: 90 }, target)).toBeNull();
+  });
+
+  it("Beine fehlen, Arme sichtbar: wird bewertet", () => {
+    const arms = { leftElbow: 90, rightElbow: 90, leftShoulder: 90, rightShoulder: 90 };
+    expect(angleDeviation(arms, target)).toBe(0);
+  });
+});

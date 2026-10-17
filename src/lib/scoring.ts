@@ -12,19 +12,33 @@ export const POINTS: Record<Rating, number> = {
 };
 export const GOLD_FACTOR = 5;
 
-/** Gewichtete mittlere Abweichung in Grad. Arme zählen doppelt. null = nichts vergleichbar. */
+/** Minimum share of the target's total weight that must be visible on the player. */
+export const MIN_COVERAGE = 0.5;
+
+const weightOf = (k: AngleKey) => (ARM_KEYS.includes(k) ? 2 : k === "torsoLean" ? 0.5 : 1);
+
+/**
+ * Gewichtete mittlere Abweichung in Grad. Arme zählen doppelt, Rumpfneigung halb.
+ * null = nicht bewertbar: weniger als MIN_COVERAGE des Zielgewichts sichtbar oder kein Armwinkel.
+ */
 export function angleDeviation(player: Angles, target: Angles): number | null {
   let sum = 0,
-    w = 0;
+    w = 0,
+    total = 0,
+    arm = false;
   for (const k of Object.keys(target) as AngleKey[]) {
-    const p = player[k],
-      t = target[k];
-    if (p == null || t == null) continue;
-    const weight = ARM_KEYS.includes(k) ? 2 : k === "torsoLean" ? 0.5 : 1;
+    const t = target[k];
+    if (t == null) continue;
+    const weight = weightOf(k);
+    total += weight;
+    const p = player[k];
+    if (p == null) continue;
     sum += Math.abs(p - t) * weight;
     w += weight;
+    if (ARM_KEYS.includes(k)) arm = true;
   }
-  return w ? sum / w : null;
+  if (!w || !arm || w < total * MIN_COVERAGE) return null;
+  return sum / w;
 }
 
 export function judge(deviation: number | null, difficulty: Difficulty = "normal"): Rating {
