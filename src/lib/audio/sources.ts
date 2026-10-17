@@ -103,12 +103,12 @@ class ElementSource implements AudioSource {
 }
 
 // ---------- YouTube ----------
+// SDK types come from @types/youtube and @types/spotify-web-playback-sdk (which also declares
+// window.Spotify). The YouTube global is only present after the IFrame API script loaded.
 declare global {
   interface Window {
-    YT?: any;
+    YT?: typeof YT;
     onYouTubeIframeAPIReady?: () => void;
-    Spotify?: any;
-    onSpotifyWebPlaybackSDKReady?: () => void;
   }
 }
 let ytReady: Promise<void> | null = null;
@@ -132,7 +132,7 @@ export function parseYouTubeId(input: string) {
 class YouTubeSource implements AudioSource {
   type = "youtube";
   lowPrecision = true;
-  private player: any;
+  private player: YT.Player | null = null;
   private clock = new SmoothClock();
   private poll = 0;
   private resync = 0;
@@ -148,12 +148,16 @@ class YouTubeSource implements AudioSource {
   }
   async load() {
     await loadYT();
+    const api = window.YT;
+    const el = this.host.firstChild;
+    if (!api || !(el instanceof HTMLElement))
+      throw new Error("YouTube konnte nicht geladen werden.");
     await new Promise<void>((res, rej) => {
       const t = setTimeout(
         () => rej(new Error("YouTube-Video lädt nicht. Prüfe Link und Verbindung.")),
         15000,
       );
-      this.player = new window.YT.Player(this.host.firstChild, {
+      this.player = new api.Player(el, {
         videoId: this.videoId,
         width: 2,
         height: 2,
@@ -163,36 +167,40 @@ class YouTubeSource implements AudioSource {
             clearTimeout(t);
             res();
           },
-          onError: (e: any) => {
+          onError: (e: YT.OnErrorEvent) => {
             clearTimeout(t);
             rej(
               new Error(
-                e.data === 101 || e.data === 150
+                e.data === api.PlayerError.EmbeddingNotAllowed ||
+                  e.data === api.PlayerError.EmbeddingNotAllowed2
                   ? "Dieses Video darf nicht eingebettet werden."
                   : "YouTube-Video nicht verfügbar.",
               ),
             );
           },
-          onStateChange: (e: any) => {
-            if (e.data === 0) this.endedCb();
+          onStateChange: (e: YT.OnStateChangeEvent) => {
+            if (e.data === api.PlayerState.ENDED) this.endedCb();
           },
         },
       });
     });
   }
   async play() {
-    this.player.playVideo();
-    this.clock.sync(this.player.getCurrentTime() * 1000, true, true);
+    const player = this.player;
+    if (!player) throw new Error("YouTube-Player ist noch nicht geladen.");
+    player.playVideo();
+    this.clock.sync(player.getCurrentTime() * 1000, true, true);
     clearInterval(this.poll);
     clearInterval(this.resync);
     // Alle ~16 ms lokal fortgeschrieben (SmoothClock), alle 500 ms an API-Zeit angleichen
     this.resync = window.setInterval(() => {
-      const playing = this.player.getPlayerState?.() === 1;
-      this.clock.sync(this.player.getCurrentTime() * 1000, playing);
+      const playing = player.getPlayerState() === YT.PlayerState.PLAYING;
+      this.clock.sync(player.getCurrentTime() * 1000, playing);
     }, 500);
   }
   pause() {
-    this.player?.pauseVideo();
+    if (!this.player) return;
+    this.player.pauseVideo();
     this.clock.sync(this.player.getCurrentTime() * 1000, false, true);
   }
   seek(ms: number) {
@@ -271,7 +279,7 @@ export function parseSpotifyUri(input: string) {
 class SpotifySource implements AudioSource {
   type = "spotify";
   lowPrecision = true;
-  private player: any;
+  private player: Spotify.Player | null = null;
   private deviceId = "";
   private clock = new SmoothClock();
   private poll = 0;
@@ -288,37 +296,38 @@ class SpotifySource implements AudioSource {
         document.head.appendChild(s);
       });
     }
-    this.player = new window.Spotify.Player({
+    const player = new window.Spotify.Player({
       name: "DanceBeat",
-      getOAuthToken: (cb: (t: string) => void) => cb(token),
+      getOAuthToken: (cb) => cb(token),
       volume: 0.8,
     });
+    this.player = player;
     await new Promise<void>((res, rej) => {
-      this.player.addListener("ready", ({ device_id }: any) => {
+      player.addListener("ready", ({ device_id }: Spotify.WebPlaybackInstance) => {
         this.deviceId = device_id;
         res();
       });
-      this.player.addListener("account_error", () =>
+      player.addListener("account_error", () =>
         rej(new Error("Spotify Premium wird benötigt, um im Browser abzuspielen.")),
       );
-      this.player.addListener("authentication_error", () =>
+      player.addListener("authentication_error", () =>
         rej(new Error("Spotify-Anmeldung abgelaufen. Bitte neu verbinden.")),
       );
-      this.player.addListener("initialization_error", () =>
+      player.addListener("initialization_error", () =>
         rej(new Error("Dein Browser unterstützt Spotify-Wiedergabe nicht.")),
       );
-      this.player.addListener("autoplay_failed", () =>
+      player.addListener("autoplay_failed", () =>
         rej(new Error("Wiedergabe blockiert. Tippe erneut auf Start.")),
       );
-      this.player.addListener("player_state_changed", (s: any) => {
+      player.addListener("player_state_changed", (s: Spotify.PlaybackState | null) => {
         if (!s) return;
         const pos = s.position + (s.paused ? 0 : Date.now() - s.timestamp);
         this.clock.sync(pos, !s.paused);
         if (s.paused && s.position === 0 && s.track_window?.previous_tracks?.length) this.endedCb();
       });
-      this.player.connect();
+      void player.connect();
     });
-    this.player.activateElement?.();
+    void player.activateElement();
   }
   async play() {
     const r = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
@@ -329,7 +338,7 @@ class SpotifySource implements AudioSource {
     if (!r.ok) throw new Error("Spotify konnte den Song nicht starten.");
     this.clock.sync(0, true, true);
     this.poll = window.setInterval(async () => {
-      const s = await this.player.getCurrentState();
+      const s = await this.player?.getCurrentState();
       if (s) this.clock.sync(s.position, !s.paused);
     }, 500);
   }
