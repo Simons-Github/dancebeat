@@ -1,3 +1,15 @@
+import type { z } from "zod";
+import type {
+  AnglesSchema,
+  ChoreoFileSchema,
+  ChoreographySchema,
+  FrameSchema,
+  LandmarkSchema,
+  MoveSchema,
+  SongSchema,
+  SourceSpecSchema,
+} from "./schema";
+
 export type AngleKey =
   | "leftElbow"
   | "rightElbow"
@@ -9,53 +21,14 @@ export type AngleKey =
   | "rightKnee"
   | "torsoLean";
 
-export type Angles = Partial<Record<AngleKey, number>>;
-export type Landmark = [number, number] | [number, number, number]; // x,y,(visibility)
-
-export interface Frame {
-  timeMs: number;
-  landmarks: Landmark[];
-  angles: Angles;
-  lowVisibility?: boolean;
-}
-export interface Move {
-  timeMs: number;
-  label: string;
-  iconId: string;
-  gold: boolean;
-}
-
-export interface Choreography {
-  title: string;
-  bpm: number;
-  offsetMs: number;
-  accentColor: string;
-  secondaryColor: string;
-  frames: Frame[];
-  moves: Move[];
-}
-
-export type SourceSpec =
-  | { type: "local"; blobId: string }
-  | { type: "url"; url: string }
-  | { type: "youtube"; videoId: string }
-  | { type: "spotify"; trackUri: string };
-
-export interface Song {
-  id: string;
-  title: string;
-  artist: string;
-  bpm: number;
-  difficulty: 1 | 2 | 3;
-  source: SourceSpec;
-  syncOffsetMs: number;
-  startOffsetMs: number;
-  playbackRate?: number;
-  choreo: Choreography;
-  highscore: number;
-  stars: number;
-  createdAt: number;
-}
+export type Angles = z.infer<typeof AnglesSchema>;
+export type Landmark = z.infer<typeof LandmarkSchema>; // x, y, (visibility)
+export type Frame = z.infer<typeof FrameSchema>;
+export type Move = z.infer<typeof MoveSchema>;
+export type Choreography = z.infer<typeof ChoreographySchema>;
+export type SourceSpec = z.infer<typeof SourceSpecSchema>;
+export type Song = z.infer<typeof SongSchema>;
+export type ChoreoFile = z.infer<typeof ChoreoFileSchema>;
 
 export type Rating = "PERFECT" | "SUPER" | "GOOD" | "OK" | "X";
 

@@ -123,11 +123,11 @@ export function computeAngles(lm: Landmark[], opts: AngleOptions = {}): Angles {
     const vx = s1[0] - s0[0],
       vy = s1[1] - s0[1];
     const a = Math.atan2(rx * vy - ry * vx, rx * vx + ry * vy) * DEG * h * side;
-    out[k as AngleKey] = a <= -180 ? a + 360 : a;
+    out[k as AngleKey] = (a <= -180 ? a + 360 : a) + 0; // + 0 turns -0 into 0
   }
   if (lh && rh) {
     // Positive = leaning toward the body's left side.
-    out.torsoLean = Math.atan2(-down[0], down[1]) * DEG * -h;
+    out.torsoLean = Math.atan2(-down[0], down[1]) * DEG * -h + 0;
   }
   return out;
 }

@@ -3,6 +3,7 @@ import { angleDiff, computeAngles, figure, frameAt, lerpAngle } from "@/lib/pose
 import { mirrorChoreo, mirrorLandmarks } from "@/lib/choreo";
 import { angleDeviation } from "@/lib/scoring";
 import type { Choreography, Landmark } from "@/lib/types";
+import { makeChoreo } from "./fixtures";
 
 const flipX = (lm: Landmark[]): Landmark[] =>
   lm.map((p) => [1 - p[0], p[1], p[2] ?? 1] as Landmark);
@@ -49,7 +50,7 @@ describe("vorzeichenbehaftete Winkel", () => {
     const lm = figure({ la: 135, ra: 30, le: 40, re: -60, ll: 20, lk: 50, lean: 12 });
     const a = computeAngles(lm);
     const b = computeAngles(flipX(lm));
-    for (const [k, v] of Object.entries(a)) expect(b[k as keyof typeof b]).toBeCloseTo(v, 6);
+    for (const [k, v] of Object.entries(a)) expect(b[k as keyof typeof b]).toBeCloseTo(v!, 6);
   });
 
   it("Rumpfneigung zur linken Körperseite ist positiv, über ±180 kürzester Bogen", () => {
@@ -68,20 +69,15 @@ describe("vorzeichenbehaftete Winkel", () => {
 describe("mirrorChoreo", () => {
   const lm = figure({ la: 160, ra: 20, re: 60, lean: 10 });
   const choreo: Choreography = {
-    title: "t",
-    bpm: 120,
-    offsetMs: 0,
-    accentColor: "#FF2E93",
-    secondaryColor: "#00E5FF",
+    ...makeChoreo(),
     frames: [{ timeMs: 0, landmarks: lm, angles: computeAngles(lm) }],
-    moves: [{ timeMs: 0, label: "x", iconId: "x", gold: false }],
   };
 
   it("vertauscht links und rechts: gespiegelte Winkel = Winkel der getauschten Landmarks", () => {
     const m = mirrorChoreo(choreo).frames[0]!;
     const expected = computeAngles(mirrorLandmarks(lm));
     for (const [k, v] of Object.entries(expected))
-      expect(m.angles[k as keyof typeof m.angles]).toBeCloseTo(v, 6);
+      expect(m.angles[k as keyof typeof m.angles]).toBeCloseTo(v!, 6);
     expect(m.angles.leftShoulder).toBeCloseTo(choreo.frames[0]!.angles.rightShoulder ?? NaN, 6);
   });
 

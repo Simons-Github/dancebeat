@@ -50,7 +50,7 @@ export function mirrorAngles(a: Angles): Angles {
     if (vr != null) out[l] = vr;
     if (vl != null) out[r] = vl;
   }
-  if (a.torsoLean != null) out.torsoLean = a.torsoLean === 0 ? 0 : -a.torsoLean;
+  if (a.torsoLean != null) out.torsoLean = -a.torsoLean + 0;
   return out;
 }
 

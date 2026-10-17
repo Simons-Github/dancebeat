@@ -13,7 +13,7 @@ describe("computeAngles: Seitenverhältnis", () => {
   it("liefert in einem 4:3-Bild mit aspect dieselben Winkel wie im quadratischen Raum", () => {
     const cam = computeAngles(squeeze(pose, 4 / 3), { aspect: 4 / 3 });
     for (const [k, v] of Object.entries(square)) {
-      expect(cam[k as keyof typeof cam]).toBeCloseTo(v, 6);
+      expect(cam[k as keyof typeof cam]).toBeCloseTo(v!, 6);
     }
   });
 

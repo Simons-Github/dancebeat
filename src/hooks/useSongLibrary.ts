@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { blobsDb, songsDb } from "@/lib/db";
+import { songRepository } from "@/lib/library/repository";
 import { seedDemos } from "@/data/demo";
 import type { Song } from "@/lib/types";
 
@@ -7,27 +7,25 @@ export function useSongLibrary() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
   const refresh = useCallback(async () => {
-    const all = await songsDb.all();
-    setSongs(all.sort((a, b) => a.createdAt - b.createdAt));
+    setSongs(await songRepository.list());
     setLoading(false);
   }, []);
   useEffect(() => {
-    seedDemos()
-      .catch(() => {})
+    seedDemos(songRepository)
+      .catch((e: unknown) => console.warn("Seeding demos failed:", e))
       .finally(refresh);
   }, [refresh]);
 
   const save = useCallback(
-    async (s: Song) => {
-      await songsDb.put(s);
+    async (s: Song, audio?: Blob) => {
+      await songRepository.save(s, audio);
       await refresh();
     },
     [refresh],
   );
   const remove = useCallback(
     async (s: Song) => {
-      await songsDb.remove(s.id);
-      if (s.source.type === "local") await blobsDb.remove(s.source.blobId);
+      await songRepository.delete(s.id);
       await refresh();
     },
     [refresh],
@@ -37,8 +35,4 @@ export function useSongLibrary() {
     [save],
   );
   return { songs, loading, save, remove, rename, refresh };
-}
-
-export async function getSong(id: string) {
-  return songsDb.get(id);
 }

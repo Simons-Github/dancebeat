@@ -1,4 +1,4 @@
-import { blobsDb } from "../db";
+import { songRepository } from "../library/repository";
 import type { Song } from "../types";
 
 export interface AudioSource {
@@ -363,7 +363,7 @@ export function createSource(song: Song): AudioSource {
       return new ElementSource(
         "local",
         async () => {
-          const b = await blobsDb.get(s.blobId);
+          const b = await songRepository.getAudio(s.blobId);
           if (!b) throw new Error("Audiodatei nicht gefunden.");
           return URL.createObjectURL(b);
         },

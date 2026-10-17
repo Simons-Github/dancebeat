@@ -1,6 +1,7 @@
 import { computeAngles, figure, type FigureParams } from "@/lib/pose";
 import type { Choreography, Frame, Move, Song } from "@/lib/types";
-import { blobsDb, songsDb } from "@/lib/db";
+import { CHOREO_VERSION } from "@/lib/schema";
+import type { SongRepository } from "@/lib/library/repository";
 
 const POSES: Record<string, { label: string; p: FigureParams }> = {
   neutral: { label: "Locker", p: { la: 10, ra: 10 } },
@@ -18,6 +19,7 @@ const POSES: Record<string, { label: string; p: FigureParams }> = {
 };
 
 function build(
+  id: string,
   title: string,
   bpm: number,
   seq: string[],
@@ -44,7 +46,10 @@ function build(
     frames.push({ timeMs: t + beat * 0.5, landmarks: lm, angles: computeAngles(lm) });
     moves.push({ timeMs: t, label: pose.label, iconId: id, gold: gold.includes(i) });
   });
+  const now = Date.now();
   return {
+    version: CHOREO_VERSION,
+    id,
     title,
     bpm,
     offsetMs: 0,
@@ -52,6 +57,8 @@ function build(
     secondaryColor: colors[1],
     frames,
     moves,
+    createdAt: now,
+    updatedAt: now,
   };
 }
 
@@ -119,7 +126,9 @@ async function synthTrack(bpm: number, seconds: number, root: number): Promise<B
 
 const DEMOS = [
   {
-    id: "demo-pink",
+    // Fixed UUIDs keep the demos stable across re-seeding.
+    id: "d4e0c1a2-0001-4000-8000-000000000001",
+    choreoId: "d4e0c1a2-0001-4000-8000-000000000101",
     title: "Pink Pulse",
     artist: "DanceBeat Demo",
     bpm: 112,
@@ -147,7 +156,8 @@ const DEMOS = [
     gold: [5, 15],
   },
   {
-    id: "demo-orange",
+    id: "d4e0c1a2-0002-4000-8000-000000000002",
+    choreoId: "d4e0c1a2-0002-4000-8000-000000000102",
     title: "Sunset Kick",
     artist: "DanceBeat Demo",
     bpm: 124,
@@ -178,14 +188,14 @@ const DEMOS = [
   },
 ];
 
-export async function seedDemos() {
+export async function seedDemos(repo: SongRepository) {
   if (localStorage.getItem("dancebeat.seeded")) return;
   for (const d of DEMOS) {
-    const choreo = build(d.title, d.bpm, d.seq, d.gold, d.colors);
+    const choreo = build(d.choreoId, d.title, d.bpm, d.seq, d.gold, d.colors);
     const lastMove = choreo.moves.at(-1);
     if (!lastMove) continue; // no moves: nothing to seed
     const blob = await synthTrack(d.bpm, Math.ceil(lastMove.timeMs / 1000) + 4, d.root);
-    await blobsDb.put(d.id, blob);
+    const now = Date.now();
     const song: Song = {
       id: d.id,
       title: d.title,
@@ -198,9 +208,10 @@ export async function seedDemos() {
       choreo,
       highscore: 0,
       stars: 0,
-      createdAt: Date.now(),
+      createdAt: now,
+      updatedAt: now,
     };
-    await songsDb.put(song);
+    await repo.save(song, blob);
   }
   localStorage.setItem("dancebeat.seeded", "1");
 }
@@ -219,5 +230,5 @@ export function autoChoreo(
     (id): id is string => id !== undefined,
   );
   const gold = [Math.floor(n * 0.3), Math.floor(n * 0.65), n - 1];
-  return build(title, bpm, seq, gold, colors);
+  return build(crypto.randomUUID(), title, bpm, seq, gold, colors);
 }
