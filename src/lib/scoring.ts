@@ -53,6 +53,16 @@ export function judge(deviation: number | null, difficulty: Difficulty = "normal
 
 export const comboMultiplier = (combo: number) => Math.min(4, 1 + Math.floor(combo / 5));
 
+/** Combo rules: these ratings keep the combo without raising it; COMBO_BREAK resets it. */
+export const COMBO_HOLD: readonly Rating[] = ["OK"];
+export const COMBO_BREAK: readonly Rating[] = ["X"];
+
+export function nextCombo(combo: number, r: Rating) {
+  if (COMBO_BREAK.includes(r)) return 0;
+  if (COMBO_HOLD.includes(r)) return combo;
+  return combo + 1;
+}
+
 export function movePoints(r: Rating, combo: number, gold: boolean) {
   return POINTS[r] * comboMultiplier(combo) * (gold ? GOLD_FACTOR : 1);
 }

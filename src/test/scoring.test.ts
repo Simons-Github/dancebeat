@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { comboMultiplier, judge, movePoints, angleDeviation } from "@/lib/scoring";
+import { comboMultiplier, judge, movePoints, angleDeviation, nextCombo } from "@/lib/scoring";
 
 describe("Bewertung", () => {
   it("Schwellen 15/30/45/60 Grad", () => {
@@ -58,5 +58,15 @@ describe("Mindestabdeckung", () => {
   it("Beine fehlen, Arme sichtbar: wird bewertet", () => {
     const arms = { leftElbow: 90, rightElbow: 90, leftShoulder: 90, rightShoulder: 90 };
     expect(angleDeviation(arms, target)).toBe(0);
+  });
+});
+
+describe("Combo", () => {
+  it("PERFECT/SUPER/GOOD erhöhen, OK hält, X bricht ab", () => {
+    expect(nextCombo(3, "PERFECT")).toBe(4);
+    expect(nextCombo(3, "SUPER")).toBe(4);
+    expect(nextCombo(3, "GOOD")).toBe(4);
+    expect(nextCombo(3, "OK")).toBe(3);
+    expect(nextCombo(3, "X")).toBe(0);
   });
 });

@@ -3,6 +3,7 @@ import {
   angleDeviation,
   judge,
   movePoints,
+  nextCombo,
   referenceMax,
   starsFor,
   type Difficulty,
@@ -34,9 +35,10 @@ export function useScoring(choreo: Choreography | null, difficulty: Difficulty) 
 
   const finalize = useCallback(
     (i: number, rating: Rating) => {
+      // Unreachable for i < moves.length; skipping is correct and the caller still advances.
       const m = choreo?.moves[i];
       if (!m) return;
-      const c = rating === "X" || rating === "OK" ? 0 : comboRef.current + 1;
+      const c = nextCombo(comboRef.current, rating);
       const pts = movePoints(rating, comboRef.current, m.gold);
       comboRef.current = c;
       maxCombo.current = Math.max(maxCombo.current, c);
