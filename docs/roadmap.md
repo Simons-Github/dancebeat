@@ -242,19 +242,20 @@ Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
 Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
-| ID  | Befund                                                                                                   | Etappe         |
-| --- | -------------------------------------------------------------------------------------------------------- | -------------- |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                   | 10             |
-| W7  | YouTube: Tipp aufs Video (Schritt 5, `pointer-events-none`), iOS am Gerät                                | 3b             |
-| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                   | 3b             |
-| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                                               | 5              |
-| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                 | 7              |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                 | 11             |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                             | 11             |
-| N3  | `seedDemos` vertraut nur dem localStorage-Marker                                                         | 11             |
-| N6  | `@tanstack/react-query` bisher ungenutzt                                                                 | 11             |
-| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                     | 11             |
-| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                       | 11             |
-| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked` | 3b (Schritt 5) |
-| N10 | YouTube ignoriert `song.playbackRate`                                                                    | 11             |
-| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                          | 11             |
+| ID  | Befund                                                                                                                           | Etappe         |
+| --- | -------------------------------------------------------------------------------------------------------------------------------- | -------------- |
+| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                           | 10             |
+| W7  | YouTube: Tipp aufs Video (Schritt 5, `pointer-events-none`), iOS am Gerät                                                        | 3b             |
+| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                           | 3b             |
+| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                                                                       | 5              |
+| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                         | 7              |
+| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                         | 11             |
+| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                     | 11             |
+| N3  | `seedDemos` vertraut nur dem localStorage-Marker                                                                                 | 11             |
+| N6  | `@tanstack/react-query` bisher ungenutzt                                                                                         | 11             |
+| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                                             | 11             |
+| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                               | 11             |
+| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked`                         | 3b (Schritt 5) |
+| N10 | YouTube ignoriert `song.playbackRate`                                                                                            | 11             |
+| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                                  | 11             |
+| N12 | Aufstellhilfe im Querformat (844×390): Karte oben unter der Kopfzeile, Knöpfe unten abgeschnitten, kein Scrollen (seit Etappe 2) | 5              |
