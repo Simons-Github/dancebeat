@@ -9,8 +9,8 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 | Etappe                                       | Status | Empfohlenes Modell                                                    |
 | -------------------------------------------- | ------ | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | 🔜     | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ⏳     | Sonnet                                                                |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅     | Sonnet                                                                |
+| 2. Aufstellhilfe                             | 🔜     | Sonnet                                                                |
 | 3. Gameplay                                  | ⏳     | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ⏳     | Sonnet                                                                |
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳     | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
@@ -34,15 +34,23 @@ Combo-Regel (OK hält, X bricht).
 
 ## Etappen
 
-### 1. Navigation, Layout, Menü, Song-Bibliothek 🔜
+### 1. Navigation, Layout, Menü, Song-Bibliothek ✅
 
-- Routen unter `src/routes`: Startmenü, Bibliothek, Platzhalter für Spiel, Ergebnis, Einstellungen.
+- Routen unter `src/routes`: Bibliothek als Startseite, Aufstellhilfe, Einstellungen (kein eigenes Startmenü).
 - Bibliothek mit den zwei Demo-Songs: große Cover-Kacheln, ausgewählter Song vergrößert,
   Hintergrund wechselt weich auf die Songfarbe. Pro Song Titel, Künstler, BPM, Schwierigkeit
-  (1–3 Flammen), Highscore, Sterne. Löschen und Umbenennen (über `SongRepository`).
-- Theme aus `src/theme.ts`, animierter Hintergrund, Safe Areas.
+  (1–3 Flammen), Highscore, Sterne.
+- Theme aus `src/theme.ts`, ruhiger Hintergrund (statisch, eine langsame Drift der Formen), Safe Areas.
 - Schrift Fredoka selbst hosten (Paket `@fontsource/fredoka` nur nach Freigabe).
 - Test: Routen-Matching, Bibliothek rendert Demo-Songs.
+
+Umgesetzt: Routen `/`, `/setup/$songId`, `/settings`, 404; Bibliothek mit Karussell, Banner und
+„Song hinzufügen“-Platzhalter; Fredoka lokal. Die Bibliothek bleibt Startseite (kein eigenes
+Startmenü). Platzhalter für Spiel und Ergebnis entfallen; die Screens kommen mit Etappe 3 und 4.
+Löschen und Umbenennen wanderten nach Etappe 5. Außerdem: Kontrastkorrektur (dunkle Tönung,
+Test in `src/test/contrast.test.ts`), zuletzt gewählter Song wird gemerkt, Highscore mit Pokal und
+aria-label, Peek der nächsten Kachel im Hochformat, Dev-Server nur lokal außer `dev:https`.
+Browser-Prüfung per Playwright (390x844 und 844x390) erledigt. **Offen:** Prüfung am Gerät.
 
 ### 2. Aufstellhilfe ⏳
 
@@ -89,6 +97,8 @@ Combo-Regel (OK hält, X bricht).
   Schwierigkeit, Kamera spiegeln (nur Anzeige).
 - Sync-Test pro Song: zum Beat tippen, Offset berechnen und speichern. Warnsymbol bei Quellen mit
   geringer Timing-Genauigkeit (YouTube, Spotify).
+- Löschen und Umbenennen von Songs (über `SongRepository`). Seed-Regel: gelöschte Demo-Songs
+  werden nicht neu angelegt (betrifft `seedDemos`, siehe N3).
 - Dialog „Song hinzufügen“ mit Tabs Datei, URL, YouTube (Spotify erst mit Etappe 10). Datei: BPM
   per Analyse (`estimateBpm`) mit manueller Korrektur; Online-Quellen: BPM manuell. Pro Song
   Sync-Offset mit Vorschau und optionaler Start-Offset. Hinweis bei URL: nur eigene oder private
