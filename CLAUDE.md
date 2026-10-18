@@ -101,6 +101,11 @@ das im Bericht ausdrücklich sagen statt es als getestet auszugeben.
 Projektlokal in `.mcp.json` (Version fest), Konfiguration in `.claude/playwright-mcp.json`:
 headless Chromium, isoliertes Profil, Fake-Kamera (640×480) mit erteilter Kamera-Berechtigung.
 
+Der Server heißt **`dancebeat-playwright`**, seine Tools tragen das Präfix
+`mcp__dancebeat-playwright__*`. Tools mit dem Präfix `mcp__playwright__*` oder
+`mcp__plugin_playwright_*` stammen nicht aus diesem Projekt (globales Plugin oder fremder
+Server): nicht verwenden, den Nutzer informieren.
+
 - Vorher `bun run dev` starten und `http://localhost:5173` öffnen. Nur localhost und 127.0.0.1
   sind erlaubt; andere Origins blockiert der Browser (`ERR_BLOCKED_BY_CLIENT`). Für Etappe 2
   `https://cdn.jsdelivr.net` und `https://storage.googleapis.com` in `network.allowedOrigins`
