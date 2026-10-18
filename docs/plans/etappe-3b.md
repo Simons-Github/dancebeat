@@ -1,5 +1,10 @@
 # Etappe 3b: Online-Quellen (URL und YouTube)
 
+**Status:** Schritte 1 (`ed6efbc`), 2 (`f61f0db`), 3 (`2c3e8aa`, `5470c2e`), 4 (`1cca5c5`) und 6
+(`17a4dd5`) umgesetzt, Schritt 7 (Doku) mit dem Doku-Commit. **Schritt 5 (Blocked-Ablauf für
+YouTube, `onExternalStart`, doppelter Tipp) ist offen** und kommt nach dem Gerätetest. Gerätetest
+(Abschnitt 6) offen.
+
 ## Kontext
 
 Etappe 3a (Gameplay mit lokaler Datei) ist umgesetzt (Commit `fd573c0`). Offen sind die Befunde

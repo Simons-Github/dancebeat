@@ -7,19 +7,19 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status            | Empfohlenes Modell                                                    |
-| -------------------------------------------- | ----------------- | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅                | Sonnet                                                                |
-| 3. Gameplay                                  | 🔜 (3a umgesetzt) | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ⏳                | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳                | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ⏳                | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ⏳                | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳                | Opus                                                                  |
-| 9. Typen und Lint                            | ✅                | –                                                                     |
-| 10. Spotify                                  | ⏳                | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳                | je nach Punkt                                                         |
+| Etappe                                       | Status                     | Empfohlenes Modell                                                    |
+| -------------------------------------------- | -------------------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                         | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
+| 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ⏳                         | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳                         | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                         | –                                                                     |
+| 10. Spotify                                  | ⏳                         | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
 
@@ -36,6 +36,9 @@ Combo-Regel (OK hält, X bricht).
 Choreo-Wechsel. N4: Soundeffekte nutzen den beim Tippen entsperrten gemeinsamen `AudioContext`.
 W9 teilweise: `type` als Union, Lade-Race beim Songwechsel, `ended`/`error` zurückgesetzt,
 `visibilitychange` → Pause.
+✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
+W7 teilweise (sichtbarer Player, Seek im Pausenzustand, Feld entfernt; Tipp aufs Video fehlt noch,
+Schritt 5). W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
 
 ## Etappen
 
@@ -82,7 +85,7 @@ Screen. Handy-Test bestanden: MediaPipe läuft flüssig, **MoveNet entfällt** (
 `PoseEstimator`-Implementierung, keine TF.js-Abhängigkeit). Messwerte stehen in
 [architecture.md](architecture.md#messwerte) (vom Nutzer nachzutragen).
 
-### 3. Gameplay 🔜 (3a umgesetzt, 3b offen)
+### 3. Gameplay 🔜 (3a umgesetzt, 3b umgesetzt bis auf Schritt 5)
 
 **3a Kern (Demo-Songs, lokale Audioquelle) – umgesetzt, Gerätetest offen.**
 
@@ -134,13 +137,32 @@ Gerätetest 3a (Handy):
 6. Ende → Ergebnis-Platzhalter mit Score, Sternen, Verteilung, längster Combo.
 7. Hoch- und Querformat, Notch/Safe Areas, Lesbarkeit bei hellem Hintergrund.
 
-**3b Online-Quellen (nach Freigabe).**
+**3b Online-Quellen – umgesetzt bis auf Schritt 5 (Blocked-Ablauf YouTube, nach dem Gerätetest),
+Gerätetest offen.** Plan: [plans/etappe-3b.md](plans/etappe-3b.md); Details zu Uhr und Quellen in
+[architecture.md](architecture.md#audiosource--spielzeit).
 
-- W5: Uhr bei YouTube erst bei PLAYING hart synchronisieren, bei BUFFERING/Pause anhalten.
-- W7: YouTube-Player sichtbar, mindestens 200 × 200 px, in der Coach-Ecke; `seek` im Pausenzustand
-  korrekt; ungenutztes Feld entfernen; iOS-Wiedergabe am Gerät prüfen.
-- URL-Quelle: `playbackRate`, `onError` in der AudioSource-Schnittstelle, iOS-Verhalten (W9, W10).
-- Fallback: Online-Quelle lädt nicht → Meldung und zurück zur Song-Auswahl.
+- W5: YouTube-Uhr läuft nur bei PLAYING; `play()` löst erst dann auf; Autoplay-Sperre wird nach
+  4 s (UNSTARTED/CUED) bzw. 15 s (BUFFERING) erkannt und als `blocked` gezeigt.
+- W7: sichtbarer YouTube-Player in der Coach-Ecke (≥ 200 × 200 px, `youtube-nocookie.com`);
+  `seek` vor dem Start wird gemerkt, im Pausenzustand springt es ohne zu starten; ungenutztes
+  Feld entfernt.
+- W9 / W10: `onError` in `AudioSource` (Laufzeitfehler → Overlay „Die Musik ist abgebrochen“);
+  URL-/Datei-Uhr hält bei `waiting`. `playbackRate` der URL-Quelle war schon vor 3b umgesetzt.
+- Datenschutzhinweis der Aufstellhilfe nennt YouTube bzw. den Hostname der Audio-URL.
+- Dev-Testsongs: `/?devsong=youtube:<ID>` bzw. `url:<Adresse>` (nur Dev-Server).
+- **Offen:** Schritt 5 (Tipp aufs Video, `onExternalStart`, doppelter Tipp; der Player ist bisher
+  `pointer-events-none`), Gerätetest.
+
+Gerätetest 3b (Handy: `bun run dev:https`, `?devsong=youtube:<ID>` bzw.
+`?devsong=url:<MP3-URL>&bpm=<BPM>`):
+
+- iPhone: YouTube startet ohne Tipp oder mit „Zum Starten tippen“ (notieren, welcher Weg);
+  Piktos laufen erst bei hörbarem Ton; Pause/Weiter/Neustart, Display sperren; Player unten links
+  ≥ 200 px in Hoch- und Querformat; Flugmodus mitten im Song; FPS mit Video plus Kamera.
+- iPhone, URL: Laden ohne vorherige Geste (`/play/…` neu laden); Lautstärke bei laufender Kamera;
+  Netz weg → Uhr hält bzw. „Die Musik ist abgebrochen“; Datenschutzhinweis nennt YouTube/Host.
+- Desktop: beide Quellen komplett durchspielen; Video mit gesperrtem Einbetten → verständliche
+  Meldung; im Netzwerk-Tab kommt das Iframe von `youtube-nocookie.com`.
 
 ### 4. Ergebnis-Screen und Highscores ⏳
 
@@ -220,17 +242,19 @@ Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
 Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
-| ID  | Befund                                                                               | Etappe |
-| --- | ------------------------------------------------------------------------------------ | ------ |
-| W5  | YouTube/Spotify-Uhr läuft beim Start vor                                             | 3b     |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf               | 10     |
-| W7  | YouTube: sichtbarer Player ≥ 200 px, `seek` im Pausenzustand, iOS                    | 3b     |
-| W9  | AudioSource ohne `onError` (Rest; Lade-Race und `visibilitychange` erledigt)         | 3b     |
-| W10 | iOS: Laden vor Nutzergeste (Datei-Quelle mit Timeout erledigt, URL am Gerät)         | 3b     |
-| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                           | 5      |
-| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)             | 7      |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                             | 11     |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                         | 11     |
-| N3  | `seedDemos` vertraut nur dem localStorage-Marker                                     | 11     |
-| N6  | `@tanstack/react-query` bisher ungenutzt                                             | 11     |
-| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon) | 11     |
+| ID  | Befund                                                                                                   | Etappe         |
+| --- | -------------------------------------------------------------------------------------------------------- | -------------- |
+| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                   | 10             |
+| W7  | YouTube: Tipp aufs Video (Schritt 5, `pointer-events-none`), iOS am Gerät                                | 3b             |
+| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                   | 3b             |
+| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                                               | 5              |
+| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                 | 7              |
+| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                 | 11             |
+| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                             | 11             |
+| N3  | `seedDemos` vertraut nur dem localStorage-Marker                                                         | 11             |
+| N6  | `@tanstack/react-query` bisher ungenutzt                                                                 | 11             |
+| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                     | 11             |
+| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                       | 11             |
+| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked` | 3b (Schritt 5) |
+| N10 | YouTube ignoriert `song.playbackRate`                                                                    | 11             |
+| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                          | 11             |

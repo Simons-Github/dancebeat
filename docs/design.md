@@ -36,7 +36,7 @@ Piktogramme. Alle Farben, Fonts und Animationskonstanten stehen in `src/theme.ts
   und ausblenden. Farben: `RATING_COLORS`.
 - Oben Score, Combo und Sternleiste mit Fortschritt. Coach-Silhouette (einfarbig in Songfarbe mit
   Glow) in einer Ecke, flüssig aus Landmarks bzw. Winkeln interpoliert. Bei YouTube-Songs sitzt
-  dort der sichtbare YouTube-Player (mindestens 200 × 200 px, Vorgabe der YouTube-API).
+  dort der sichtbare YouTube-Player (Box `max(200px, …)` mit der Größe der Coach-Ecke, also mindestens 200 × 200 px, Vorgabe der YouTube-API).
 - Dezenter Beat-Puls am Rand. Countdown 3-2-1, Pause-Button. Kein Scrollen.
 
 ## Ergebnis-Screen

@@ -52,19 +52,55 @@ der Landmarker geschlossen, auch wenn ein asynchroner Schritt erst nach dem Aufr
 
 ### AudioSource → Spielzeit
 
-`createSource(song, { element })` liefert einen Adapter mit gemeinsamer Schnittstelle
+`createSource(song, { element, container })` liefert einen Adapter mit gemeinsamer Schnittstelle
 `AudioSource` (`type` als Union der Quellarten, `load`, `play`, `pause`, `seek`, `getTimeMs`,
-`setVolume`, `onEnded`, `destroy`):
+`setVolume`, `onEnded`, `onError`, `destroy`). `onError` meldet Fehler, die nach erfolgreichem
+`load()` auftreten (Verbindung weg, Dekodierfehler, YouTube-Fehlercode). `SourceOptions.element`
+ist das gemeinsame, per Geste entsperrte Audioelement (Datei/URL), `SourceOptions.container` das
+Element, in dem der YouTube-Player angezeigt wird (ohne: unsichtbarer 2×2-px-Player außerhalb des
+Bildschirms):
 
-| Quelle    | Umsetzung                              | Zeitbasis                                    |
-| --------- | -------------------------------------- | -------------------------------------------- |
-| `local`   | `HTMLAudioElement` mit Blob aus der DB | `currentTime`, interpoliert                  |
-| `url`     | `HTMLAudioElement` mit Nutzer-URL      | `currentTime`, interpoliert                  |
-| `youtube` | YouTube-IFrame-Player                  | `getCurrentTime()` alle 500 ms, interpoliert |
-| `spotify` | Spotify Web Playback SDK (PKCE)        | Player-State `position`, interpoliert        |
+| Quelle    | Umsetzung                              | Zeitbasis                                  |
+| --------- | -------------------------------------- | ------------------------------------------ |
+| `local`   | `HTMLAudioElement` mit Blob aus der DB | `currentTime`, interpoliert                |
+| `url`     | `HTMLAudioElement` mit Nutzer-URL      | `currentTime`, interpoliert                |
+| `youtube` | YouTube-IFrame-Player                  | `getCurrentTime()`, nur bei PLAYING, s. u. |
+| `spotify` | Spotify Web Playback SDK (PKCE)        | Player-State `position`, interpoliert      |
 
 Jeder Adapter nutzt eine `SmoothClock`: zwischen den Abfragen wird per `performance.now()`
 fortgeschrieben, Abweichungen werden weich angeglichen (große Sprünge hart übernommen).
+
+**Datei und URL** (`ElementSource`): Beim Puffern (`waiting`) bleibt `paused` falsch, deshalb hält
+die Uhr explizit an und läuft bei `playing` weiter; der 250-ms-Abgleich berücksichtigt das ebenfalls.
+`defaultPlaybackRate` und `playbackRate` werden gesetzt (die Rate der URL-Quelle war schon vor 3b
+umgesetzt). Ein Fehler des Elements nach dem Laden hält die Uhr an und löst `onError` aus
+(URL: „Die Verbindung zur Musik ist abgebrochen.“).
+
+**YouTube** (`YouTubeSource`, Host `www.youtube-nocookie.com`):
+
+- Die Uhr läuft nur im Zustand PLAYING. BUFFERING, PAUSED, CUED und ENDED halten sie an; jede
+  Zustandsänderung gleicht hart ab, im Spiel zusätzlich alle 500 ms (Resync).
+- `play()` löst erst bei PLAYING auf. Ist der Player nach 4 s noch UNSTARTED oder CUED
+  (`YT_PLAY_TIMEOUT_MS`), gilt der Start als blockiert (kein Tipp erreichte das Iframe); bei
+  BUFFERING wird bis 15 s (`YT_BUFFER_TIMEOUT_MS`) gewartet. In beiden Fällen wird `play()`
+  abgelehnt, der `GameController` zeigt dann `blocked` („Zum Starten tippen“). Nach einer Ablehnung
+  wartet der nächste `play()`-Aufruf ohne Timeouts, bis ein erfolgreicher Start die Timeouts
+  wieder scharf schaltet.
+- `seek` vor dem ersten Start (UNSTARTED, CUED, ENDED) wird in `pendingSeekMs` gemerkt und von
+  `play()` angewandt, weil `seekTo` ein nie gestartetes Video starten würde (Annahme, am Gerät
+  prüfen). Im Pausenzustand (PAUSED) wird direkt gesprungen, ohne zu starten.
+- Der Player ist im Spiel sichtbar: Er füllt die Coach-Ecke (Box mindestens 200 × 200 px, Vorgabe
+  der YouTube-API; siehe [design.md](design.md)), die Box ist derzeit `pointer-events-none`. Der
+  direkte Tipp aufs Video als Startweg kommt mit Schritt 5 des Plans
+  ([plans/etappe-3b.md](plans/etappe-3b.md)) und ist **noch nicht umgesetzt**.
+- Laden: IFrame-API-Skript mit Timeout 15 s (nicht zwischengespeichert, nächster Versuch lädt neu),
+  danach `onReady` mit Timeout 15 s. Fehlercodes vor `onReady` lehnen `load()` ab, danach lösen sie
+  `onError` aus („Dieses Video darf nicht eingebettet werden.“ bzw. „YouTube-Video nicht
+  verfügbar.“).
+
+**Laufzeitfehler im Spiel:** `useAudioClock` setzt bei `onError` den Zustand `error`; der
+Spielscreen zeigt dann, wenn das Spiel schon gestartet war, das Overlay „Die Musik ist
+abgebrochen“ (sonst „Die Musik konnte nicht geladen werden“) mit Rückweg zur Bibliothek.
 
 `useAudioClock` ist die einzige Spielzeit:
 `timeMs = getTimeMs() − globale Latenz − song.syncOffsetMs − choreo.offsetMs` (reine Funktion
@@ -120,6 +156,13 @@ play() abgelehnt ──▶ blocked ──Tipp──▶ playing · Abbrechen im C
   Kamera durch `simulatedAngles` (Winkel der Choreografie plus Rauschen). Alle Stellen stehen
   hinter `import.meta.env.DEV`; im Produktions-Build ist der Code nicht enthalten (geprüft per
   Suche im Build, Positiv-Kontrolle mit `NODE_ENV=development`).
+- **Dev-Testsongs** (nur Dev-Server): Auf der Bibliotheksseite legt `/?devsong=youtube:<ID|Link>`
+  bzw. `/?devsong=url:<Adresse>` einen Testsong mit automatischer Choreografie an, damit URL- und
+  YouTube-Quelle ohne „Song hinzufügen“ (Etappe 5) testbar sind. Optional `bpm` (30–300, Standard 120) und `len` (Sekunden, 10–600, Standard 180). Es gibt feste Slots (einer je Quelle), ein
+  erneuter Aufruf überschreibt; `/?devsong=clear` entfernt beide. Ungültige Werte ergeben eine
+  Konsolenwarnung. Code in `src/data/devSongs.ts` und `src/routes/index.tsx` steckt hinter
+  `import.meta.env.DEV`; im Produktions-Build nicht enthalten (geprüft per `grep` im `dist/`,
+  Gegenprobe mit `NODE_ENV=development`).
 
 ## Speicher
 
@@ -155,21 +198,24 @@ IndexedDB-Versionen:
 Kamerabilder verlassen das Gerät nie. Folgende Abrufe gehen trotzdem ins Netz und müssen in der
 UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 
-| Was                            | Von                                   | Wann                                     |
-| ------------------------------ | ------------------------------------- | ---------------------------------------- |
-| MediaPipe-WASM-Laufzeit        | cdn.jsdelivr.net                      | Aufstellhilfe (Start der Pose-Erkennung) |
-| Pose-Modell (`.task`)          | storage.googleapis.com                | Aufstellhilfe (Start der Pose-Erkennung) |
-| YouTube-IFrame-API, Video      | youtube.com                           | YouTube-Song laden                       |
-| Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden                       |
-| Audio-URL                      | vom Nutzer eingegebene Adresse        | URL-Song laden                           |
+| Was                            | Von                                   | Wann                                      |
+| ------------------------------ | ------------------------------------- | ----------------------------------------- |
+| MediaPipe-WASM-Laufzeit        | cdn.jsdelivr.net                      | Aufstellhilfe (Start der Pose-Erkennung)  |
+| Pose-Modell (`.task`)          | storage.googleapis.com                | Aufstellhilfe (Start der Pose-Erkennung)  |
+| YouTube-IFrame-API (Skript)    | www.youtube.com                       | YouTube-Song im Spiel laden; in der       |
+| YouTube-Player, Video          | www.youtube-nocookie.com              | Aufstellhilfe benannt                     |
+| Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden                        |
+| Audio-URL                      | vom Nutzer eingegebene Adresse        | in der Aufstellhilfe mit Hostname benannt |
 
 Die ersten beiden Abrufe gehen bei jedem Start der Kamera raus (kein Service Worker, mindestens
 zur Cache-Prüfung), nicht nur beim ersten Mal. Die WASM-URL entsteht aus der Konstante
 `TASKS_VISION_VERSION` (`src/lib/mediapipe.ts`); `@mediapipe/tasks-vision` ist in `package.json`
 exakt auf `1.1.1` festgelegt und ein Test prüft, dass beides übereinstimmt.
 
-Die ersten beiden Abrufe sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
-(`src/components/setup/PrivacyNote.tsx`; W12). Ziel (Etappe 7): WASM und Modell nach `public/`
+Alle Abrufe außer Spotify sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
+(`src/components/setup/PrivacyNote.tsx`; W12): die ersten beiden immer, bei YouTube-Songs
+zusätzlich YouTube (Skript von youtube.com, Video über youtube-nocookie.com), bei URL-Songs der
+Hostname der Adresse; beide mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Ziel (Etappe 7): WASM und Modell nach `public/`
 verlegen, dann entfallen sie und der Hinweis wird angepasst.
 
 **Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
