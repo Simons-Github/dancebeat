@@ -360,7 +360,11 @@ class YouTubeSource implements AudioSource {
     const p = this.takePending();
     if (!p) return;
     if (error) p.reject(error);
-    else p.resolve();
+    else {
+      // Started: later play() calls (resume, restart) get the refusal timeouts again.
+      this.refusedOnce = false;
+      p.resolve();
+    }
   }
   /** Runtime error after `onReady`: stop the clock and report it. */
   private fail(message: string) {

@@ -209,6 +209,27 @@ describe("YouTubeSource: Start und Autoplay-Sperre", () => {
     src.destroy();
   });
 
+  it("nach erfolgreichem Start bekommt ein späteres play() wieder die Timeouts", async () => {
+    const { src, player } = await loaded();
+    const first = track(src.play());
+    await advance(mod.YT_PLAY_TIMEOUT_MS);
+    expect(first.state).toBe("rejected");
+
+    const second = track(src.play());
+    player.emit(PlayerState.PLAYING);
+    await tick();
+    expect(second.state).toBe("resolved");
+
+    src.pause();
+    player.emit(PlayerState.CUED);
+    const third = track(src.play());
+    expect(vi.getTimerCount()).toBe(3); // resync + 4 s + 15 s
+    await advance(mod.YT_PLAY_TIMEOUT_MS);
+    expect(third.state).toBe("rejected");
+    expect(player.pauseVideo).toHaveBeenCalledTimes(3); // refusal, pause, refusal
+    src.destroy();
+  });
+
   it("(f) zwei parallele play() → ein playVideo, ein Promise", async () => {
     const { src, player } = await loaded();
     const a = src.play();
