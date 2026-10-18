@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { getLastResult, isAutoStartArmed, resetSessionForTests } from "@/lib/game/session";
 import type { PoseEstimator } from "@/lib/poseEstimator";
@@ -210,6 +210,33 @@ describe("Spielscreen (Simulationsmodus)", () => {
     expect(r.counts.PERFECT).toBe(4);
     expect(r.maxCombo).toBe(4);
     expect(screen.getByTestId("result-score")).toHaveTextContent("4.000");
+  });
+
+  it("öffnet keine Kamera: kein getUserMedia, kein Video, keine Pose-Erkennung", async () => {
+    const getUserMedia = vi.fn();
+    const enumerateDevices = vi.fn(async () => []);
+    vi.stubGlobal("isSecureContext", true);
+    const original = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia, enumerateDevices },
+    });
+    onTestFinished(() => {
+      if (original) Object.defineProperty(navigator, "mediaDevices", original);
+      else Reflect.deleteProperty(navigator, "mediaDevices");
+    });
+    // A saved camera must not tempt the simulation into opening it either.
+    localStorage.setItem("dancebeat.settings", JSON.stringify({ cameraId: "cam-1" }));
+    const { container } = await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5000);
+    for (let i = 0; i < 40; i++) await advance(100);
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(enumerateDevices).not.toHaveBeenCalled();
+    expect(container.querySelector("video")).toBeNull();
+    expect(scene.estimators).toHaveLength(0);
+    // The result comes from the choreography's own angles only.
+    expect(getLastResult(SONG_ID)!.counts.PERFECT).toBe(4);
   });
 
   it("Totalausfall im Simulationsmodus: Hinweis statt stiller X", async () => {

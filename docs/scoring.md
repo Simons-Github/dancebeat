@@ -102,7 +102,8 @@ Die Abweichung wird durch den Toleranzfaktor der Schwierigkeit geteilt und dann 
 ## Sterne und Rang
 
 - Referenzmaximum = alle gespielten Moves PERFECT bei Multiplikator x2 (realistisch erreichbar),
-  Gold 5-fach. Per `seekTo` übersprungene Moves zählen nicht mit.
+  Gold 5-fach. **Per `seekTo` übersprungene Moves zählen nicht für die Sterne:** weder im
+  Score noch im Referenzmaximum, sie werden also weder belohnt noch bestraft.
 - Quote = Score / Referenzmaximum. Sterne bei 15 / 30 / 45 / 60 / 75 %; **Megastar** ab 95 %.
 - Da lange Combos x3 oder x4 erreichen, kann die Quote über 100 % liegen. Das ist gewollt, aber
   noch zu prüfen, ob die Sternstufen sich gut anfühlen.
