@@ -23,11 +23,13 @@ Browser-APIs (getUserMedia, MediaPipe/WASM, HTMLAudioElement, IndexedDB, localSt
 
 ### Kamera → Pose → Winkel → Scoring → UI
 
-1. `usePoseTracking` öffnet die Frontkamera (`getUserMedia`) und erzeugt einen MediaPipe Pose
-   Landmarker (VIDEO-Modus, GPU mit CPU-Fallback).
-2. Eine rAF-Schleife ruft `detectForVideo` auf und legt das Ergebnis als `PoseFrame`
-   (Landmarks normiert auf 0..1 je Achse, plus Seitenverhältnis `aspect` des Videos) in einer Ref
-   ab.
+1. `usePoseTracking` öffnet die Frontkamera (`getUserMedia`, ideal 1280×720, max. 1280×720) und
+   erzeugt über die Schnittstelle `PoseEstimator` (Standard: MediaPipe Pose Landmarker „lite“,
+   VIDEO-Modus, GPU mit CPU-Fallback).
+2. Eine Schleife auf `requestVideoFrameCallback` (Fallback rAF mit Überspringen gleicher Bilder)
+   ruft `detect` auf und legt das Ergebnis als `PoseFrame` (Landmarks normiert auf 0..1 je Achse,
+   plus Seitenverhältnis `aspect` des Videos) in einer Ref ab. Zusätzlich wird der Callback
+   `onFrame` aufgerufen; Overlays zeichnen darin direkt auf ein Canvas. Kein `setState` pro Frame.
 3. `computeAngles(landmarks, { aspect })` berechnet die Gelenkwinkel. Das Seitenverhältnis
    gleicht aus, dass x auf die Bildbreite und y auf die Bildhöhe normiert ist.
 4. `useScoring.sample(t, angles)` wird regelmäßig (ca. alle 100 ms) mit der Spielzeit aufgerufen
@@ -90,15 +92,17 @@ IndexedDB-Versionen:
 Kamerabilder verlassen das Gerät nie. Folgende Abrufe gehen trotzdem ins Netz und müssen in der
 UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 
-| Was                            | Von                                   | Wann                     |
-| ------------------------------ | ------------------------------------- | ------------------------ |
-| MediaPipe-WASM-Laufzeit        | cdn.jsdelivr.net                      | Start der Pose-Erkennung |
-| Pose-Modell (`.task`)          | storage.googleapis.com                | Start der Pose-Erkennung |
-| YouTube-IFrame-API, Video      | youtube.com                           | YouTube-Song laden       |
-| Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden       |
-| Audio-URL                      | vom Nutzer eingegebene Adresse        | URL-Song laden           |
+| Was                            | Von                                   | Wann                                     |
+| ------------------------------ | ------------------------------------- | ---------------------------------------- |
+| MediaPipe-WASM-Laufzeit        | cdn.jsdelivr.net                      | Aufstellhilfe (Start der Pose-Erkennung) |
+| Pose-Modell (`.task`)          | storage.googleapis.com                | Aufstellhilfe (Start der Pose-Erkennung) |
+| YouTube-IFrame-API, Video      | youtube.com                           | YouTube-Song laden                       |
+| Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden                       |
+| Audio-URL                      | vom Nutzer eingegebene Adresse        | URL-Song laden                           |
 
-Ziel (Etappe 7): WASM und Modell nach `public/` verlegen, dann entfallen die ersten beiden.
+Die ersten beiden Abrufe sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
+(`src/components/setup/PrivacyNote.tsx`; W12). Ziel (Etappe 7): WASM und Modell nach `public/`
+verlegen, dann entfallen sie und der Hinweis wird angepasst.
 
 **Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
 selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gibt keine Anfrage an
@@ -106,12 +110,37 @@ Google Fonts oder ein anderes CDN.
 
 ## Pose-Erkennung
 
-- `src/lib/mediapipe.ts` erzeugt den Landmarker (Modell `lite`, `full` oder `heavy`).
-- Geplant (Etappe 2): Kapselung hinter einer Schnittstelle, damit MediaPipe und MoveNet (TF.js)
-  austauschbar sind, plus FPS-Anzeige zum Vergleich auf dem Gerät.
+- `src/lib/poseEstimator.ts`: Schnittstelle `PoseEstimator` (`init`, `detect`, `close`). `init`
+  liefert das tatsächlich genutzte Delegate (GPU/CPU); `close` ist jederzeit erlaubt, auch während
+  `init` noch lädt. Landmarks folgen der 33-Punkte-Topologie von MediaPipe.
+- `src/lib/mediapipePoseEstimator.ts`: Standardimplementierung (Modell `lite` für Live).
+  `src/lib/mediapipe.ts` erzeugt den Landmarker (`lite`, `full` oder `heavy`) und meldet das Delegate.
+- Eine zweite Implementierung (MoveNet) entfällt: MediaPipe läuft auf dem Handy flüssig. Die
+  Schnittstelle bleibt bestehen.
 - Winkel hängen nicht von Körpergröße oder Abstand zur Kamera ab.
-- Licht-Check: alle 2 s wird das Video auf 16×12 Pixel verkleinert und die Helligkeit gemessen,
-  nur lokal.
+- Licht-Check (`src/lib/brightness.ts`): alle 2 s wird das Video auf 16×12 Pixel verkleinert und
+  die Helligkeit gemessen (Schwelle 45 von 255), nur lokal.
+- Körper-Check (`src/lib/bodyTracker.ts`): Schultern, Hüften, Knie und Knöchel müssen mit
+  visibility ≥ 0.5 eine Sekunde lang ohne Unterbrechung gesehen werden (ein schlechter Frame oder
+  eine Bildpause über 300 ms setzt zurück). Liefert außerdem Abstand (Schulter-Knöchel-Höhe
+  0.4 bis 0.85 der Bildhöhe) und Hinweistexte.
+- Fehler der Kamera: `src/lib/cameraErrors.ts` ordnet `getUserMedia`-Fehler deutschen Meldungen zu.
+  Eine veraltete gespeicherte Kamera-ID (`OverconstrainedError`) fällt auf die Standardkamera
+  zurück und löscht die gespeicherte ID.
+- Diagnose (`src/lib/frameStats.ts`): Bildrate der Erkennung (letzte Sekunde), geglättete
+  Inferenzzeit und Delegate; das Diagnosefeld liest sie zweimal pro Sekunde aus einer Ref.
+- Aufstellhilfe: Das Bild wird nur per CSS gespiegelt, die Erkennung bekommt das Rohbild. Das
+  Overlay-Canvas liegt im selben gespiegelten Container und hat die Pixelgröße des Videos; der
+  Container übernimmt dessen Seitenverhältnis, damit nichts zugeschnitten oder verzerrt wird.
+
+## Messwerte
+
+Aus dem Diagnosefeld der Aufstellhilfe (Zahnrad-Symbol), Erkennung mit Modell „lite“. Ziel:
+mehr als 25 FPS. Werte trägt der Nutzer nach.
+
+| Gerät | Browser | FPS   | Inferenzzeit (ms) | Delegate |
+| ----- | ------- | ----- | ----------------- | -------- |
+| _TBD_ | _TBD_   | _TBD_ | _TBD_             | _TBD_    |
 
 ## BPM-Schätzung
 

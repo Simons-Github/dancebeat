@@ -10,8 +10,8 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | Etappe                                       | Status | Empfohlenes Modell                                                    |
 | -------------------------------------------- | ------ | --------------------------------------------------------------------- |
 | 1. Navigation, Layout, Menü, Song-Bibliothek | ✅     | Sonnet                                                                |
-| 2. Aufstellhilfe                             | 🔜     | Sonnet                                                                |
-| 3. Gameplay                                  | ⏳     | Opus                                                                  |
+| 2. Aufstellhilfe                             | ✅     | Sonnet                                                                |
+| 3. Gameplay                                  | 🔜     | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ⏳     | Sonnet                                                                |
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳     | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ⏳     | Sonnet                                                                |
@@ -29,6 +29,7 @@ K3 Mindestabdeckung beim Scoring.
 ✅ W1 vorzeichenbehaftete Winkel, kürzester Bogen · W2 `mirrorChoreo`.
 ✅ Choreografie-Format v1 mit zod, `SongRepository`, IndexedDB-Migration, Export/Import-Logik,
 Speicher-Helfer (W11 teilweise), Repository-Tests mit `fake-indexeddb`.
+✅ W4 (Etappe 2): kein `setState` pro Frame, Video-Frame-Callback, Kamera-Fehlerfälle.
 ✅ SDK-Typen, Lint sauber · Quick Fixes (URL ohne CORS-Zwang, Lautstärke live, W8 teilweise) ·
 Combo-Regel (OK hält, X bricht).
 
@@ -52,7 +53,7 @@ Test in `src/test/contrast.test.ts`), zuletzt gewählter Song wird gemerkt, High
 aria-label, Peek der nächsten Kachel im Hochformat, Dev-Server nur lokal außer `dev:https`.
 Browser-Prüfung per Playwright (390x844 und 844x390) erledigt. **Offen:** Prüfung am Gerät.
 
-### 2. Aufstellhilfe ⏳
+### 2. Aufstellhilfe ✅
 
 - Kurze Erklärung, Kamera-Berechtigung, Live-Bild mit Silhouetten-Rahmen und Pose-Overlay auf
   Canvas. „Los geht's“ erst aktiv, wenn Schultern, Hüften, Knie und Knöchel erkannt werden.
@@ -60,14 +61,24 @@ Browser-Prüfung per Playwright (390x844 und 844x390) erledigt. **Offen:** Prüf
   Laufzeit von jsDelivr und Google geladen (IP-Adresse wird übertragen, keine Bilder) (W12).
 - Fehlermeldungen: Kamera verweigert, keine Kamera, Kamera belegt, Körper nicht sichtbar,
   schlechtes Licht, Beine fehlen.
-- **Pose-Schnittstelle:** Erkennung hinter einer Schnittstelle kapseln, damit MediaPipe Pose
-  Landmarker und MoveNet (TF.js) austauschbar sind (MoveNet nur nach Freigabe der Abhängigkeit).
+- **Pose-Schnittstelle:** Erkennung hinter einer Schnittstelle kapseln (umgesetzt; MoveNet
+  entfällt nach dem Handy-Test).
   **FPS- und Inferenzzeit-Anzeige** zum Vergleich auf dem Handy.
 - W4: kein `setState` pro Frame (Overlay per Callback auf Canvas), `requestVideoFrameCallback`
   statt 33-ms-Drossel, `NotReadableError`/`OverconstrainedError` (veraltete Kamera-ID →
   Standardkamera).
 
-### 3. Gameplay ⏳
+Umgesetzt: Route `/setup/$songId` (Erklärung, „Kamera starten“ per Tippen, gespiegeltes Bild mit
+Zielrahmen und Skelett auf Canvas, Statuszeilen, Hinweise, Kamera-Auswahl, Diagnosefeld,
+Datenschutzhinweis) und Platzhalter `/play/$songId`. `PoseEstimator`-Schnittstelle mit
+MediaPipe-Implementierung („lite“); `usePoseTracking` neu auf Video-Frame-Callback und
+`onFrame`; Körper-Check (1 s durchgehend, `src/lib/bodyTracker.ts`); Kamerafehler auf Deutsch
+(`src/lib/cameraErrors.ts`). Vitest-Tests für Körper-Check, Fehlerzuordnung, Aufräumen, Hook und
+Screen. Handy-Test bestanden: MediaPipe läuft flüssig, **MoveNet entfällt** (keine zweite
+`PoseEstimator`-Implementierung, keine TF.js-Abhängigkeit). Messwerte stehen in
+[architecture.md](architecture.md#messwerte) (vom Nutzer nachzutragen).
+
+### 3. Gameplay 🔜
 
 - Audio-Clock, Countdown 3-2-1, Piktoleiste, Coach-Strichfigur (Canvas), Score/Combo/Sterne,
   Wertungs-Popups, Gold-Move-Effekte, Pause. Bewertung alle ~100 ms. Design: [design.md](design.md).
@@ -164,14 +175,13 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | ID  | Befund                                                                    | Etappe |
 | --- | ------------------------------------------------------------------------- | ------ |
 | W3  | Seek/Intro wertet frühere Moves als X; Soll-Winkel pro Aufruf neu         | 3      |
-| W4  | `setState` pro Frame, effektiv ~20 FPS, fehlende Kamera-Fehlerfälle       | 2      |
 | W5  | YouTube/Spotify-Uhr läuft beim Start vor                                  | 3      |
 | W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf    | 10     |
 | W7  | YouTube: sichtbarer Player ≥ 200 px, `seek` im Pausenzustand, iOS         | 3      |
 | W9  | AudioSource ohne `onError`, Lade-Race, kein `visibilitychange`            | 3      |
 | W10 | iOS: `canplay` vor Nutzergeste                                            | 3      |
 | W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                | 5      |
-| W12 | Externe Abrufe in der UI benennen                                         | 2, 7   |
+| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)  | 7      |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                  | 11     |
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen              | 11     |
 | N3  | `seedDemos` vertraut nur dem localStorage-Marker                          | 11     |

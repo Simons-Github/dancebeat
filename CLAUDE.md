@@ -105,6 +105,17 @@ headless Chromium, isoliertes Profil, Fake-Kamera (640×480) mit erteilter Kamer
   sind erlaubt; andere Origins blockiert der Browser (`ERR_BLOCKED_BY_CLIENT`). Für Etappe 2
   `https://cdn.jsdelivr.net` und `https://storage.googleapis.com` in `network.allowedOrigins`
   ergänzen. Die Sperre ist eine Schutzhilfe, keine Sicherheitsgrenze.
+- **Vor jedem Test mit Kamera** per `ps aux | grep -i playwright` prüfen, dass der laufende
+  Playwright-Chromium headless läuft und die Flags `--use-fake-device-for-media-stream` und
+  `--use-fake-ui-for-media-stream` trägt, und dass der MCP-Server der projektlokale aus `.mcp.json`
+  ist (`@playwright/mcp@0.0.83` mit `--config .claude/playwright-mcp.json`), nicht ein globaler.
+- `getUserMedia` niemals direkt aufrufen, um die Konfiguration zu prüfen (es könnte die echte
+  Kamera öffnen). Die Flag-Prüfung per `ps` ist der einzige Weg.
+- Fehlen Flags oder ist ein Browserfenster sichtbar: Test abbrechen, den Nutzer informieren und
+  nichts anklicken.
+- Nach jeder Änderung an `.claude/playwright-mcp.json` den MCP-Server neu starten (`/mcp`).
+- Screenshots und Snapshots nach dem Test löschen (Ausgabeordner `.playwright-mcp/` liegt im
+  Arbeitsverzeichnis der Sitzung, kann also auch außerhalb des Repos landen).
 - Jeden Screen in Hochformat 390×844 (Standard) und Querformat 844×390 (`browser_resize`)
   prüfen, per Snapshot und bei Layoutfragen per Screenshot.
 - Nach jeder Navigation und Interaktion `browser_console_messages` lesen; Fehler und Warnungen
