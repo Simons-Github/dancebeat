@@ -201,13 +201,27 @@ declare global {
   }
 }
 let ytReady: Promise<void> | null = null;
+/** Script load or `onYouTubeIframeAPIReady` not within this time: give up, the next try reloads. */
+export const YT_SCRIPT_TIMEOUT_MS = 15000;
 function loadYT() {
   if (window.YT?.Player) return Promise.resolve();
   ytReady ??= new Promise((res, rej) => {
-    window.onYouTubeIframeAPIReady = () => res();
     const s = document.createElement("script");
+    let timeout = 0;
+    const fail = () => {
+      clearTimeout(timeout);
+      // Do not cache the failure: the next attempt starts with a fresh script tag.
+      ytReady = null;
+      s.remove();
+      rej(new Error("YouTube konnte nicht geladen werden. Bist du online?"));
+    };
+    window.onYouTubeIframeAPIReady = () => {
+      clearTimeout(timeout);
+      res();
+    };
+    timeout = window.setTimeout(fail, YT_SCRIPT_TIMEOUT_MS);
     s.src = "https://www.youtube.com/iframe_api";
-    s.onerror = () => rej(new Error("YouTube konnte nicht geladen werden. Bist du online?"));
+    s.onerror = fail;
     document.head.appendChild(s);
   });
   return ytReady;
@@ -218,13 +232,43 @@ export function parseYouTubeId(input: string) {
   return m ? m[1] : /^[\w-]{11}$/.test(input.trim()) ? input.trim() : null;
 }
 
+/**
+ * `play()` waits for PLAYING. Still UNSTARTED or CUED after this time: autoplay was refused
+ * (no gesture reached the iframe). Assumed value, to be tuned on devices.
+ */
+export const YT_PLAY_TIMEOUT_MS = 4000;
+/** BUFFERING at the refusal check: wait up to this time (from `play()`) before giving up. */
+export const YT_BUFFER_TIMEOUT_MS = 15000;
+
+const YT_STATE_UNSTARTED = -1;
+
+interface PendingPlay {
+  promise: Promise<void>;
+  resolve: () => void;
+  reject: (e: Error) => void;
+  timers: number[];
+}
+
 class YouTubeSource implements AudioSource {
   type = "youtube" as const;
   lowPrecision = true;
   private player: YT.Player | null = null;
+  private api: typeof YT | null = null;
   private clock = new SmoothClock();
-  private poll = 0;
   private resync = 0;
+  private destroyed = false;
+  /** Set on `onReady`; errors after that are runtime errors (`onError` callback). */
+  private ready = false;
+  /** Last state from `onStateChange`; drives the clock. */
+  private ytState: number = YT_STATE_UNSTARTED;
+  /** Seek before the first start: `seekTo` on an unstarted video would start it (assumption). */
+  private pendingSeekMs: number | null = null;
+  /** Shared by concurrent `play()` calls; rejected by `pause()`/`destroy()`. */
+  private pending: PendingPlay | null = null;
+  /** A play() was refused once: later calls wait without timeouts (tap on the video may start it). */
+  private refusedOnce = false;
+  private loadTimer = 0;
+  private settleLoad: (() => void) | null = null;
   private endedCb = () => {};
   private errorCb: (message: string) => void = () => {};
   private host: HTMLDivElement;
@@ -236,66 +280,175 @@ class YouTubeSource implements AudioSource {
     this.host.appendChild(inner);
     document.body.appendChild(this.host);
   }
+  private errorText(api: typeof YT, code: YT.PlayerError) {
+    return code === api.PlayerError.EmbeddingNotAllowed ||
+      code === api.PlayerError.EmbeddingNotAllowed2
+      ? "Dieses Video darf nicht eingebettet werden."
+      : "YouTube-Video nicht verfügbar.";
+  }
   async load() {
     await loadYT();
+    // Destroyed while the API script loaded (song switch, route left): no player.
+    if (this.destroyed) return;
     const api = window.YT;
     const el = this.host.firstChild;
     if (!api || !(el instanceof HTMLElement))
       throw new Error("YouTube konnte nicht geladen werden.");
+    this.api = api;
     await new Promise<void>((res, rej) => {
-      const t = setTimeout(
-        () => rej(new Error("YouTube-Video lädt nicht. Prüfe Link und Verbindung.")),
-        15000,
-      );
+      const settle = () => {
+        clearTimeout(this.loadTimer);
+        this.settleLoad = null;
+      };
+      // destroy() during the wait ends load() quietly, like ElementSource.
+      this.settleLoad = () => {
+        settle();
+        res();
+      };
+      this.loadTimer = window.setTimeout(() => {
+        settle();
+        rej(new Error("YouTube-Video lädt nicht. Prüfe Link und Verbindung."));
+      }, 15000);
       this.player = new api.Player(el, {
         videoId: this.videoId,
         width: 2,
         height: 2,
+        host: "https://www.youtube-nocookie.com",
         playerVars: { playsinline: 1, controls: 0, disablekb: 1 },
         events: {
           onReady: () => {
-            clearTimeout(t);
+            if (this.destroyed) return;
+            settle();
+            this.ready = true;
             res();
           },
           onError: (e: YT.OnErrorEvent) => {
-            clearTimeout(t);
-            rej(
-              new Error(
-                e.data === api.PlayerError.EmbeddingNotAllowed ||
-                  e.data === api.PlayerError.EmbeddingNotAllowed2
-                  ? "Dieses Video darf nicht eingebettet werden."
-                  : "YouTube-Video nicht verfügbar.",
-              ),
-            );
+            if (this.destroyed) return;
+            const message = this.errorText(api, e.data);
+            if (!this.ready) {
+              settle();
+              rej(new Error(message));
+            } else this.fail(message);
           },
-          onStateChange: (e: YT.OnStateChangeEvent) => {
-            if (e.data === api.PlayerState.ENDED) this.endedCb();
-          },
+          onStateChange: (e: YT.OnStateChangeEvent) => this.stateChanged(api, e.data),
         },
       });
     });
   }
-  async play() {
-    const player = this.player;
-    if (!player) throw new Error("YouTube-Player ist noch nicht geladen.");
-    player.playVideo();
-    this.clock.sync(player.getCurrentTime() * 1000, true, true);
-    clearInterval(this.poll);
+  private currentMs() {
+    return this.pendingSeekMs ?? (this.player?.getCurrentTime() ?? 0) * 1000;
+  }
+  private stateChanged(api: typeof YT, state: YT.PlayerState) {
+    if (this.destroyed) return;
+    this.ytState = state;
+    // Started some other way (direct tap on the video): the remembered seek no longer applies.
+    if (state === api.PlayerState.PLAYING) this.pendingSeekMs = null;
+    // Game time runs only while YouTube reports PLAYING; buffering and pausing hold it.
+    const playing = state === api.PlayerState.PLAYING;
+    this.clock.sync(this.currentMs(), playing, true);
+    if (playing) this.settlePlay();
+    if (state === api.PlayerState.ENDED) this.endedCb();
+  }
+  private takePending() {
+    const p = this.pending;
+    if (!p) return null;
+    p.timers.forEach((t) => clearTimeout(t));
+    this.pending = null;
+    return p;
+  }
+  private settlePlay(error?: Error) {
+    const p = this.takePending();
+    if (!p) return;
+    if (error) p.reject(error);
+    else p.resolve();
+  }
+  /** Runtime error after `onReady`: stop the clock and report it. */
+  private fail(message: string) {
     clearInterval(this.resync);
-    // Alle ~16 ms lokal fortgeschrieben (SmoothClock), alle 500 ms an API-Zeit angleichen
+    this.clock.sync(this.currentMs(), false, true);
+    this.settlePlay(new Error(message));
+    this.errorCb(message);
+  }
+  private startResync(api: typeof YT) {
+    clearInterval(this.resync);
+    // Advanced locally per frame (SmoothClock), aligned with the API time every 500 ms.
     this.resync = window.setInterval(() => {
-      const playing = player.getPlayerState() === YT.PlayerState.PLAYING;
-      this.clock.sync(player.getCurrentTime() * 1000, playing);
+      this.clock.sync(this.currentMs(), this.ytState === api.PlayerState.PLAYING);
     }, 500);
   }
+  play(): Promise<void> {
+    const player = this.player;
+    const api = this.api;
+    if (this.destroyed || !player || !api || !this.ready)
+      return Promise.reject(new Error("YouTube-Player ist noch nicht geladen."));
+    if (this.pending) return this.pending.promise;
+    if (this.ytState === api.PlayerState.PLAYING) {
+      this.startResync(api);
+      return Promise.resolve();
+    }
+    let resolve = () => {};
+    let reject: (e: Error) => void = () => {};
+    const promise = new Promise<void>((res, rej) => {
+      resolve = res;
+      reject = rej;
+    });
+    const pending: PendingPlay = { promise, resolve, reject, timers: [] };
+    this.pending = pending;
+    if (this.pendingSeekMs !== null) {
+      player.seekTo(this.pendingSeekMs / 1000, true);
+      this.pendingSeekMs = null;
+    }
+    player.playVideo();
+    this.startResync(api);
+    if (!this.refusedOnce) {
+      const refuse = (message: string) => {
+        this.refusedOnce = true;
+        player.pauseVideo();
+        this.settlePlay(new Error(message));
+      };
+      pending.timers.push(
+        window.setTimeout(() => {
+          const s = this.ytState;
+          if (s === YT_STATE_UNSTARTED || s === api.PlayerState.CUED)
+            refuse("YouTube hat den Start blockiert. Tippe zum Starten.");
+        }, YT_PLAY_TIMEOUT_MS),
+        window.setTimeout(
+          () => refuse("YouTube-Video lädt nicht. Prüfe Link und Verbindung."),
+          YT_BUFFER_TIMEOUT_MS,
+        ),
+      );
+    }
+    return promise;
+  }
   pause() {
+    clearInterval(this.resync);
+    this.settlePlay(new Error("Wiedergabe angehalten."));
     if (!this.player) return;
     this.player.pauseVideo();
-    this.clock.sync(this.player.getCurrentTime() * 1000, false, true);
+    this.clock.sync(this.currentMs(), false, true);
   }
   seek(ms: number) {
-    this.player?.seekTo(ms / 1000, true);
-    this.clock.sync(ms, true, true);
+    const player = this.player;
+    const api = this.api;
+    if (!player || !api) {
+      this.pendingSeekMs = ms;
+      this.clock.sync(ms, false, true);
+      return;
+    }
+    const s = this.ytState;
+    const started =
+      s === api.PlayerState.PLAYING ||
+      s === api.PlayerState.PAUSED ||
+      s === api.PlayerState.BUFFERING;
+    if (!started && !this.pending) {
+      // Not started (UNSTARTED, CUED, ENDED): seekTo would start playback; play() applies it.
+      this.pendingSeekMs = ms;
+      this.clock.sync(ms, false, true);
+      return;
+    }
+    this.pendingSeekMs = null;
+    player.seekTo(ms / 1000, true);
+    this.clock.sync(ms, s === api.PlayerState.PLAYING, true);
   }
   getTimeMs() {
     return this.clock.get();
@@ -310,13 +463,16 @@ class YouTubeSource implements AudioSource {
     this.errorCb = cb;
   }
   destroy() {
-    clearInterval(this.poll);
+    this.destroyed = true;
     clearInterval(this.resync);
+    this.settlePlay(new Error("Wiedergabe beendet."));
+    this.settleLoad?.();
     try {
       this.player?.destroy();
     } catch {
       /* */
     }
+    this.player = null;
     this.host.remove();
   }
 }

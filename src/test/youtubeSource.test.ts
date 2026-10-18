@@ -1,0 +1,380 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+
+import type { AudioSource } from "@/lib/audio/sources";
+import { makeSong } from "./fixtures";
+
+type Sources = typeof import("@/lib/audio/sources");
+
+const PlayerState = { UNSTARTED: -1, ENDED: 0, PLAYING: 1, PAUSED: 2, BUFFERING: 3, CUED: 5 };
+const PlayerError = {
+  InvalidParam: 2,
+  Html5Error: 5,
+  VideoNotFound: 100,
+  EmbeddingNotAllowed: 101,
+  EmbeddingNotAllowed2: 150,
+};
+
+/** Stand-in for YT.Player: keeps the options; the test drives state, time runs while PLAYING. */
+class FakePlayer {
+  static all: FakePlayer[] = [];
+  state = PlayerState.UNSTARTED;
+  private time = 0;
+  private since = 0;
+  playVideo = vi.fn();
+  pauseVideo = vi.fn();
+  seekTo = vi.fn((sec: number) => {
+    this.time = sec;
+    this.since = now;
+  });
+  setVolume = vi.fn();
+  destroy = vi.fn();
+  constructor(
+    public el: HTMLElement,
+    public opts: YT.PlayerOptions,
+  ) {
+    FakePlayer.all.push(this);
+  }
+  getPlayerState = () => this.state;
+  getCurrentTime = () =>
+    this.state === PlayerState.PLAYING ? this.time + (now - this.since) / 1000 : this.time;
+  private get target() {
+    return this as unknown as YT.Player;
+  }
+  ready() {
+    const cb = this.opts.events?.onReady;
+    if (typeof cb === "function") cb({ target: this.target });
+  }
+  emit(state: number) {
+    this.time = this.getCurrentTime();
+    this.since = now;
+    this.state = state;
+    const cb = this.opts.events?.onStateChange;
+    if (typeof cb === "function") cb({ target: this.target, data: state });
+  }
+  fail(code: number) {
+    const cb = this.opts.events?.onError;
+    if (typeof cb === "function") cb({ target: this.target, data: code });
+  }
+}
+
+function installYT() {
+  window.YT = { Player: FakePlayer, PlayerState, PlayerError } as unknown as typeof YT;
+}
+
+const ytSong = () => ({
+  ...makeSong(),
+  source: { type: "youtube" as const, videoId: "aaaaaaaaaaa" },
+});
+
+let now = 0;
+let mod: Sources;
+
+/** Lets pending promise callbacks run without advancing time. */
+const tick = () => vi.advanceTimersByTimeAsync(0);
+const advance = async (ms: number) => {
+  now += ms;
+  await vi.advanceTimersByTimeAsync(ms);
+};
+
+/** Settled state of a promise, without awaiting it forever. */
+function track(p: Promise<void>) {
+  const r: { state: "pending" | "resolved" | "rejected"; error?: unknown } = { state: "pending" };
+  p.then(
+    () => (r.state = "resolved"),
+    (e: unknown) => {
+      r.state = "rejected";
+      r.error = e;
+    },
+  );
+  return r;
+}
+
+async function loaded(): Promise<{ src: AudioSource; player: FakePlayer }> {
+  const src = mod.createSource(ytSong());
+  const done = src.load();
+  await tick();
+  const player = FakePlayer.all.at(-1);
+  if (!player) throw new Error("no player");
+  player.ready();
+  await done;
+  return { src, player };
+}
+
+beforeEach(async () => {
+  vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval"] });
+  now = 0;
+  vi.spyOn(performance, "now").mockImplementation(() => now);
+  FakePlayer.all = [];
+  installYT();
+  // Fresh module per test: loadYT caches its promise at module level.
+  vi.resetModules();
+  mod = await import("@/lib/audio/sources");
+});
+
+afterEach(() => {
+  delete window.YT;
+  delete window.onYouTubeIframeAPIReady;
+  document.head.querySelectorAll("script").forEach((s) => s.remove());
+  vi.useRealTimers();
+  vi.restoreAllMocks();
+});
+
+describe("YouTubeSource: Uhr", () => {
+  it("(a) steht nach play() bis PLAYING, dann läuft sie", async () => {
+    const { src, player } = await loaded();
+    const p = track(src.play());
+    expect(player.playVideo).toHaveBeenCalledTimes(1);
+    await advance(1000);
+    expect(src.getTimeMs()).toBe(0);
+    expect(p.state).toBe("pending");
+
+    player.emit(PlayerState.PLAYING);
+    await tick();
+    expect(p.state).toBe("resolved");
+    await advance(300);
+    expect(src.getTimeMs()).toBe(300);
+    expect(vi.getTimerCount()).toBe(1); // only the resync interval
+    src.destroy();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("(b) BUFFERING mitten im Spiel hält sie an, PLAYING setzt sie fort", async () => {
+    const { src, player } = await loaded();
+    void src.play();
+    player.emit(PlayerState.PLAYING);
+    await advance(2000);
+    expect(src.getTimeMs()).toBe(2000);
+
+    player.emit(PlayerState.BUFFERING);
+    await advance(1500);
+    expect(src.getTimeMs()).toBe(2000);
+
+    player.emit(PlayerState.PLAYING);
+    await advance(100);
+    expect(src.getTimeMs()).toBe(2100);
+    src.destroy();
+  });
+});
+
+describe("YouTubeSource: Start und Autoplay-Sperre", () => {
+  it("(c) lehnt nach 4 s bei CUED ab, ruft pauseVideo und hinterlässt keine Timeouts", async () => {
+    const { src, player } = await loaded();
+    player.emit(PlayerState.CUED);
+    const p = track(src.play());
+    await advance(mod.YT_PLAY_TIMEOUT_MS - 1);
+    expect(p.state).toBe("pending");
+    await advance(1);
+    expect(p.state).toBe("rejected");
+    expect(player.pauseVideo).toHaveBeenCalledTimes(1);
+    expect(src.getTimeMs()).toBe(0);
+    src.pause();
+    expect(vi.getTimerCount()).toBe(0);
+    src.destroy();
+  });
+
+  it("(d) bei BUFFERING wird weiter gewartet, Ablehnung erst nach 15 s", async () => {
+    const { src, player } = await loaded();
+    const p = track(src.play());
+    player.emit(PlayerState.BUFFERING);
+    await advance(mod.YT_PLAY_TIMEOUT_MS);
+    expect(p.state).toBe("pending");
+    expect(player.pauseVideo).not.toHaveBeenCalled();
+    await advance(mod.YT_BUFFER_TIMEOUT_MS - mod.YT_PLAY_TIMEOUT_MS - 1);
+    expect(p.state).toBe("pending");
+    await advance(1);
+    expect(p.state).toBe("rejected");
+    expect((p.error as Error).message).toBe("YouTube-Video lädt nicht. Prüfe Link und Verbindung.");
+    expect(player.pauseVideo).toHaveBeenCalledTimes(1);
+    src.destroy();
+  });
+
+  it("(e) zweites play() nach Ablehnung wartet ohne Timeout; Tipp aufs Video löst es auf", async () => {
+    const { src, player } = await loaded();
+    const first = track(src.play());
+    await advance(mod.YT_PLAY_TIMEOUT_MS);
+    expect(first.state).toBe("rejected");
+
+    const second = track(src.play());
+    expect(player.playVideo).toHaveBeenCalledTimes(2);
+    expect(vi.getTimerCount()).toBe(1); // resync only, no refusal timeouts
+    await advance(60_000);
+    expect(second.state).toBe("pending");
+    expect(player.pauseVideo).toHaveBeenCalledTimes(1);
+
+    // Direct tap on the video: YouTube starts by itself and reports PLAYING.
+    player.emit(PlayerState.BUFFERING);
+    player.emit(PlayerState.PLAYING);
+    await tick();
+    expect(second.state).toBe("resolved");
+    src.destroy();
+  });
+
+  it("(f) zwei parallele play() → ein playVideo, ein Promise", async () => {
+    const { src, player } = await loaded();
+    const a = src.play();
+    const b = src.play();
+    expect(a).toBe(b);
+    expect(player.playVideo).toHaveBeenCalledTimes(1);
+    player.emit(PlayerState.PLAYING);
+    await expect(a).resolves.toBeUndefined();
+    src.destroy();
+  });
+
+  it("pause() und destroy() lehnen ein ausstehendes play() ab und räumen die Timeouts auf", async () => {
+    const { src } = await loaded();
+    const a = track(src.play());
+    expect(vi.getTimerCount()).toBe(3); // resync + 4 s + 15 s
+    src.pause();
+    await tick();
+    expect(a.state).toBe("rejected");
+    expect(vi.getTimerCount()).toBe(0);
+
+    const b = track(src.play());
+    src.destroy();
+    await tick();
+    expect(b.state).toBe("rejected");
+    expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("YouTubeSource: Seek", () => {
+  it("(g) seek vor dem Start ruft kein seekTo, play() danach seekTo vor playVideo", async () => {
+    const { src, player } = await loaded();
+    src.seek(12_000);
+    expect(player.seekTo).not.toHaveBeenCalled();
+    await advance(1000);
+    expect(src.getTimeMs()).toBe(12_000);
+
+    void src.play();
+    expect(player.seekTo).toHaveBeenCalledWith(12, true);
+    expect(player.seekTo.mock.invocationCallOrder[0]).toBeLessThan(
+      player.playVideo.mock.invocationCallOrder[0] ?? 0,
+    );
+    player.emit(PlayerState.PLAYING);
+    await advance(500);
+    expect(src.getTimeMs()).toBe(12_500);
+    src.destroy();
+  });
+
+  it("(h) seek im PAUSED-Zustand lässt die Uhr stehen", async () => {
+    const { src, player } = await loaded();
+    void src.play();
+    player.emit(PlayerState.PLAYING);
+    await advance(1000);
+    src.pause();
+    player.emit(PlayerState.PAUSED);
+
+    src.seek(5000);
+    expect(player.seekTo).toHaveBeenCalledWith(5, true);
+    await advance(2000);
+    expect(src.getTimeMs()).toBe(5000);
+    src.destroy();
+  });
+});
+
+describe("YouTubeSource: Laden", () => {
+  it("(i) destroy() während load() erzeugt keinen Player und hinterlässt keinen Timer", async () => {
+    delete window.YT;
+    const src = mod.createSource(ytSong());
+    const done = src.load();
+    src.destroy();
+    installYT();
+    window.onYouTubeIframeAPIReady?.();
+    await done;
+    expect(FakePlayer.all).toHaveLength(0);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("(i) destroy() vor onReady: load() endet, kein Timer, spätes onReady bleibt folgenlos", async () => {
+    const src = mod.createSource(ytSong());
+    const done = track(src.load());
+    await tick();
+    const player = FakePlayer.all[0];
+    src.destroy();
+    await tick();
+    expect(done.state).toBe("resolved");
+    expect(vi.getTimerCount()).toBe(0);
+    expect(player?.destroy).toHaveBeenCalled();
+
+    player?.ready();
+    player?.emit(PlayerState.PLAYING);
+    expect(vi.getTimerCount()).toBe(0);
+    expect(src.getTimeMs()).toBe(0);
+  });
+
+  it("(j) loadYT lädt nach Skriptfehler beim nächsten Versuch neu", async () => {
+    delete window.YT;
+    const first = mod.createSource(ytSong());
+    const firstLoad = first.load();
+    const s1 = document.head.querySelector<HTMLScriptElement>(
+      'script[src="https://www.youtube.com/iframe_api"]',
+    );
+    expect(s1).not.toBeNull();
+    s1?.onerror?.(new Event("error"));
+    await expect(firstLoad).rejects.toThrow("YouTube konnte nicht geladen werden");
+    expect(s1?.isConnected).toBe(false);
+    expect(vi.getTimerCount()).toBe(0);
+    first.destroy();
+
+    const second = mod.createSource(ytSong());
+    const secondLoad = second.load();
+    const s2 = document.head.querySelector('script[src="https://www.youtube.com/iframe_api"]');
+    expect(s2).not.toBeNull();
+    expect(s2).not.toBe(s1);
+    installYT();
+    window.onYouTubeIframeAPIReady?.();
+    await tick();
+    FakePlayer.all[0]?.ready();
+    await expect(secondLoad).resolves.toBeUndefined();
+    second.destroy();
+  });
+
+  it("(j) loadYT nach Timeout ohne API-Ready lädt beim nächsten Versuch neu", async () => {
+    delete window.YT;
+    const first = mod.createSource(ytSong());
+    const firstLoad = track(first.load());
+    await advance(mod.YT_SCRIPT_TIMEOUT_MS);
+    expect(firstLoad.state).toBe("rejected");
+    expect(document.head.querySelectorAll("script")).toHaveLength(0);
+    first.destroy();
+
+    const second = mod.createSource(ytSong());
+    void second.load().catch(() => {});
+    expect(document.head.querySelectorAll("script")).toHaveLength(1);
+    second.destroy();
+  });
+
+  it("(k) Player läuft über youtube-nocookie.com", async () => {
+    const { src, player } = await loaded();
+    expect(player.opts.host).toBe("https://www.youtube-nocookie.com");
+    expect(player.opts.videoId).toBe("aaaaaaaaaaa");
+    src.destroy();
+  });
+
+  it("Fehler vor onReady lehnt load() ab", async () => {
+    const src = mod.createSource(ytSong());
+    const done = src.load();
+    await tick();
+    FakePlayer.all[0]?.fail(PlayerError.EmbeddingNotAllowed);
+    await expect(done).rejects.toThrow("Dieses Video darf nicht eingebettet werden.");
+    expect(vi.getTimerCount()).toBe(0);
+    src.destroy();
+  });
+
+  it("(l) Fehler nach onReady gehen an den onError-Callback und stoppen die Uhr", async () => {
+    const { src, player } = await loaded();
+    const onError = vi.fn();
+    src.onError(onError);
+    const p = track(src.play());
+    player.emit(PlayerState.PLAYING);
+    await advance(1000);
+    expect(p.state).toBe("resolved");
+
+    player.fail(PlayerError.VideoNotFound);
+    expect(onError).toHaveBeenCalledWith("YouTube-Video nicht verfügbar.");
+    expect(vi.getTimerCount()).toBe(0);
+    await advance(1000);
+    expect(src.getTimeMs()).toBe(1000);
+    src.destroy();
+  });
+});
