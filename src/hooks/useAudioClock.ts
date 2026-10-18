@@ -20,6 +20,11 @@ export interface AudioClockOptions {
   container?: () => HTMLElement | null;
   /** Called when the audio reached its end (read from a ref, may change freely). */
   onEnded?: () => void;
+  /**
+   * Called when the source started playing without `play()` (YouTube: direct tap on the video).
+   * Read from a ref like `onEnded`.
+   */
+  onExternalStart?: () => void;
   /** Test seam: replaces `createSource`. */
   create?: (song: Song) => AudioSource;
 }
@@ -68,6 +73,10 @@ export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
       if (cancelled) return;
       setEnded(true);
       latest.current.onEnded?.();
+    });
+    s.onExternalStart?.(() => {
+      if (cancelled) return;
+      latest.current.onExternalStart?.();
     });
     // Runtime failure after loading (connection lost): same error state as a load failure.
     s.onError((message) => {

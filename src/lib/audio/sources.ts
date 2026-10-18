@@ -15,6 +15,11 @@ export interface AudioSource {
   onEnded(cb: () => void): void;
   /** Called when playback breaks after a successful `load()` (connection lost, decode error). */
   onError(cb: (message: string) => void): void;
+  /**
+   * Optional (YouTube only): playback started without a pending `play()`, e.g. a direct tap on
+   * the video after the start was refused. The clock already runs.
+   */
+  onExternalStart?(cb: () => void): void;
   destroy(): void;
 }
 
@@ -272,10 +277,13 @@ class YouTubeSource implements AudioSource {
   private pending: PendingPlay | null = null;
   /** A play() was refused once: later calls wait without timeouts (tap on the video may start it). */
   private refusedOnce = false;
+  /** Playback was started (by play() or externally) and not paused since. */
+  private active = false;
   private loadTimer = 0;
   private settleLoad: (() => void) | null = null;
   private endedCb = () => {};
   private errorCb: (message: string) => void = () => {};
+  private externalStartCb = () => {};
   private host: HTMLDivElement;
   private visible: boolean;
   constructor(
@@ -357,7 +365,13 @@ class YouTubeSource implements AudioSource {
     // Game time runs only while YouTube reports PLAYING; buffering and pausing hold it.
     const playing = state === api.PlayerState.PLAYING;
     this.clock.sync(this.currentMs(), playing, true);
-    if (playing) this.settlePlay();
+    if (playing && !this.pending && !this.active) {
+      // Started without play() (direct tap on the video): count it as a successful start.
+      this.active = true;
+      this.refusedOnce = false;
+      this.startResync(api);
+      this.externalStartCb();
+    } else if (playing) this.settlePlay();
     if (state === api.PlayerState.ENDED) this.endedCb();
   }
   private takePending() {
@@ -374,11 +388,13 @@ class YouTubeSource implements AudioSource {
     else {
       // Started: later play() calls (resume, restart) get the refusal timeouts again.
       this.refusedOnce = false;
+      this.active = true;
       p.resolve();
     }
   }
   /** Runtime error after `onReady`: stop the clock and report it. */
   private fail(message: string) {
+    this.active = false;
     clearInterval(this.resync);
     this.clock.sync(this.currentMs(), false, true);
     this.settlePlay(new Error(message));
@@ -398,6 +414,7 @@ class YouTubeSource implements AudioSource {
       return Promise.reject(new Error("YouTube-Player ist noch nicht geladen."));
     if (this.pending) return this.pending.promise;
     if (this.ytState === api.PlayerState.PLAYING) {
+      this.active = true;
       this.startResync(api);
       return Promise.resolve();
     }
@@ -418,6 +435,7 @@ class YouTubeSource implements AudioSource {
     if (!this.refusedOnce) {
       const refuse = (message: string) => {
         this.refusedOnce = true;
+        this.active = false;
         player.pauseVideo();
         this.settlePlay(new Error(message));
       };
@@ -436,6 +454,7 @@ class YouTubeSource implements AudioSource {
     return promise;
   }
   pause() {
+    this.active = false;
     clearInterval(this.resync);
     this.settlePlay(new Error("Wiedergabe angehalten."));
     if (!this.player) return;
@@ -476,6 +495,9 @@ class YouTubeSource implements AudioSource {
   }
   onError(cb: (message: string) => void) {
     this.errorCb = cb;
+  }
+  onExternalStart(cb: () => void) {
+    this.externalStartCb = cb;
   }
   destroy() {
     this.destroyed = true;

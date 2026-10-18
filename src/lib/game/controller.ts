@@ -95,6 +95,8 @@ export class GameController {
   private lastBodyT = -Infinity;
   /** Bumped whenever a pending play() result must be ignored. */
   private playToken = 0;
+  /** Token of the play() still awaiting the audio (-1: none). Stale once the token moves on. */
+  private pendingPlay = -1;
   private disposed = false;
 
   constructor(deps: GameDeps) {
@@ -171,28 +173,51 @@ export class GameController {
   /** Starts the audio. Refused (no gesture): "blocked" until `tap()`. */
   private async play() {
     const token = ++this.playToken;
+    this.pendingPlay = token;
     try {
       await this.deps.audio.play();
     } catch {
       if (token !== this.playToken || this.disposed) return;
       this.set({ phase: "blocked", count: null });
       return;
+    } finally {
+      if (this.pendingPlay === token) this.pendingPlay = -1;
     }
     if (token !== this.playToken || this.disposed) {
-      // Paused, restarted or left while play() was pending.
+      // Paused, restarted or left while play() was pending. Already "playing" (external start or
+      // a newer play()): the audio must keep running.
       if (this.s.phase !== "playing") this.deps.audio.pause();
       return;
     }
+    this.enterPlaying();
+  }
+
+  private enterPlaying() {
     // Pose data from before the pause belongs to another moment.
     this.frame = null;
     this.lastBodyT = this.deps.timeMs();
     this.set({ phase: "playing", count: null, pauseReason: null, bodyMissing: false });
   }
 
-  /** "Zum Starten tippen": must be called inside the tap handler. */
+  /** True while a play() awaits the audio and has not been superseded. */
+  private get playPending() {
+    return this.pendingPlay === this.playToken;
+  }
+
+  /** "Zum Starten tippen": must be called inside the tap handler. A second tap waits for the first. */
   tap() {
-    if (this.s.phase !== "blocked") return;
+    if (this.s.phase !== "blocked" || this.playPending) return;
     void this.play();
+  }
+
+  /**
+   * The audio started without play() (direct tap on the YouTube video). Only leaves "blocked";
+   * a play() still pending is superseded and its late result ignored.
+   */
+  externalStart() {
+    if (this.s.phase !== "blocked" || this.disposed) return;
+    this.playToken++;
+    this.enterPlaying();
   }
 
   /** Cancels a running countdown (the screen then goes back to the setup). */

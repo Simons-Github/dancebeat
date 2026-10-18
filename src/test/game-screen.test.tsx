@@ -24,6 +24,7 @@ const audio = vi.hoisted(() => ({
   loadFails: false,
   ended: null as null | (() => void),
   failed: null as null | ((message: string) => void),
+  external: null as null | (() => void),
   calls: [] as string[],
   opts: null as null | { container?: HTMLElement },
 }));
@@ -61,6 +62,7 @@ vi.mock("@/lib/audio/sources", () => ({
       setVolume: () => {},
       onEnded: (cb: () => void) => (audio.ended = cb),
       onError: (cb: (message: string) => void) => (audio.failed = cb),
+      onExternalStart: (cb: () => void) => (audio.external = cb),
       destroy: () => audio.calls.push("destroy"),
     };
   },
@@ -134,6 +136,7 @@ beforeEach(() => {
     loadFails: false,
     ended: null,
     failed: null,
+    external: null,
     calls: [],
     opts: null,
   });
@@ -304,6 +307,41 @@ describe("Spielscreen mit YouTube-Quelle", () => {
     expect(audio.opts?.container).toBe(host);
     await advance(5100);
     expect(phase()).toBe("playing");
+  });
+
+  it("blocked: Hinweis aufs Video, Host antippbar; Start im Video führt nach playing", async () => {
+    const song = library.songs[0];
+    if (!song) throw new Error("no song");
+    library.songs = [{ ...song, source: { type: "youtube", videoId: "aaaaaaaaaaa" } }];
+    audio.refuse = true;
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    const host = screen.getByLabelText("YouTube-Video");
+    expect(host).toHaveClass("pointer-events-none");
+    await advance(5100);
+    expect(phase()).toBe("blocked");
+    expect(screen.getByText("Falls nichts passiert, tippe direkt auf das Video.")).toBeVisible();
+    expect(host).toHaveClass("pointer-events-auto", "z-40");
+    expect(host).not.toHaveClass("pointer-events-none");
+
+    // Tap inside the iframe: the page sees no click, only the source's signal.
+    audio.refuse = false;
+    audio.at = performance.now();
+    audio.playing = true;
+    act(() => audio.external?.());
+    await advance(20);
+    expect(phase()).toBe("playing");
+    expect(screen.queryByText(/tippe direkt auf das Video/)).toBeNull();
+    expect(host).toHaveClass("pointer-events-none", "z-20");
+    expect(audio.calls.filter((c) => c === "play")).toHaveLength(1);
+  });
+
+  it("blocked ohne YouTube: kein Hinweis aufs Video", async () => {
+    audio.refuse = true;
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    expect(phase()).toBe("blocked");
+    expect(screen.getByRole("button", { name: "Zum Starten tippen" })).toBeInTheDocument();
+    expect(screen.queryByText(/tippe direkt auf das Video/)).toBeNull();
   });
 
   it("Lokale Songs behalten den Coach und bekommen keinen Container", async () => {

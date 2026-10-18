@@ -264,3 +264,56 @@ describe("Audio-Entsperrung (iOS)", () => {
     vi.useRealTimers();
   });
 });
+
+describe("useAudioClock: Start von außen", () => {
+  afterEach(() => {
+    api = null;
+  });
+
+  it("reicht onExternalStart der Quelle an die Option durch", async () => {
+    let started = () => {};
+    const src = fakeSource({ onExternalStart: (cb) => (started = cb) });
+    const onExternalStart = vi.fn();
+    render(
+      <Probe
+        song={makeSong()}
+        opts={{ latencyMs: 0, volume: 1, create: () => src, onExternalStart }}
+      />,
+    );
+    await flush();
+    act(() => started());
+    expect(onExternalStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("ein spätes Signal des alten Songs wird verworfen", async () => {
+    const starts: (() => void)[] = [];
+    const make = () => fakeSource({ onExternalStart: (cb) => starts.push(cb) });
+    const sources = [make(), make()];
+    const create = () => sources.shift()!;
+    const onExternalStart = vi.fn();
+    const { rerender } = render(
+      <Probe song={makeSong()} opts={{ latencyMs: 0, volume: 1, create, onExternalStart }} />,
+    );
+    await flush();
+    rerender(
+      <Probe song={makeSong()} opts={{ latencyMs: 0, volume: 1, create, onExternalStart }} />,
+    );
+    await flush();
+    act(() => starts[0]!());
+    expect(onExternalStart).not.toHaveBeenCalled();
+    act(() => starts[1]!());
+    expect(onExternalStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("Quellen ohne onExternalStart funktionieren unverändert", async () => {
+    const src = fakeSource();
+    render(
+      <Probe
+        song={makeSong()}
+        opts={{ latencyMs: 0, volume: 1, create: () => src, onExternalStart: vi.fn() }}
+      />,
+    );
+    await flush();
+    expect(api!.state).toBe("ready");
+  });
+});

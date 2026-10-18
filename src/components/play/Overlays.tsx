@@ -74,16 +74,26 @@ export function CountdownOverlay({ count, onCancel }: { count: number; onCancel:
   );
 }
 
-/** play() was refused without a gesture: this tap starts the audio. */
-export function BlockedOverlay({ onTap }: { onTap: () => void }) {
+/**
+ * play() was refused without a gesture: this tap starts the audio. `hint` (YouTube) points to the
+ * video in the coach corner, which stays free and tappable.
+ */
+export function BlockedOverlay({ onTap, hint }: { onTap: () => void; hint?: string }) {
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => ref.current?.focus(), []);
   return (
     <Layer>
-      <Button ref={ref} size="lg" onClick={onTap} className={cn(GAME_BTN, "h-20 px-10 text-2xl")}>
-        <Play aria-hidden />
-        Zum Starten tippen
-      </Button>
+      <div className="flex flex-col items-center gap-4">
+        <Button ref={ref} size="lg" onClick={onTap} className={cn(GAME_BTN, "h-20 px-10 text-2xl")}>
+          <Play aria-hidden />
+          Zum Starten tippen
+        </Button>
+        {hint && (
+          <p className="bg-(--hud-scrim) max-w-xs rounded-2xl px-4 py-2 text-center text-base font-bold">
+            {hint}
+          </p>
+        )}
+      </div>
     </Layer>
   );
 }

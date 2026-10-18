@@ -87,6 +87,7 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
     element: claimSharedElement,
     container: () => ytHostRef.current,
     onEnded: () => controllerRef.current?.finish(),
+    onExternalStart: () => controllerRef.current?.externalStart(),
   });
   const scoring = useScoring(choreo, settings.difficulty);
   const timeMs = audio.timeMs;
@@ -311,7 +312,12 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
   } else if (phase === "countdown" && game.count !== null) {
     overlay = <CountdownOverlay count={game.count} onCancel={cancel} />;
   } else if (phase === "blocked") {
-    overlay = <BlockedOverlay onTap={() => controllerRef.current?.tap()} />;
+    overlay = (
+      <BlockedOverlay
+        onTap={() => controllerRef.current?.tap()}
+        {...(isYouTube ? { hint: "Falls nichts passiert, tippe direkt auf das Video." } : {})}
+      />
+    );
   } else if (phase === "paused") {
     overlay = (
       <PauseMenu
@@ -371,7 +377,9 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
         style={{ boxShadow: `inset 0 0 8vmin ${choreo.accentColor}`, opacity: 0 }}
       />
 
-      <div className="safe-pad relative z-10 flex h-full flex-col gap-3">
+      {/* No z-index here: it would make a stacking context, and the YouTube host could not rise
+          above the blocked layer (z-30). Tree order already puts this above the tints. */}
+      <div className="safe-pad relative flex h-full flex-col gap-3">
         <div className="flex items-start gap-2">
           <Hud
             score={snap?.score ?? 0}
@@ -406,7 +414,11 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
             <div
               ref={ytHostRef}
               aria-label="YouTube-Video"
-              className="pointer-events-none absolute bottom-0 left-0 z-20 size-[max(200px,min(38vw,28dvh))] overflow-hidden rounded-2xl landscape:size-[max(200px,min(26vw,42dvh))]"
+              className={cn(
+                "absolute bottom-0 left-0 size-[max(200px,min(38vw,28dvh))] overflow-hidden rounded-2xl landscape:size-[max(200px,min(26vw,42dvh))]",
+                // Blocked: above the layer and tappable, the tap in the iframe starts YouTube.
+                phase === "blocked" ? "pointer-events-auto z-40" : "pointer-events-none z-20",
+              )}
             />
           ) : (
             <canvas

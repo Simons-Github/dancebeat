@@ -427,3 +427,77 @@ describe("YouTubeSource: Laden", () => {
     src.destroy();
   });
 });
+
+describe("YouTubeSource: Start von außen (Tipp aufs Video)", () => {
+  it("PLAYING ohne play() ruft onExternalStart genau einmal, die Uhr läuft", async () => {
+    const { src, player } = await loaded();
+    const onExternal = vi.fn();
+    src.onExternalStart?.(onExternal);
+    const first = track(src.play());
+    await advance(mod.YT_PLAY_TIMEOUT_MS);
+    expect(first.state).toBe("rejected");
+    player.emit(PlayerState.PAUSED);
+
+    // Direct tap on the video: YouTube starts by itself.
+    player.emit(PlayerState.BUFFERING);
+    player.emit(PlayerState.PLAYING);
+    expect(onExternal).toHaveBeenCalledTimes(1);
+    const t0 = src.getTimeMs();
+    await advance(1000);
+    expect(src.getTimeMs()).toBe(t0 + 1000);
+    expect(vi.getTimerCount()).toBe(1); // resync interval
+
+    // Buffering mid-song is no new external start.
+    player.emit(PlayerState.BUFFERING);
+    player.emit(PlayerState.PLAYING);
+    expect(onExternal).toHaveBeenCalledTimes(1);
+    src.destroy();
+  });
+
+  it("setzt refusedOnce zurück: das nächste play() bei CUED lehnt nach 4 s wieder ab", async () => {
+    const { src, player } = await loaded();
+    src.onExternalStart?.(() => {});
+    const first = track(src.play());
+    await advance(mod.YT_PLAY_TIMEOUT_MS);
+    expect(first.state).toBe("rejected");
+    player.emit(PlayerState.PLAYING);
+
+    src.pause();
+    player.emit(PlayerState.CUED);
+    const next = track(src.play());
+    expect(vi.getTimerCount()).toBe(3); // resync + 4 s + 15 s
+    await advance(mod.YT_PLAY_TIMEOUT_MS);
+    expect(next.state).toBe("rejected");
+    src.destroy();
+  });
+
+  it("PLAYING bei laufendem play() ruft onExternalStart nicht", async () => {
+    const { src, player } = await loaded();
+    const onExternal = vi.fn();
+    src.onExternalStart?.(onExternal);
+    const p = track(src.play());
+    player.emit(PlayerState.PLAYING);
+    await tick();
+    expect(p.state).toBe("resolved");
+    expect(onExternal).not.toHaveBeenCalled();
+
+    // Pause and resume through play(): still no external start.
+    src.pause();
+    player.emit(PlayerState.PAUSED);
+    const q = track(src.play());
+    player.emit(PlayerState.PLAYING);
+    await tick();
+    expect(q.state).toBe("resolved");
+    expect(onExternal).not.toHaveBeenCalled();
+    src.destroy();
+  });
+
+  it("nach destroy() bleibt ein spätes PLAYING folgenlos", async () => {
+    const { src, player } = await loaded();
+    const onExternal = vi.fn();
+    src.onExternalStart?.(onExternal);
+    src.destroy();
+    player.emit(PlayerState.PLAYING);
+    expect(onExternal).not.toHaveBeenCalled();
+  });
+});

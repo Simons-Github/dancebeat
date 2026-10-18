@@ -287,3 +287,130 @@ describe("Bewertungsschleife", () => {
     expect(env.audio.play).not.toHaveBeenCalled();
   });
 });
+
+describe("Blocked: doppelter Tipp und Start von außen", () => {
+  /** Start refused once ("blocked"); later play() calls wait until `release()`. */
+  async function blocked() {
+    const env = setup();
+    env.audio.refuse = true;
+    env.ctl.start();
+    await env.advance(5100);
+    expect(env.ctl.state.phase).toBe("blocked");
+    env.audio.refuse = false;
+    const releases: (() => void)[] = [];
+    env.audio.play.mockImplementation(
+      () =>
+        new Promise<void>((r) =>
+          releases.push(() => {
+            env.audio.playing = true;
+            r();
+          }),
+        ),
+    );
+    env.audio.play.mockClear();
+    env.audio.pause.mockClear();
+    const release = () => releases.forEach((f) => f());
+    return { ...env, release };
+  }
+
+  it("zwei tap() auf ein langsames play() → ein Aufruf, kein pause(), Phase playing", async () => {
+    const { ctl, audio, advance, release } = await blocked();
+    ctl.tap();
+    ctl.tap();
+    await advance(500);
+    ctl.tap();
+    expect(audio.play).toHaveBeenCalledTimes(1);
+    release();
+    await advance(16);
+    expect(ctl.state.phase).toBe("playing");
+    expect(audio.pause).not.toHaveBeenCalled();
+    expect(audio.playing).toBe(true);
+  });
+
+  it("nach einem abgelehnten tap()-play() darf der nächste Tipp wieder starten", async () => {
+    const { ctl, audio, advance } = await blocked();
+    audio.play.mockImplementationOnce(async () => {
+      throw new DOMException("no gesture", "NotAllowedError");
+    });
+    ctl.tap();
+    await advance(16);
+    expect(ctl.state.phase).toBe("blocked");
+    audio.play.mockImplementationOnce(async () => {
+      audio.playing = true;
+    });
+    ctl.tap();
+    await advance(16);
+    expect(audio.play).toHaveBeenCalledTimes(2);
+    expect(ctl.state.phase).toBe("playing");
+  });
+
+  it("Pause während ausstehendem play() → paused, späte Auflösung verworfen", async () => {
+    const { ctl, audio, advance, release } = await blocked();
+    ctl.tap();
+    ctl.pause("user");
+    expect(ctl.state.phase).toBe("paused");
+    release();
+    await advance(16);
+    expect(ctl.state.phase).toBe("paused");
+    expect(audio.playing).toBe(false);
+  });
+
+  it("externalStart in blocked → playing, ohne play() und pause()", async () => {
+    const { ctl, audio, advance } = await blocked();
+    audio.playing = true; // YouTube started by itself
+    ctl.externalStart();
+    expect(ctl.state).toMatchObject({ phase: "playing", count: null, bodyMissing: false });
+    await advance(100);
+    expect(ctl.state.phase).toBe("playing");
+    expect(audio.play).not.toHaveBeenCalled();
+    expect(audio.pause).not.toHaveBeenCalled();
+  });
+
+  it("externalStart in anderen Phasen wird ignoriert", async () => {
+    const env = setup();
+    env.ctl.externalStart();
+    expect(env.ctl.state.phase).toBe("preparing");
+    env.ctl.start();
+    env.ctl.externalStart();
+    expect(env.ctl.state.phase).toBe("countdown");
+    await env.advance(5100);
+    expect(env.ctl.state.phase).toBe("playing");
+    env.ctl.pause("user");
+    env.ctl.externalStart();
+    expect(env.ctl.state.phase).toBe("paused");
+    env.ctl.restart();
+    await env.advance(5100);
+    env.ctl.finish();
+    env.ctl.externalStart();
+    expect(env.ctl.state.phase).toBe("ended");
+    expect(env.audio.play).toHaveBeenCalledTimes(2);
+  });
+
+  it("externalStart während ein tap()-play() aussteht, das danach auflöst → bleibt playing, kein pause()", async () => {
+    const { ctl, audio, advance, release } = await blocked();
+    ctl.tap();
+    audio.playing = true;
+    ctl.externalStart();
+    expect(ctl.state.phase).toBe("playing");
+    release();
+    await advance(16);
+    expect(ctl.state.phase).toBe("playing");
+    expect(audio.pause).not.toHaveBeenCalled();
+    expect(audio.playing).toBe(true);
+    // The superseded play() no longer blocks a later tap (not that one is needed now).
+    ctl.tap();
+    expect(audio.play).toHaveBeenCalledTimes(1);
+  });
+
+  it("externalStart, dann ein später abgelehntes tap()-play() → bleibt playing", async () => {
+    const { ctl, audio, advance } = await blocked();
+    let fail = (_e: Error) => {};
+    audio.play.mockImplementationOnce(() => new Promise<void>((_, rej) => (fail = rej)));
+    ctl.tap();
+    ctl.externalStart();
+    fail(new Error("Wiedergabe angehalten."));
+    await advance(16);
+    expect(ctl.state.phase).toBe("playing");
+    expect(audio.pause).not.toHaveBeenCalled();
+  });
+});
