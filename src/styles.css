@@ -1,3 +1,6 @@
+@import "@fontsource/fredoka/latin-400.css";
+@import "@fontsource/fredoka/latin-500.css";
+@import "@fontsource/fredoka/latin-700.css";
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -44,7 +47,7 @@
   --song: #ff2e93;
   --song-2: #00e5ff;
   --gold: oklch(0.86 0.17 85);
-  --ink: oklch(0.2 0.08 300);
+  --ink: #1e0b36; /* overridden by AppShell from SCRIM.ink in src/theme.ts */
   --glass: oklch(1 0 0 / 18%);
   --background: oklch(0.32 0.14 330);
   --foreground: oklch(0.99 0 0);
@@ -121,9 +124,18 @@
       transparent 55%
     ),
     linear-gradient(135deg, var(--song), color-mix(in oklab, var(--song) 50%, #3a0a6b));
-  background-size: 200% 200%;
-  animation: party-shift 14s ease-in-out infinite;
-  transition: background-color 0.6s;
+}
+/* Dark tints for readability; their strength comes from SCRIM in src/theme.ts. */
+@utility scrim-header {
+  background: linear-gradient(
+    to bottom,
+    var(--scrim-header) 55%,
+    color-mix(in srgb, var(--scrim-header) 40%, transparent) 78%,
+    transparent
+  );
+}
+@utility scrim-edge {
+  background: linear-gradient(to top, var(--scrim-edge), transparent);
 }
 @utility btn-pill {
   border-radius: 9999px;
@@ -133,23 +145,6 @@
   box-shadow: var(--shadow-pop);
 }
 
-@keyframes party-shift {
-  0%,
-  100% {
-    background-position: 0% 0%;
-  }
-  50% {
-    background-position: 100% 100%;
-  }
-}
-@keyframes float-shape {
-  0% {
-    transform: translateY(110vh) rotate(0deg);
-  }
-  100% {
-    transform: translateY(-20vh) rotate(360deg);
-  }
-}
 @keyframes gold-pulse {
   0%,
   100% {
@@ -161,4 +156,27 @@
 }
 .animate-gold {
   animation: gold-pulse 0.6s ease-in-out infinite;
+}
+
+/* Registered so the song colors can fade smoothly when another song is selected. */
+@property --song {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #ff2e93;
+}
+@property --song-2 {
+  syntax: "<color>";
+  inherits: true;
+  initial-value: #00e5ff;
+}
+.song-frame {
+  transition:
+    --song var(--theme-fade, 700ms) ease,
+    --song-2 var(--theme-fade, 700ms) ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .song-frame {
+    transition-duration: 1ms;
+  }
 }

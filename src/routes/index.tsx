@@ -1,13 +1,13 @@
 import { createFileRoute } from "@tanstack/react-router";
 
+import { SongLibrary } from "@/components/SongLibrary";
+import { useSongLibrary } from "@/hooks/useSongLibrary";
+
 export const Route = createFileRoute("/")({
   component: Index,
 });
 
 function Index() {
-  return (
-    <main className="flex min-h-screen items-center justify-center">
-      <h1 className="text-4xl font-extrabold tracking-tight">DanceBeat</h1>
-    </main>
-  );
+  const { songs, loading } = useSongLibrary();
+  return <SongLibrary songs={songs} loading={loading} />;
 }

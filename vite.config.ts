@@ -10,7 +10,8 @@ const useHttps = process.env["DEV_HTTPS"] === "1";
 
 export default defineConfig({
   resolve: { tsconfigPaths: true },
-  server: { host: true },
+  // Reachable from the phone only for `dev:https`; plain dev stays on localhost.
+  server: useHttps ? { host: true } : {},
   preview: { host: true },
   plugins: [
     // Must run before the React plugin so generated route files are picked up.

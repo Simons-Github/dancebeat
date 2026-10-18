@@ -10,6 +10,7 @@ export interface Settings {
   mirror: boolean;
   spotifyClientId: string;
   onboarded: boolean;
+  lastSongId: string;
 }
 
 const DEFAULTS: Settings = {
@@ -21,6 +22,7 @@ const DEFAULTS: Settings = {
   mirror: true,
   spotifyClientId: "",
   onboarded: false,
+  lastSongId: "",
 };
 const KEY = "dancebeat.settings";
 const listeners = new Set<(s: Settings) => void>();

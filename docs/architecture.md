@@ -99,7 +99,10 @@ UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 | Audio-URL                      | vom Nutzer eingegebene Adresse        | URL-Song laden           |
 
 Ziel (Etappe 7): WASM und Modell nach `public/` verlegen, dann entfallen die ersten beiden.
-Die Schrift soll selbst gehostet werden, nicht über Google Fonts.
+
+**Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
+selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gibt keine Anfrage an
+Google Fonts oder ein anderes CDN.
 
 ## Pose-Erkennung
 
