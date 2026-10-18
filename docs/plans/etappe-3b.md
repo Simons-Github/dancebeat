@@ -170,6 +170,10 @@ wie bisher „konnte nicht geladen werden“, jeweils mit „Zur Bibliothek“.
 
 ## 4. Schritte
 
+Reihenfolge: 1, 2, 3, 4, 6, 7, Gerätetest, dann 5 (siehe Schritt 5). Festgelegt für die offenen
+Fragen aus Abschnitt 8: Timeouts 4 s / 15 s, nur „Zur Bibliothek“ (kein „Erneut versuchen“),
+Hinweis „Wir sehen dich nicht“ unverändert.
+
 Jeder Commit endet mit `bun run typecheck`, `bun run test`, `bun run lint`, `bun run build`, alle
 vier sauber. Danach `bun run format` (nur geänderte Dateien prüfen).
 
@@ -265,16 +269,25 @@ url } | { kind: "clear" } | null`; YouTube über `parseYouTubeId` (`src/lib/audi
 - **Dateien:** `src/lib/game/controller.ts`, `src/components/play/Overlays.tsx`,
   `src/components/play/GameScreen.tsx`, `src/test/gameController.test.ts`,
   `src/test/game-screen.test.tsx`.
+- **Planänderung nach Schritt 3:** Nach einer Ablehnung gibt es kein ausstehendes `play()` mehr.
+  Ein Tipp direkt aufs Video (im Iframe, die Elternseite sieht ihn nicht) startet YouTube, aber der
+  Controller bliebe in `blocked`, obwohl die Musik läuft. Deshalb bekommt `AudioSource` ein
+  **optionales** `onExternalStart(cb)`: `YouTubeSource` ruft es, wenn PLAYING ohne ausstehendes
+  `play()` eintritt (und setzt dabei `refusedOnce` zurück, `pendingSeekMs` wird schon verworfen).
+  `useAudioClock` reicht es durch, der Controller geht in `blocked` bei diesem Signal nach `playing`
+  (gleiche Schritte wie am Ende von `play()`). Reihenfolge im Plan: Schritt 5 erst nach dem
+  Gerätetest von Schritt 3/4 (Reihenfolge 1, 2, 3, 4, 6, 7, Gerätetest, dann 5).
 - **Änderung:** Controller: privates `playPending`; `tap()` tut nichts, solange ein `play()`
-  aussteht. `BlockedOverlay` bekommt `hint?: string`; bei YouTube: „Falls nichts passiert, tippe
-  direkt auf das Video.“ Im `blocked`-Zustand liegt der YouTube-Host über der Ebene (`z-40`) und
-  ist antippbar (`pointer-events-auto`); sonst `pointer-events-none`. Der Tipp aufs Video startet
-  YouTube selbst, das ausstehende `play()` (D2) löst auf, der Controller geht in `playing`.
+  aussteht. `onExternalStart` wie oben. `BlockedOverlay` bekommt `hint?: string`; bei YouTube:
+  „Falls nichts passiert, tippe direkt auf das Video.“ Im `blocked`-Zustand liegt der YouTube-Host
+  über der Ebene (`z-40`) und ist antippbar (`pointer-events-auto`); sonst `pointer-events-none`.
 - **Akzeptanz:** Controller-Test: zwei `tap()` auf ein langsames `play()` → ein Aufruf, kein
   `pause()`, Phase `playing`. Pause während ausstehendem `play()` → Phase `paused`, späte Auflösung
-  wird verworfen. Screen-Test: Phase `blocked` mit YouTube-Song zeigt den Hinweis, Host hat
+  wird verworfen. `onExternalStart` in `blocked` → Phase `playing`; in anderen Phasen ignoriert.
+  Source-Test: PLAYING ohne `play()` ruft `onExternalStart` genau einmal, PLAYING bei laufendem
+  `play()` nicht. Screen-Test: Phase `blocked` mit YouTube-Song zeigt den Hinweis, Host hat
   `pointer-events-auto`.
-- **Modell:** Sonnet (klar spezifiziert); bei Unsicherheit im Controller Opus.
+- **Modell:** Opus (Schnittstelle, Controller-Zustände, Nebenläufigkeit).
 - **Commit:** `Etappe 3b: Blocked-Ablauf für YouTube, doppelter Tipp startet nicht zweimal`
 
 ### Schritt 6: Externe Abrufe in der UI
