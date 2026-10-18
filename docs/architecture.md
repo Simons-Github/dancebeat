@@ -54,8 +54,10 @@ der Landmarker geschlossen, auch wenn ein asynchroner Schritt erst nach dem Aufr
 
 `createSource(song, { element, container })` liefert einen Adapter mit gemeinsamer Schnittstelle
 `AudioSource` (`type` als Union der Quellarten, `load`, `play`, `pause`, `seek`, `getTimeMs`,
-`setVolume`, `onEnded`, `onError`, `destroy`). `onError` meldet Fehler, die nach erfolgreichem
-`load()` auftreten (Verbindung weg, Dekodierfehler, YouTube-Fehlercode). `SourceOptions.element`
+`setVolume`, `onEnded`, `onError`, `destroy`, optional `onExternalStart`). `onError` meldet
+Fehler, die nach erfolgreichem `load()` auftreten (Verbindung weg, Dekodierfehler,
+YouTube-Fehlercode). `onExternalStart` implementiert nur YouTube: Die Wiedergabe startete ohne
+ausstehendes `play()` (direkter Tipp aufs Video). `SourceOptions.element`
 ist das gemeinsame, per Geste entsperrte Audioelement (Datei/URL), `SourceOptions.container` das
 Element, in dem der YouTube-Player angezeigt wird (ohne: unsichtbarer 2×2-px-Player außerhalb des
 Bildschirms):
@@ -90,9 +92,11 @@ umgesetzt). Ein Fehler des Elements nach dem Laden hält die Uhr an und löst `o
   `play()` angewandt, weil `seekTo` ein nie gestartetes Video starten würde (Annahme, am Gerät
   prüfen). Im Pausenzustand (PAUSED) wird direkt gesprungen, ohne zu starten.
 - Der Player ist im Spiel sichtbar: Er füllt die Coach-Ecke (Box mindestens 200 × 200 px, Vorgabe
-  der YouTube-API; siehe [design.md](design.md)), die Box ist derzeit `pointer-events-none`. Der
-  direkte Tipp aufs Video als Startweg kommt mit Schritt 5 des Plans
-  ([plans/etappe-3b.md](plans/etappe-3b.md)) und ist **noch nicht umgesetzt**.
+  der YouTube-API; siehe [design.md](design.md)). Sonst `pointer-events-none`; im Zustand
+  `blocked` liegt die Box über der Ebene (`z-40`) und ist antippbar, das Overlay zeigt „Falls
+  nichts passiert, tippe direkt auf das Video.“ Meldet YouTube danach PLAYING ohne ausstehendes
+  `play()`, ruft die Quelle `onExternalStart`, setzt `refusedOnce` zurück und startet den Resync.
+  Ob der Tipp aufs Video auf iOS startet, zeigt nur der Gerätetest.
 - Laden: IFrame-API-Skript mit Timeout 15 s (nicht zwischengespeichert, nächster Versuch lädt neu),
   danach `onReady` mit Timeout 15 s. Fehlercodes vor `onReady` lehnen `load()` ab, danach lösen sie
   `onError` aus („Dieses Video darf nicht eingebettet werden.“ bzw. „YouTube-Video nicht
@@ -132,12 +136,14 @@ preparing ──(Audio geladen, Kamera bereit, Seite sichtbar)──▶ countdow
 countdown ──▶ playing ──(Audio-Ende oder letzter Move + 2,25 s)──▶ ended → /result/$songId
 countdown/playing ──(Pause-Knopf, Escape, visibilitychange, Kamera weg)──▶ paused
 paused ──Weiter──▶ countdown (3-2-1, ohne Vorlauf) · Neustart ──▶ countdown mit Vorlauf
-play() abgelehnt ──▶ blocked ──Tipp──▶ playing · Abbrechen im Countdown ──▶ /setup/$songId
+play() abgelehnt ──▶ blocked ──Tipp (Knopf) oder Tipp aufs Video (onExternalStart)──▶ playing
+Abbrechen im Countdown ──▶ /setup/$songId
 ```
 
 - `GameController` (`src/lib/game/controller.ts`) hält diesen Ablauf ohne React; er bekommt
   Audio (`play`/`pause`/`seek`), die Uhr (`timeMs`) und die Wertung über Schnittstellen und ist
-  mit Fake-Uhr testbar.
+  mit Fake-Uhr testbar. Ein zweiter Tipp in `blocked` tut nichts, solange das `play()` des ersten
+  aussteht; `externalStart()` wirkt nur in `blocked`.
 - `GameScreen` (`src/components/play/GameScreen.tsx`) verbindet `useAudioClock`,
   `usePoseTracking`, `useScoring` und den Controller. Eine einzige rAF-Schleife ruft `tick()` und
   zeichnet Piktoleiste, Coach und Beat-Puls auf Canvas bzw. per Style; das Skelett zeichnet der

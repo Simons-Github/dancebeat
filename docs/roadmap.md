@@ -37,8 +37,8 @@ Choreo-Wechsel. N4: Soundeffekte nutzen den beim Tippen entsperrten gemeinsamen 
 W9 teilweise: `type` als Union, Lade-Race beim Songwechsel, `ended`/`error` zurückgesetzt,
 `visibilitychange` → Pause.
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
-W7 teilweise (sichtbarer Player, Seek im Pausenzustand, Feld entfernt; Tipp aufs Video fehlt noch,
-Schritt 5). W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
+W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
+Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
 
 ## Etappen
 
@@ -137,21 +137,21 @@ Gerätetest 3a (Handy):
 6. Ende → Ergebnis-Platzhalter mit Score, Sternen, Verteilung, längster Combo.
 7. Hoch- und Querformat, Notch/Safe Areas, Lesbarkeit bei hellem Hintergrund.
 
-**3b Online-Quellen – umgesetzt bis auf Schritt 5 (Blocked-Ablauf YouTube, nach dem Gerätetest),
-Gerätetest offen.** Plan: [plans/etappe-3b.md](plans/etappe-3b.md); Details zu Uhr und Quellen in
+**3b Online-Quellen – alle Schritte umgesetzt, Gerätetest offen.** Plan:
+[plans/etappe-3b.md](plans/etappe-3b.md); Details zu Uhr und Quellen in
 [architecture.md](architecture.md#audiosource--spielzeit).
 
 - W5: YouTube-Uhr läuft nur bei PLAYING; `play()` löst erst dann auf; Autoplay-Sperre wird nach
   4 s (UNSTARTED/CUED) bzw. 15 s (BUFFERING) erkannt und als `blocked` gezeigt.
 - W7: sichtbarer YouTube-Player in der Coach-Ecke (≥ 200 × 200 px, `youtube-nocookie.com`);
   `seek` vor dem Start wird gemerkt, im Pausenzustand springt es ohne zu starten; ungenutztes
-  Feld entfernt.
+  Feld entfernt. Im Zustand `blocked` ist das Video antippbar (Hinweis im Overlay), ein Start im
+  Video meldet die Quelle über `onExternalStart`; ein doppelter Tipp startet nicht zweimal.
 - W9 / W10: `onError` in `AudioSource` (Laufzeitfehler → Overlay „Die Musik ist abgebrochen“);
   URL-/Datei-Uhr hält bei `waiting`. `playbackRate` der URL-Quelle war schon vor 3b umgesetzt.
 - Datenschutzhinweis der Aufstellhilfe nennt YouTube bzw. den Hostname der Audio-URL.
 - Dev-Testsongs: `/?devsong=youtube:<ID>` bzw. `url:<Adresse>` (nur Dev-Server).
-- **Offen:** Schritt 5 (Tipp aufs Video, `onExternalStart`, doppelter Tipp; der Player ist bisher
-  `pointer-events-none`), Gerätetest.
+- **Offen:** Gerätetest.
 
 Gerätetest 3b (Handy: `bun run dev:https`, `?devsong=youtube:<ID>` bzw.
 `?devsong=url:<MP3-URL>&bpm=<BPM>`):
@@ -242,20 +242,20 @@ Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
 Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
-| ID  | Befund                                                                                                                           | Etappe         |
-| --- | -------------------------------------------------------------------------------------------------------------------------------- | -------------- |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                           | 10             |
-| W7  | YouTube: Tipp aufs Video (Schritt 5, `pointer-events-none`), iOS am Gerät                                                        | 3b             |
-| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                           | 3b             |
-| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                                                                       | 5              |
-| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                         | 7              |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                         | 11             |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                     | 11             |
-| N3  | `seedDemos` vertraut nur dem localStorage-Marker                                                                                 | 11             |
-| N6  | `@tanstack/react-query` bisher ungenutzt                                                                                         | 11             |
-| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                                             | 11             |
-| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                               | 11             |
-| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked`                         | 3b (Schritt 5) |
-| N10 | YouTube ignoriert `song.playbackRate`                                                                                            | 11             |
-| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                                  | 11             |
-| N12 | Aufstellhilfe im Querformat (844×390): Karte oben unter der Kopfzeile, Knöpfe unten abgeschnitten, kein Scrollen (seit Etappe 2) | 5              |
+| ID  | Befund                                                                                                                           | Etappe |
+| --- | -------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                           | 10     |
+| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                           | 3b     |
+| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                           | 3b     |
+| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                                                                       | 5      |
+| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                         | 7      |
+| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                         | 11     |
+| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                     | 11     |
+| N3  | `seedDemos` vertraut nur dem localStorage-Marker                                                                                 | 11     |
+| N6  | `@tanstack/react-query` bisher ungenutzt                                                                                         | 11     |
+| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                                             | 11     |
+| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                               | 11     |
+| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked`                         | 11     |
+| N10 | YouTube ignoriert `song.playbackRate`                                                                                            | 11     |
+| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                                  | 11     |
+| N12 | Aufstellhilfe im Querformat (844×390): Karte oben unter der Kopfzeile, Knöpfe unten abgeschnitten, kein Scrollen (seit Etappe 2) | 5      |
