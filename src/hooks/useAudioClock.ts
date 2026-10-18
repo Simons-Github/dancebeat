@@ -13,6 +13,11 @@ export interface AudioClockOptions {
    * src/lib/audio/unlock.ts). Called inside the effect, never during render.
    */
   element?: () => HTMLAudioElement;
+  /**
+   * Returns the element a YouTube video is shown in (null: hidden player). Called inside the
+   * effect, never during render.
+   */
+  container?: () => HTMLElement | null;
   /** Called when the audio reached its end (read from a ref, may change freely). */
   onEnded?: () => void;
   /** Test seam: replaces `createSource`. */
@@ -47,8 +52,14 @@ export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
     if (!song) return;
     // A late load of a previous song must not touch this one's state.
     let cancelled = false;
-    const { create, element } = latest.current;
-    const s = create ? create(song) : createSource(song, element ? { element: element() } : {});
+    const { create, element, container } = latest.current;
+    const box = container?.() ?? null;
+    const s = create
+      ? create(song)
+      : createSource(song, {
+          ...(element ? { element: element() } : {}),
+          ...(box ? { container: box } : {}),
+        });
     src.current = s;
     setEnded(false);
     setError("");

@@ -25,10 +25,12 @@ const audio = vi.hoisted(() => ({
   ended: null as null | (() => void),
   failed: null as null | ((message: string) => void),
   calls: [] as string[],
+  opts: null as null | { container?: HTMLElement },
 }));
 vi.mock("@/lib/audio/sources", () => ({
-  createSource: () => {
+  createSource: (_song: unknown, opts: { container?: HTMLElement } = {}) => {
     audio.created++;
+    audio.opts = opts;
     const now = () => performance.now();
     const time = () => (audio.playing ? audio.base + (now() - audio.at) : audio.base);
     return {
@@ -133,6 +135,7 @@ beforeEach(() => {
     ended: null,
     failed: null,
     calls: [],
+    opts: null,
   });
   scene.estimators = [];
 });
@@ -287,6 +290,27 @@ describe("Spielscreen (Simulationsmodus)", () => {
     cleanup();
     expect(audio.calls).toContain("destroy");
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("Spielscreen mit YouTube-Quelle", () => {
+  it("zeigt den Player-Container statt des Coach-Canvas und reicht ihn an die Quelle", async () => {
+    const song = library.songs[0];
+    if (!song) throw new Error("no song");
+    library.songs = [{ ...song, source: { type: "youtube", videoId: "aaaaaaaaaaa" } }];
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    const host = screen.getByLabelText("YouTube-Video");
+    expect(screen.queryByRole("img", { name: "Coach" })).toBeNull();
+    expect(audio.opts?.container).toBe(host);
+    await advance(5100);
+    expect(phase()).toBe("playing");
+  });
+
+  it("Lokale Songs behalten den Coach und bekommen keinen Container", async () => {
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    expect(screen.getByRole("img", { name: "Coach" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("YouTube-Video")).toBeNull();
+    expect(audio.opts?.container).toBeUndefined();
   });
 });
 

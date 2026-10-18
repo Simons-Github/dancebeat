@@ -119,6 +119,34 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+describe("YouTubeSource: Container", () => {
+  it("hängt den Host in den Container und startet den Player mit 100 % Größe", async () => {
+    const box = document.createElement("div");
+    document.body.appendChild(box);
+    const src = mod.createSource(ytSong(), { container: box });
+    const done = src.load();
+    await tick();
+    const player = FakePlayer.all.at(-1);
+    if (!player) throw new Error("no player");
+    expect(box.children).toHaveLength(1);
+    expect((box.firstElementChild as HTMLElement).style.position).toBe("absolute");
+    expect(player.opts.width).toBe("100%");
+    expect(player.opts.height).toBe("100%");
+    player.ready();
+    await done;
+    src.destroy();
+    expect(box.children).toHaveLength(0);
+    box.remove();
+  });
+
+  it("ohne Container bleibt der Player versteckt an body (2×2 px)", async () => {
+    const { src, player } = await loaded();
+    expect(player.opts.width).toBe(2);
+    expect(player.opts.height).toBe(2);
+    src.destroy();
+  });
+});
+
 describe("YouTubeSource: Uhr", () => {
   it("(a) steht nach play() bis PLAYING, dann läuft sie", async () => {
     const { src, player } = await loaded();

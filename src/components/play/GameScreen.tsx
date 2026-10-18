@@ -72,6 +72,8 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
   const skeletonRef = useRef<HTMLCanvasElement>(null);
   const piktoRef = useRef<HTMLCanvasElement>(null);
   const coachRef = useRef<HTMLCanvasElement>(null);
+  const ytHostRef = useRef<HTMLDivElement>(null);
+  const isYouTube = song.source.type === "youtube";
   const pulseRef = useRef<HTMLDivElement>(null);
   // Latest toggles for the loops, without restarting them.
   const showSkeleton = useRef(settings.skeleton);
@@ -83,6 +85,7 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
     latencyMs: settings.latencyMs,
     volume: settings.volume,
     element: claimSharedElement,
+    container: () => ytHostRef.current,
     onEnded: () => controllerRef.current?.finish(),
   });
   const scoring = useScoring(choreo, settings.difficulty);
@@ -399,12 +402,20 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
             </p>
           )}
           <RatingPopup judgement={scoring.last} />
-          <canvas
-            ref={coachRef}
-            aria-label="Coach"
-            role="img"
-            className="absolute bottom-0 left-0 size-[min(38vw,28dvh)] landscape:size-[min(26vw,42dvh)]"
-          />
+          {isYouTube ? (
+            <div
+              ref={ytHostRef}
+              aria-label="YouTube-Video"
+              className="pointer-events-none absolute bottom-0 left-0 z-20 size-[max(200px,min(38vw,28dvh))] overflow-hidden rounded-2xl landscape:size-[max(200px,min(26vw,42dvh))]"
+            />
+          ) : (
+            <canvas
+              ref={coachRef}
+              aria-label="Coach"
+              role="img"
+              className="absolute bottom-0 left-0 size-[min(38vw,28dvh)] landscape:size-[min(26vw,42dvh)]"
+            />
+          )}
         </div>
       </div>
       {import.meta.env.DEV && sim && (

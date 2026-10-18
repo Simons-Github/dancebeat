@@ -24,6 +24,11 @@ export interface SourceOptions {
    * gesture (src/lib/audio/unlock.ts). It is emptied on destroy, never thrown away.
    */
   element?: HTMLAudioElement;
+  /**
+   * YouTube only: element the player is shown in (fills it). Without it the player stays hidden
+   * off screen.
+   */
+  container?: HTMLElement;
 }
 
 /** Interpolierte Uhr: zwischen API-Abfragen per performance.now() fortschreiben, weich angleichen. */
@@ -272,13 +277,19 @@ class YouTubeSource implements AudioSource {
   private endedCb = () => {};
   private errorCb: (message: string) => void = () => {};
   private host: HTMLDivElement;
-  constructor(private videoId: string) {
+  private visible: boolean;
+  constructor(
+    private videoId: string,
+    container?: HTMLElement,
+  ) {
+    this.visible = !!container;
     this.host = document.createElement("div");
-    this.host.style.cssText =
-      "position:fixed;width:2px;height:2px;left:-10px;bottom:0;opacity:0.01;pointer-events:none";
+    this.host.style.cssText = container
+      ? "position:absolute;inset:0"
+      : "position:fixed;width:2px;height:2px;left:-10px;bottom:0;opacity:0.01;pointer-events:none";
     const inner = document.createElement("div");
     this.host.appendChild(inner);
-    document.body.appendChild(this.host);
+    (container ?? document.body).appendChild(this.host);
   }
   private errorText(api: typeof YT, code: YT.PlayerError) {
     return code === api.PlayerError.EmbeddingNotAllowed ||
@@ -311,8 +322,8 @@ class YouTubeSource implements AudioSource {
       }, 15000);
       this.player = new api.Player(el, {
         videoId: this.videoId,
-        width: 2,
-        height: 2,
+        width: this.visible ? "100%" : 2,
+        height: this.visible ? "100%" : 2,
         host: "https://www.youtube-nocookie.com",
         playerVars: { playsinline: 1, controls: 0, disablekb: 1 },
         events: {
@@ -639,7 +650,7 @@ export function createSource(song: Song, opts: SourceOptions = {}): AudioSource 
     case "url":
       return new ElementSource("url", async () => s.url, song.playbackRate ?? 1, opts.element);
     case "youtube":
-      return new YouTubeSource(s.videoId);
+      return new YouTubeSource(s.videoId, opts.container);
     case "spotify":
       return new SpotifySource(s.trackUri);
   }
