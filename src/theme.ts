@@ -92,3 +92,25 @@ export const OVERLAY_COLORS = {
   guide: "rgb(255 255 255 / 70%)",
   guideReady: "#7CFF4F",
 } as const;
+
+/** Gameplay screen (canvas colors are plain strings, no CSS variables). */
+export const GAME = {
+  /** Song-color filter over the camera picture (opacity). */
+  tint: 0.2,
+  /** Darkness of the vignette at the edges (opacity of SCRIM.ink). */
+  vignette: 0.6,
+  /** Ink behind HUD texts (opacity of SCRIM.ink); checked in contrast.test.ts. */
+  hudScrim: 0.72,
+  /** Pictogram bar fill. */
+  piktoBar: "rgb(255 255 255 / 22%)",
+  /** Dark outline around pictograms and coach so they read on any picture. */
+  outline: SCRIM.ink,
+  flash: "#FFFFFF",
+  skeleton: "rgb(255 255 255 / 60%)",
+  skeletonJoint: "rgb(255 201 60 / 80%)",
+  /** Beat pulse at the screen edge: highest opacity. */
+  pulse: 0.35,
+} as const;
+
+/** Rating popups: rise distance (vh) and duration (s). */
+export const POPUP = { riseVh: 6, seconds: 0.9 } as const;

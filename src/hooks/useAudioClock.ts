@@ -1,61 +1,90 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSource, type AudioSource } from "@/lib/audio/sources";
+import { gameTimeMs, type ClockOffsets } from "@/lib/audio/clock";
 import type { Song } from "@/lib/types";
 
-/** Einzige Zeitquelle des Spiels: Song-Zeit minus globaler Latenz und Song-Offset. */
-export function useAudioClock(song: Song | null, latencyMs: number, volume: number) {
+export type AudioClockState = "idle" | "loading" | "ready" | "error";
+
+export interface AudioClockOptions {
+  latencyMs: number;
+  volume: number;
+  /**
+   * Returns the shared, gesture-unlocked element for file and URL sources (see
+   * src/lib/audio/unlock.ts). Called inside the effect, never during render.
+   */
+  element?: () => HTMLAudioElement;
+  /** Called when the audio reached its end (read from a ref, may change freely). */
+  onEnded?: () => void;
+  /** Test seam: replaces `createSource`. */
+  create?: (song: Song) => AudioSource;
+}
+
+/**
+ * Owns the song's AudioSource and is the only game clock:
+ * `timeMs() = getTimeMs() − latency − song.syncOffsetMs − choreo.offsetMs` (see `gameTimeMs`).
+ * `timeMs` keeps its identity; offsets are read from refs, so loops never need to restart.
+ */
+export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
   const src = useRef<AudioSource | null>(null);
-  const [state, setState] = useState<"idle" | "loading" | "ready" | "error">("idle");
+  const [state, setState] = useState<AudioClockState>("idle");
   const [error, setError] = useState("");
   const [ended, setEnded] = useState(false);
-  // Latest volume for the load/start callbacks, which are not re-created on volume changes.
-  const volumeRef = useRef(volume);
-  volumeRef.current = volume;
+  const latest = useRef(opts);
+  latest.current = opts;
+  const offsets = useRef<ClockOffsets>({ latencyMs: 0, syncOffsetMs: 0, choreoOffsetMs: 0 });
+  offsets.current = {
+    latencyMs: opts.latencyMs,
+    syncOffsetMs: song?.syncOffsetMs ?? 0,
+    choreoOffsetMs: song?.choreo.offsetMs ?? 0,
+  };
 
   useEffect(() => {
-    src.current?.setVolume(volume);
-  }, [volume]);
+    src.current?.setVolume(opts.volume);
+  }, [opts.volume]);
 
+  const songId = song?.id;
   useEffect(() => {
     if (!song) return;
-    const s = createSource(song);
+    // A late load of a previous song must not touch this one's state.
+    let cancelled = false;
+    const { create, element } = latest.current;
+    const s = create ? create(song) : createSource(song, element ? { element: element() } : {});
     src.current = s;
+    setEnded(false);
+    setError("");
     setState("loading");
-    // YouTube/Spotify müssen im Klick-Handler starten; laden darf vorab passieren (außer Spotify).
+    s.onEnded(() => {
+      if (cancelled) return;
+      setEnded(true);
+      latest.current.onEnded?.();
+    });
+    // Spotify must load inside a click handler (stage 10); everything else may load now.
     if (song.source.type !== "spotify") {
       s.load()
         .then(() => {
-          s.setVolume(volumeRef.current);
+          if (cancelled) return;
+          s.setVolume(latest.current.volume);
           setState("ready");
         })
-        .catch((e) => {
-          setError(e.message);
+        .catch((e: unknown) => {
+          if (cancelled) return;
+          setError(e instanceof Error ? e.message : String(e));
           setState("error");
         });
     } else setState("ready");
-    s.onEnded(() => setEnded(true));
-    return () => s.destroy();
+    return () => {
+      cancelled = true;
+      s.destroy();
+      if (src.current === s) src.current = null;
+    };
+    // The source depends on the song identity only; a re-render with a new object is the same song.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [song?.id]);
-
-  const start = useCallback(async () => {
-    const s = src.current!;
-    if (song?.source.type === "spotify") await s.load();
-    s.setVolume(volumeRef.current);
-    if (song?.startOffsetMs) s.seek(song.startOffsetMs);
-    await s.play();
-  }, [song]);
+  }, [songId]);
 
   const timeMs = useCallback(
-    () =>
-      src.current
-        ? src.current.getTimeMs() -
-          latencyMs -
-          (song?.syncOffsetMs ?? 0) -
-          (song?.choreo.offsetMs ?? 0)
-        : 0,
-    [latencyMs, song],
+    () => (src.current ? gameTimeMs(src.current.getTimeMs(), offsets.current) : 0),
+    [],
   );
 
-  return { source: src, state, error, ended, start, timeMs, setError, setState };
+  return { source: src, state, error, ended, timeMs };
 }

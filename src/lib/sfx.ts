@@ -1,15 +1,24 @@
-// Synthetisch erzeugte Soundeffekte.
-let ctx: AudioContext | null = null;
-const ac = () => (ctx ??= new AudioContext());
+// Synthetisch erzeugte Soundeffekte. The AudioContext is shared with the audio unlock
+// (src/lib/audio/unlock.ts), so a tap on "Kamera starten" also unlocks the effects on iOS.
+import { sharedAudioContext } from "./audio/unlock";
+
+let volume = 1;
+
+/** Effects follow the music volume (0..1). */
+export function setSfxVolume(v: number) {
+  volume = Math.max(0, Math.min(1, v));
+}
 
 function tone(freq: number, dur: number, type: OscillatorType, delay = 0, gain = 0.15) {
-  const c = ac();
+  const c = sharedAudioContext();
+  if (!c || volume === 0) return;
+  if (c.state === "suspended") void c.resume().catch(() => {});
   const o = c.createOscillator(),
     g = c.createGain();
   o.type = type;
   o.frequency.value = freq;
   const t = c.currentTime + delay;
-  g.gain.setValueAtTime(gain, t);
+  g.gain.setValueAtTime(gain * volume, t);
   g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
   o.connect(g).connect(c.destination);
   o.start(t);

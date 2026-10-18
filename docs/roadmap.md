@@ -7,19 +7,19 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status | Empfohlenes Modell                                                    |
-| -------------------------------------------- | ------ | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅     | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅     | Sonnet                                                                |
-| 3. Gameplay                                  | 🔜     | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ⏳     | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳     | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ⏳     | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ⏳     | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳     | Opus                                                                  |
-| 9. Typen und Lint                            | ✅     | –                                                                     |
-| 10. Spotify                                  | ⏳     | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳     | je nach Punkt                                                         |
+| Etappe                                       | Status            | Empfohlenes Modell                                                    |
+| -------------------------------------------- | ----------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                | Sonnet                                                                |
+| 3. Gameplay                                  | 🔜 (3a umgesetzt) | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ⏳                | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳                | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ⏳                | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ⏳                | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳                | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                | –                                                                     |
+| 10. Spotify                                  | ⏳                | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
 
@@ -32,6 +32,10 @@ Speicher-Helfer (W11 teilweise), Repository-Tests mit `fake-indexeddb`.
 ✅ W4 (Etappe 2): kein `setState` pro Frame, Video-Frame-Callback, Kamera-Fehlerfälle.
 ✅ SDK-Typen, Lint sauber · Quick Fixes (URL ohne CORS-Zwang, Lautstärke live, W8 teilweise) ·
 Combo-Regel (OK hält, X bricht).
+✅ W3 (Etappe 3a): `seekTo` ohne Wertung, Soll-Winkel pro Move vorberechnet, Reset bei
+Choreo-Wechsel. N4: Soundeffekte nutzen den beim Tippen entsperrten gemeinsamen `AudioContext`.
+W9 teilweise: `type` als Union, Lade-Race beim Songwechsel, `ended`/`error` zurückgesetzt,
+`visibilitychange` → Pause.
 
 ## Etappen
 
@@ -78,24 +82,65 @@ Screen. Handy-Test bestanden: MediaPipe läuft flüssig, **MoveNet entfällt** (
 `PoseEstimator`-Implementierung, keine TF.js-Abhängigkeit). Messwerte stehen in
 [architecture.md](architecture.md#messwerte) (vom Nutzer nachzutragen).
 
-### 3. Gameplay 🔜
+### 3. Gameplay 🔜 (3a umgesetzt, 3b offen)
 
-- Aufstellhilfe: „Los geht's“ startet automatisch mit Countdown, sobald die Aufstellung erreicht
-  ist (bisher rastet nur der Knopf ein); Schalter dazu in Etappe 5.
-- Audio-Clock, Countdown 3-2-1, Piktoleiste, Coach-Strichfigur (Canvas), Score/Combo/Sterne,
-  Wertungs-Popups, Gold-Move-Effekte, Pause. Bewertung alle ~100 ms. Design: [design.md](design.md).
-- Start nur per Nutzergeste (Start-Button), nötig für YouTube und iOS.
-- Fallback: Online-Quelle lädt nicht → Meldung und zurück zur Song-Auswahl.
-- W3: `seekTo(t)` ohne Wertung (Intro überspringen, Pause), Soll-Winkel pro Move vorberechnen,
-  `reset` bei Choreo-Wechsel.
+**3a Kern (Demo-Songs, lokale Audioquelle) – umgesetzt, Gerätetest offen.**
+
+- Route `/play/$songId`: Vollbild ohne App-Kopf, Hoch- und Querformat, Safe Areas. Lädt den Song
+  über `useSongLibrary`/`SongRepository` und das Audio über `createSource`.
+- Audio-Entsperrung für iOS (`src/lib/audio/unlock.ts`): Der Tipp auf „Kamera starten“ (und
+  „Los geht's“) spielt auf einem gemeinsamen Audioelement eine stille WAV an und weckt den
+  gemeinsamen `AudioContext`. Der Song spielt später über genau dieses Element. Wird `play()`
+  trotzdem abgelehnt: „Zum Starten tippen“.
+- Auto-Start: Rastet die Aufstellhilfe ein, wechselt sie ins Spiel; dort laufen Vorlauf
+  („Bereit machen!“, 2 s, deckt den Kamera-Neustart ab) und 3-2-1, zusammen ca. 5 s. „Abbrechen“
+  führt zur Aufstellhilfe und setzt den Auto-Start für diesen Song aus, bis „Los geht's“ getippt
+  wird (sonst Endlosschleife). Schalter folgt in Etappe 5.
+- Ablauf ohne React in `GameController` (`src/lib/game/controller.ts`): Countdown, Spielen,
+  Pause (Knopf, Escape, `visibilitychange`, Kameraverlust), Weiter mit 3-2-1, Neustart, Ende,
+  „blocked“. Ende nach Audio-Ende oder letztem Move + 2,25 s; Weiterleitung zu `/result/$songId`
+  (Platzhalter, Endstand aus `src/lib/game/session.ts`).
+- Bewertung: `Scorer` (`src/lib/scorer.ts`) mit `seekTo`, vorberechneten Zielwinkeln und Schutz
+  gegen ungültige Zeiten; Proben alle ≥ 100 ms Spielzeit; Winkel gehören zum Aufnahmezeitpunkt
+  des Bildes (Details in [scoring.md](scoring.md)). Hinweis „Wir sehen dich nicht“ nach 2,5 s ohne
+  Pose.
+- Oberfläche: gespiegeltes Kamerabild mit Songfarbfilter (20 %) und Vignette, Skelett auf Canvas
+  (abschaltbar im Pausenmenü), Piktoleiste (Canvas, 4 s Vorschau, Blitz an der Marke höchstens
+  3-mal pro Sekunde, Gold golden mit Glow, Pfeile für weite Handbewegungen), Coach in der Ecke
+  (Canvas, feste Ansicht, `frameAt`), HUD mit Score, Combo/Multiplikator, 5 Sternen plus
+  Mega-Stern, Popups (Gold: „YEAH!“/„X“), Hinweis „Gold Move“, Beat-Puls am Rand (abschaltbar,
+  aus bei `prefers-reduced-motion`, höchstens 3 Hz).
+- Fehlerfälle: Song nicht gefunden, keine Moves, Audio nicht ladbar, Kamerafehler (mit erneutem
+  Versuch), Kamera unterbrochen (Pause).
+- Simulationsmodus nur im Dev-Server: `/play/<id>?sim=1&noise=10&miss=0.2` speist die Winkel der
+  Choreografie mit Rauschen (Grad) und Ausfallquote (0–1) ein, ohne Kamera. Steckt hinter
+  `import.meta.env.DEV` und ist im Produktions-Build nachweislich nicht enthalten.
+- Tests: Controller (Countdown, Abbruch, Pause, Wiederaufnahme, blocked, Neustart, Ende,
+  Bildalter), Scorer mit simuliertem Spieler (perfekt, Rauschen, Totalausfall, Combo, Gold,
+  `seekTo`), Piktoleiste, Coach, Beat-Puls, Offsets, `useAudioClock`, Entsperrung, Spielscreen
+  auf Routenebene inkl. Aufräumen.
+- **Offen:** Playwright-Prüfung mit Screenshots (abgebrochen: es lief der globale statt des
+  projektlokalen Playwright-MCP-Servers) und der Gerätetest (Checkliste unten).
+
+Gerätetest 3a (Handy):
+
+1. Aufstellhilfe → einrasten → Spiel startet von selbst, Countdown hörbar (Beeps), Musik startet
+   nach „1“ ohne zusätzlichen Tipp (iOS: Entsperrung wirkt?).
+2. Piktogramme treffen die Marke im Takt; falls nicht, Latenz notieren (globaler Offset kommt in
+   Etappe 5).
+3. Abbrechen im Countdown → Aufstellhilfe ohne erneuten Auto-Start; „Los geht's“ startet.
+4. Pause, Weiter, Neustart, Beenden; App in den Hintergrund / Display sperren → Pause.
+5. Aus dem Bild gehen → Hinweis „Wir sehen dich nicht“.
+6. Ende → Ergebnis-Platzhalter mit Score, Sternen, Verteilung, längster Combo.
+7. Hoch- und Querformat, Notch/Safe Areas, Lesbarkeit bei hellem Hintergrund.
+
+**3b Online-Quellen (nach Freigabe).**
+
 - W5: Uhr bei YouTube erst bei PLAYING hart synchronisieren, bei BUFFERING/Pause anhalten.
 - W7: YouTube-Player sichtbar, mindestens 200 × 200 px, in der Coach-Ecke; `seek` im Pausenzustand
   korrekt; ungenutztes Feld entfernen; iOS-Wiedergabe am Gerät prüfen.
-- W9: `onError` in der AudioSource-Schnittstelle, `type` als Union, Doppelung `lowPrecision`
-  auflösen; Lade-Race beim Song-Wechsel; `ended`/`error` zurücksetzen; `visibilitychange` →
-  Pause.
-- W10: iOS lädt Audio erst nach Geste: `loadedmetadata` plus Timeout, Start im Klick-Handler.
-- Test: Scoring-Ablauf mit simulierter Zeit (inkl. Seek), Piktoleisten-Positionen.
+- URL-Quelle: `playbackRate`, `onError` in der AudioSource-Schnittstelle, iOS-Verhalten (W9, W10).
+- Fallback: Online-Quelle lädt nicht → Meldung und zurück zur Song-Auswahl.
 
 ### 4. Ergebnis-Screen und Highscores ⏳
 
@@ -175,19 +220,17 @@ Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
 Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
-| ID  | Befund                                                                    | Etappe |
-| --- | ------------------------------------------------------------------------- | ------ |
-| W3  | Seek/Intro wertet frühere Moves als X; Soll-Winkel pro Aufruf neu         | 3      |
-| W5  | YouTube/Spotify-Uhr läuft beim Start vor                                  | 3      |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf    | 10     |
-| W7  | YouTube: sichtbarer Player ≥ 200 px, `seek` im Pausenzustand, iOS         | 3      |
-| W9  | AudioSource ohne `onError`, Lade-Race, kein `visibilitychange`            | 3      |
-| W10 | iOS: `canplay` vor Nutzergeste                                            | 3      |
-| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                | 5      |
-| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)  | 7      |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                  | 11     |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen              | 11     |
-| N3  | `seedDemos` vertraut nur dem localStorage-Marker                          | 11     |
-| N4  | `AudioContext` der Soundeffekte wird nicht per `resume()` entsperrt (iOS) | 11     |
-| N6  | `@tanstack/react-query` bisher ungenutzt                                  | 11     |
-| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert        | 11     |
+| ID  | Befund                                                                               | Etappe |
+| --- | ------------------------------------------------------------------------------------ | ------ |
+| W5  | YouTube/Spotify-Uhr läuft beim Start vor                                             | 3b     |
+| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf               | 10     |
+| W7  | YouTube: sichtbarer Player ≥ 200 px, `seek` im Pausenzustand, iOS                    | 3b     |
+| W9  | AudioSource ohne `onError` (Rest; Lade-Race und `visibilitychange` erledigt)         | 3b     |
+| W10 | iOS: Laden vor Nutzergeste (Datei-Quelle mit Timeout erledigt, URL am Gerät)         | 3b     |
+| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                           | 5      |
+| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)             | 7      |
+| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                             | 11     |
+| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                         | 11     |
+| N3  | `seedDemos` vertraut nur dem localStorage-Marker                                     | 11     |
+| N6  | `@tanstack/react-query` bisher ungenutzt                                             | 11     |
+| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon) | 11     |

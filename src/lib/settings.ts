@@ -6,6 +6,8 @@ export interface Settings {
   volume: number;
   latencyMs: number;
   skeleton: boolean;
+  /** Subtle beat pulse at the screen edge during play (off with prefers-reduced-motion anyway). */
+  beatPulse: boolean;
   difficulty: Difficulty;
   mirror: boolean;
   spotifyClientId: string;
@@ -18,6 +20,7 @@ const DEFAULTS: Settings = {
   volume: 0.8,
   latencyMs: 0,
   skeleton: true,
+  beatPulse: true,
   difficulty: "normal",
   mirror: true,
   spotifyClientId: "",

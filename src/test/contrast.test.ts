@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { contrast, hexToRgb, over, type Rgb } from "@/lib/contrast";
-import { MIN_CONTRAST, SCRIM, SONG_PALETTES, TEXT_SECONDARY_ALPHA } from "@/theme";
+import { GAME, MIN_CONTRAST, SCRIM, SONG_PALETTES, TEXT_SECONDARY_ALPHA } from "@/theme";
 
 const WHITE: Rgb = [255, 255, 255];
 const INK = hexToRgb(SCRIM.ink);
@@ -39,5 +39,15 @@ describe.each(SONG_PALETTES)("white text on $accent / $secondary", ({ accent, se
   });
   it("'Song hinzufügen' button inside the banner", () => {
     expect(contrast(WHITE, button)).toBeGreaterThanOrEqual(MIN_CONTRAST.text);
+  });
+});
+
+describe.each(SONG_PALETTES)("gameplay HUD on $accent", ({ accent }) => {
+  // Worst case behind the HUD: a white camera picture under the song tint, no vignette.
+  const camera = over(hexToRgb(accent), GAME.tint, WHITE);
+  const hud = over(INK, GAME.hudScrim, camera);
+
+  it("score, combo, countdown and hints on the HUD scrim", () => {
+    expect(contrast(WHITE, hud)).toBeGreaterThanOrEqual(MIN_CONTRAST.text);
   });
 });

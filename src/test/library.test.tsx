@@ -143,9 +143,9 @@ describe("Song library", () => {
 });
 
 describe("Other routes", () => {
-  it("shows the play placeholder", async () => {
+  it("reports an unknown song on the play route", async () => {
     await renderAt("/play/abc");
-    expect(await screen.findByText("Spiel folgt in Etappe 3")).toBeInTheDocument();
+    expect(await screen.findByText("Song nicht gefunden")).toBeInTheDocument();
   });
 
   it("shows the settings placeholder", async () => {

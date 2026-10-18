@@ -23,6 +23,8 @@ import {
   statusRows,
   type BodyStatus,
 } from "@/lib/bodyTracker";
+import { unlockAudio } from "@/lib/audio/unlock";
+import { isAutoStartArmed, rearmAutoStart } from "@/lib/game/session";
 import { clearOverlay, drawOverlay } from "@/lib/overlay";
 import { cn } from "@/lib/utils";
 import { getSettings, useSettings } from "@/lib/settings";
@@ -40,6 +42,10 @@ const HEARTBEAT_MS = 250;
  * Setup screen: explains, then (after a tap) starts the camera, shows the mirrored picture with
  * stance guide and skeleton, and unlocks "Los geht's" once the whole body was seen for 1 s.
  * The unlock sticks until camera or status change: walking to the phone must not lock it again.
+ *
+ * Once unlocked, the game starts on its own (the play route counts down). After "Abbrechen" in
+ * that countdown, auto-start stays off for this song until "Los geht's" is tapped. The tap on
+ * "Kamera starten" also unlocks audio playback for iOS (src/lib/audio/unlock.ts).
  */
 export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: string }) {
   const navigate = useNavigate();
@@ -50,6 +56,7 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
   const [showDiag, setShowDiag] = useState(false);
   const [body, setBody] = useState<BodyStatus | null>(null);
   const [reached, setReached] = useState(false);
+  const [autoStart] = useState(() => isAutoStartArmed(songId));
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tracker] = useState(() => createBodyTracker());
@@ -133,6 +140,8 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
   }, [status, lastFrameAtRef, resetBody]);
 
   const start = () => {
+    // Synchronously inside the tap: the countdown start later is no user gesture.
+    unlockAudio();
     setCameraId(getSettings().cameraId || undefined);
     setStarted(true);
   };
@@ -143,6 +152,19 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
   };
 
   const ready = status === "ready" && reached;
+
+  const play = useCallback(() => {
+    void navigate({ to: "/play/$songId", params: { songId } });
+  }, [navigate, songId]);
+  const playNow = () => {
+    unlockAudio();
+    rearmAutoStart(songId);
+    play();
+  };
+  // Auto-start (always on until the setting in stage 5).
+  useEffect(() => {
+    if (ready && autoStart) play();
+  }, [ready, autoStart, play]);
   const rows = statusRows(body, lowLight);
   const mirror = settings.mirror;
 
@@ -227,6 +249,14 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
                     : "Einen Moment, die Kamera startet."}
                 </p>
                 {lowLight && <p className="text-base">{LIGHT_HINT}</p>}
+                {autoStart ? (
+                  <p className="text-base">Sobald alles passt, geht es von selbst los.</p>
+                ) : (
+                  <p className="text-base">
+                    Automatischer Start ist aus, weil du abgebrochen hast. Tippe auf „Los
+                    geht&apos;s“, wenn du bereit bist.
+                  </p>
+                )}
               </>
             )}
 
@@ -254,12 +284,7 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
             <PrivacyNote />
 
             <div className="flex flex-wrap items-center gap-3">
-              <Button
-                size="lg"
-                disabled={!ready}
-                onClick={() => void navigate({ to: "/play/$songId", params: { songId } })}
-                className={BTN}
-              >
+              <Button size="lg" disabled={!ready} onClick={playNow} className={BTN}>
                 <Play aria-hidden />
                 Los geht&apos;s
               </Button>

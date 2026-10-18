@@ -1,0 +1,64 @@
+import { frameAt } from "../pose";
+import type { AngleKey, Angles, Choreography } from "../types";
+
+/**
+ * Simulated player for tests and the dev-only simulation mode: the choreography's own angles at
+ * time `t`, with Gaussian noise (`noiseDeg` = standard deviation) and a share of frames without any
+ * pose (`missRate`, 1 = nobody in the picture). Never part of a production build: the play screen
+ * only references it behind `import.meta.env.DEV`.
+ */
+export interface SimOptions {
+  noiseDeg: number;
+  missRate: number;
+  /** Random numbers in [0, 1). Pass a seeded one for reproducible tests. */
+  random?: () => number;
+}
+
+/** Small deterministic PRNG (mulberry32). */
+export function seededRandom(seed: number) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gaussian(random: () => number) {
+  const u = Math.max(random(), 1e-12);
+  const v = random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
+const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
+
+export function simulatedAngles(
+  choreo: Pick<Choreography, "frames">,
+  t: number,
+  opts: SimOptions,
+): Angles | null {
+  const random = opts.random ?? Math.random;
+  if (opts.missRate > 0 && random() < opts.missRate) return null;
+  const angles = frameAt(choreo.frames, t)?.angles;
+  if (!angles) return null;
+  const out: Angles = {};
+  for (const k of Object.keys(angles) as AngleKey[]) {
+    const v = angles[k];
+    if (v == null) continue;
+    out[k] = opts.noiseDeg > 0 ? wrap(v + gaussian(random) * opts.noiseDeg) : v;
+  }
+  return out;
+}
+
+/** Reads `?sim=1&noise=12&miss=0.2` style search params. Null when the mode is off. */
+export function parseSimParams(search: Record<string, unknown>): SimOptions | null {
+  const on = search["sim"];
+  if (on !== 1 && on !== "1" && on !== true && on !== "true") return null;
+  const num = (v: unknown, min: number, max: number, def: number) => {
+    const n = typeof v === "number" ? v : typeof v === "string" ? Number(v) : NaN;
+    return Number.isFinite(n) ? Math.min(max, Math.max(min, n)) : def;
+  };
+  return { noiseDeg: num(search["noise"], 0, 180, 0), missRate: num(search["miss"], 0, 1, 0) };
+}

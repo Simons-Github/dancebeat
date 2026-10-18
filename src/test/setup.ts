@@ -21,3 +21,10 @@ Object.defineProperty(window, "matchMedia", {
 
 // jsdom has no canvas backend; tests that need a context mock it themselves.
 HTMLCanvasElement.prototype.getContext = () => null;
+
+// jsdom does not implement media playback; tests that care spy on these themselves.
+HTMLMediaElement.prototype.play = function () {
+  return Promise.resolve();
+};
+HTMLMediaElement.prototype.pause = () => {};
+HTMLMediaElement.prototype.load = () => {};

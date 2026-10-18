@@ -3,6 +3,7 @@ import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/rea
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { disarmAutoStart, resetSessionForTests } from "@/lib/game/session";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import type { Landmark, Song } from "@/lib/types";
 import { routeTree } from "@/routeTree.gen";
@@ -11,6 +12,22 @@ import { makeChoreo, makeSong } from "./fixtures";
 const library = vi.hoisted(() => ({ songs: [] as Song[] }));
 vi.mock("@/hooks/useSongLibrary", () => ({
   useSongLibrary: () => ({ songs: library.songs, loading: false }),
+}));
+
+// The game route mounts after an auto-start; it must not load real audio.
+vi.mock("@/lib/audio/sources", () => ({
+  createSource: () => ({
+    type: "local",
+    lowPrecision: false,
+    load: () => new Promise(() => {}),
+    play: async () => {},
+    pause: () => {},
+    seek: () => {},
+    getTimeMs: () => 0,
+    setVolume: () => {},
+    onEnded: () => {},
+    destroy: () => {},
+  }),
 }));
 
 // What the fake model "sees"; tests change it between frames.
@@ -69,11 +86,14 @@ async function startSetup() {
   await idle(0);
   fireEvent.click(screen.getByRole("button", { name: "Kamera starten" }));
   await idle(10);
+  return router;
 }
 
 describe("Aufstellhilfe: Einrasten und Heartbeat", () => {
   beforeEach(() => {
     vi.useFakeTimers();
+    // These tests look at the unlock itself; auto-start would leave the screen.
+    disarmAutoStart("song-1");
     const song = { ...makeSong({ ...makeChoreo(), title: "Pink Pulse" }), title: "Pink Pulse" };
     library.songs = [{ ...song, id: "song-1" }];
     scene.landmarks = standing();
@@ -105,9 +125,30 @@ describe("Aufstellhilfe: Einrasten und Heartbeat", () => {
   afterEach(() => {
     cleanup();
     localStorage.clear();
+    resetSessionForTests();
     vi.useRealTimers();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
+  });
+
+  it("Auto-Start: wechselt nach dem Einrasten von selbst ins Spiel", async () => {
+    resetSessionForTests(); // armed
+    const router = await startSetup();
+    expect(screen.getByText("Sobald alles passt, geht es von selbst los.")).toBeInTheDocument();
+    await runFrames(500);
+    expect(router.state.location.pathname).toBe("/setup/song-1");
+    await runFrames(700);
+    expect(router.state.location.pathname).toBe("/play/song-1");
+  });
+
+  it("nach Abbruch kein Auto-Start, „Los geht's“ startet und schaltet ihn wieder ein", async () => {
+    const router = await startSetup();
+    expect(screen.getByText(/Automatischer Start ist aus/)).toBeInTheDocument();
+    await runFrames(1500);
+    expect(router.state.location.pathname).toBe("/setup/song-1");
+    fireEvent.click(goButton());
+    await idle(10);
+    expect(router.state.location.pathname).toBe("/play/song-1");
   });
 
   it("schaltet erst nach einer Sekunde im Bild frei", async () => {

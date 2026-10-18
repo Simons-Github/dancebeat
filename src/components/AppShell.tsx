@@ -1,5 +1,5 @@
 import { useMemo, useState, type CSSProperties, type ReactNode } from "react";
-import { Link } from "@tanstack/react-router";
+import { Link, useRouterState } from "@tanstack/react-router";
 import { Settings } from "lucide-react";
 import { MotionConfig } from "framer-motion";
 
@@ -24,6 +24,8 @@ export function AppShell({ children }: { children: ReactNode }) {
 
 function Frame({ children }: { children: ReactNode }) {
   const { theme } = useSongTheme();
+  // The game screen covers everything: no header, no decorative background behind it.
+  const immersive = useRouterState({ select: (s) => s.location.pathname.startsWith("/play/") });
   const style = {
     "--song": theme.accent,
     "--song-2": theme.secondary,
@@ -37,12 +39,16 @@ function Frame({ children }: { children: ReactNode }) {
   } as CSSProperties;
   return (
     <div className="song-frame bg-party relative flex h-dvh flex-col overflow-hidden" style={style}>
-      <PartyBackground />
-      <div
-        aria-hidden
-        className="scrim-edge pointer-events-none absolute inset-x-0 bottom-0 h-1/4"
-      />
-      <AppHeader />
+      {!immersive && (
+        <>
+          <PartyBackground />
+          <div
+            aria-hidden
+            className="scrim-edge pointer-events-none absolute inset-x-0 bottom-0 h-1/4"
+          />
+          <AppHeader />
+        </>
+      )}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">{children}</div>
     </div>
   );

@@ -31,7 +31,16 @@ export interface FrameInfo {
   videoHeight: number;
   /** performance.now() after the detection. */
   nowMs: number;
+  /**
+   * How old the picture is when this callback runs: from the camera capture (video-frame
+   * metadata `captureTime`, if the browser reports a plausible one) or else from the start of
+   * the detection, to `nowMs`. The game files the angles under the time of the picture.
+   */
+  frameAgeMs: number;
 }
+
+/** captureTime further back than this is treated as unreliable. */
+const MAX_CAPTURE_AGE_MS = 300;
 
 export interface CameraDevice {
   deviceId: string;
@@ -193,7 +202,7 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       let lastAspect = 0;
       const useVfc = typeof v.requestVideoFrameCallback === "function";
 
-      const step = () => {
+      const step = (_now?: number, meta?: VideoFrameCallbackMetadata) => {
         if (cancelled) return;
         schedule();
         // rAF fires faster than the camera delivers; skip repeats of the same picture.
@@ -228,12 +237,16 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
           lastAspect = a;
           setAspect(a);
         }
+        const capture = meta?.captureTime;
+        const capturedAt =
+          capture != null && capture <= t0 && t0 - capture < MAX_CAPTURE_AGE_MS ? capture : t0;
         cbRef.current.onFrame?.({
           landmarks,
           aspect: a,
           videoWidth: v.videoWidth,
           videoHeight: v.videoHeight,
           nowMs: t1,
+          frameAgeMs: t1 - capturedAt,
         });
         if (t1 - lastLight > BRIGHTNESS_INTERVAL_MS) {
           lastLight = t1;
