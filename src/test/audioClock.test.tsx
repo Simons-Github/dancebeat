@@ -51,6 +51,7 @@ function fakeSource(over: Partial<AudioSource> = {}): AudioSource & { t: number 
     getTimeMs: (): number => s.t,
     setVolume: vi.fn(),
     onEnded: vi.fn(),
+    onError: vi.fn(),
     destroy: vi.fn(),
     ...over,
   };
@@ -111,6 +112,113 @@ describe("useAudioClock", () => {
     await flush();
     expect(api!.state).toBe("error");
     expect(api!.error).toBe("kaputt");
+  });
+});
+
+describe("useAudioClock: Laufzeitfehler", () => {
+  afterEach(() => {
+    api = null;
+  });
+
+  it("onError nach dem Laden setzt den Fehlerzustand", async () => {
+    let fail = (_m: string) => {};
+    const src = fakeSource({ onError: (cb) => (fail = cb) });
+    render(<Probe song={makeSong()} opts={{ latencyMs: 0, volume: 1, create: () => src }} />);
+    await flush();
+    expect(api!.state).toBe("ready");
+    act(() => fail("Verbindung weg"));
+    expect(api!.state).toBe("error");
+    expect(api!.error).toBe("Verbindung weg");
+  });
+
+  it("ein später Fehler des alten Songs wird verworfen", async () => {
+    const fails: ((m: string) => void)[] = [];
+    const make = () => fakeSource({ onError: (cb) => fails.push(cb) });
+    const sources = [make(), make()];
+    const create = () => sources.shift()!;
+    const { rerender } = render(
+      <Probe song={makeSong()} opts={{ latencyMs: 0, volume: 1, create }} />,
+    );
+    await flush();
+    rerender(<Probe song={makeSong()} opts={{ latencyMs: 0, volume: 1, create }} />);
+    await flush();
+    act(() => fails[0]!("alt"));
+    expect(api!.state).toBe("ready");
+    expect(api!.error).toBe("");
+  });
+});
+
+describe("URL-Quelle: Puffern und Laufzeitfehler", () => {
+  afterEach(() => {
+    resetAudioUnlockForTests();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  async function loadedUrlSource() {
+    vi.useFakeTimers({
+      toFake: ["setTimeout", "clearTimeout", "setInterval", "clearInterval", "performance"],
+    });
+    const el = document.createElement("audio");
+    const song = makeSong();
+    song.source = { type: "url", url: "https://example.org/c.mp3" };
+    const src = createSource(song, { element: el });
+    const loading = src.load();
+    await Promise.resolve();
+    el.dispatchEvent(new Event("loadedmetadata"));
+    await loading;
+    vi.spyOn(el, "play").mockResolvedValue();
+    return { el, src };
+  }
+
+  it("waiting hält die Uhr an, playing setzt sie fort", async () => {
+    const { el, src } = await loadedUrlSource();
+    // The element's position advances with real playback until it stalls.
+    let stalled = false;
+    let pos = 1000;
+    let last = performance.now();
+    Object.defineProperty(el, "currentTime", {
+      get: () => {
+        const now = performance.now();
+        if (!stalled) pos += now - last;
+        last = now;
+        return pos / 1000;
+      },
+    });
+    await src.play();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(src.getTimeMs()).toBeCloseTo(2000, -2);
+    stalled = true;
+    el.dispatchEvent(new Event("waiting"));
+    const held = src.getTimeMs();
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(src.getTimeMs()).toBe(held);
+    stalled = false;
+    el.dispatchEvent(new Event("playing"));
+    await vi.advanceTimersByTimeAsync(500);
+    expect(src.getTimeMs()).toBeGreaterThan(held + 400);
+    src.destroy();
+  });
+
+  it("Fehler nach dem Laden ruft onError mit Verbindungstext und hält die Uhr an", async () => {
+    const { el, src } = await loadedUrlSource();
+    const cb = vi.fn();
+    src.onError(cb);
+    el.dispatchEvent(new Event("error"));
+    expect(cb).toHaveBeenCalledWith("Die Verbindung zur Musik ist abgebrochen.");
+    src.destroy();
+  });
+
+  it("destroy entfernt die Handler", async () => {
+    const { el, src } = await loadedUrlSource();
+    const cb = vi.fn();
+    src.onError(cb);
+    src.destroy();
+    expect(el.onerror).toBeNull();
+    expect(el.onwaiting).toBeNull();
+    expect(el.onplaying).toBeNull();
+    el.dispatchEvent(new Event("error"));
+    expect(cb).not.toHaveBeenCalled();
   });
 });
 

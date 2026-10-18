@@ -23,6 +23,7 @@ const audio = vi.hoisted(() => ({
   refuse: false,
   loadFails: false,
   ended: null as null | (() => void),
+  failed: null as null | ((message: string) => void),
   calls: [] as string[],
 }));
 vi.mock("@/lib/audio/sources", () => ({
@@ -57,6 +58,7 @@ vi.mock("@/lib/audio/sources", () => ({
       getTimeMs: time,
       setVolume: () => {},
       onEnded: (cb: () => void) => (audio.ended = cb),
+      onError: (cb: (message: string) => void) => (audio.failed = cb),
       destroy: () => audio.calls.push("destroy"),
     };
   },
@@ -129,6 +131,7 @@ beforeEach(() => {
     refuse: false,
     loadFails: false,
     ended: null,
+    failed: null,
     calls: [],
   });
   scene.estimators = [];
@@ -261,6 +264,19 @@ describe("Spielscreen (Simulationsmodus)", () => {
     audio.loadFails = true;
     await renderAt(`/play/${SONG_ID}?sim=1`);
     expect(screen.getByText("Die Musik konnte nicht geladen werden")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Zur Bibliothek" })).toBeInTheDocument();
+  });
+
+  it("Musik bricht im Spiel ab: Spiel stoppt, Meldung und Weg zurück", async () => {
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    expect(phase()).toBe("playing");
+    act(() => audio.failed?.("Die Verbindung zur Musik ist abgebrochen."));
+    await advance(20);
+    expect(phase()).toBe("preparing");
+    expect(audio.playing).toBe(false);
+    expect(screen.getByText("Die Musik ist abgebrochen")).toBeInTheDocument();
+    expect(screen.getByText("Die Verbindung zur Musik ist abgebrochen.")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Zur Bibliothek" })).toBeInTheDocument();
   });
 

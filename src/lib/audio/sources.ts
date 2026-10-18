@@ -13,6 +13,8 @@ export interface AudioSource {
   getTimeMs(): number;
   setVolume(v: number): void;
   onEnded(cb: () => void): void;
+  /** Called when playback breaks after a successful `load()` (connection lost, decode error). */
+  onError(cb: (message: string) => void): void;
   destroy(): void;
 }
 
@@ -61,6 +63,9 @@ class ElementSource implements AudioSource {
   private clock = new SmoothClock();
   private timer = 0;
   private destroyed = false;
+  /** True while the element stalls for data (`waiting`); the clock holds until `playing`. */
+  private waiting = false;
+  private errorCb: (message: string) => void = () => {};
   constructor(
     public type: "local" | "url",
     private getUrl: () => Promise<string>,
@@ -70,8 +75,14 @@ class ElementSource implements AudioSource {
     this.shared = !!element;
     this.el = element ?? new Audio();
     this.el.preload = "auto";
+    this.el.defaultPlaybackRate = rate;
     this.el.playbackRate = rate;
     this.clock.setRate(rate);
+  }
+  private errorMessage() {
+    return this.type === "url"
+      ? "Die Audio-URL konnte nicht geladen werden. Prüfe den Link und ob die Datei öffentlich erreichbar ist."
+      : "Die Audiodatei konnte nicht dekodiert werden. Bitte MP3, M4A, WAV oder OGG verwenden.";
   }
   async load() {
     const url = await this.getUrl();
@@ -93,13 +104,7 @@ class ElementSource implements AudioSource {
       el.onloadedmetadata = done;
       el.onerror = () => {
         clearTimeout(timeout);
-        rej(
-          new Error(
-            this.type === "url"
-              ? "Die Audio-URL konnte nicht geladen werden. Prüfe den Link und ob die Datei öffentlich erreichbar ist."
-              : "Die Audiodatei konnte nicht dekodiert werden. Bitte MP3, M4A, WAV oder OGG verwenden.",
-          ),
-        );
+        rej(new Error(this.errorMessage()));
       };
       timeout = window.setTimeout(done, LOAD_TIMEOUT_MS);
       el.src = url;
@@ -109,7 +114,26 @@ class ElementSource implements AudioSource {
         /* jsdom */
       }
     });
+    el.defaultPlaybackRate = this.rate;
     el.playbackRate = this.rate;
+    // After loading, errors are runtime errors (connection lost, decode failure mid-song).
+    el.onerror = () => {
+      if (this.destroyed) return;
+      clearInterval(this.timer);
+      this.clock.sync(el.currentTime * 1000, false, true);
+      this.errorCb(
+        this.type === "url" ? "Die Verbindung zur Musik ist abgebrochen." : this.errorMessage(),
+      );
+    };
+    // Buffering: `paused` stays false, so the clock must be held explicitly.
+    el.onwaiting = () => {
+      this.waiting = true;
+      this.clock.sync(el.currentTime * 1000, false, true);
+    };
+    el.onplaying = () => {
+      this.waiting = false;
+      this.clock.sync(el.currentTime * 1000, !el.paused, true);
+    };
   }
   async play() {
     await this.el.play();
@@ -117,18 +141,19 @@ class ElementSource implements AudioSource {
     this.clock.sync(this.el.currentTime * 1000, true, true);
     clearInterval(this.timer);
     this.timer = window.setInterval(
-      () => this.clock.sync(this.el.currentTime * 1000, !this.el.paused),
+      () => this.clock.sync(this.el.currentTime * 1000, !this.el.paused && !this.waiting),
       250,
     );
   }
   pause() {
     clearInterval(this.timer);
+    this.waiting = false;
     this.el.pause();
     this.clock.sync(this.el.currentTime * 1000, false, true);
   }
   seek(ms: number) {
     this.el.currentTime = ms / 1000;
-    this.clock.sync(ms, !this.el.paused, true);
+    this.clock.sync(ms, !this.el.paused && !this.waiting, true);
   }
   getTimeMs() {
     return this.clock.get();
@@ -139,6 +164,9 @@ class ElementSource implements AudioSource {
   onEnded(cb: () => void) {
     this.el.onended = cb;
   }
+  onError(cb: (message: string) => void) {
+    this.errorCb = cb;
+  }
   destroy() {
     this.destroyed = true;
     clearInterval(this.timer);
@@ -146,6 +174,8 @@ class ElementSource implements AudioSource {
     el.pause();
     el.onended = null;
     el.onerror = null;
+    el.onwaiting = null;
+    el.onplaying = null;
     el.oncanplay = null;
     el.onloadedmetadata = null;
     if (el.src.startsWith("blob:")) URL.revokeObjectURL(el.src);
@@ -196,6 +226,7 @@ class YouTubeSource implements AudioSource {
   private poll = 0;
   private resync = 0;
   private endedCb = () => {};
+  private errorCb: (message: string) => void = () => {};
   private host: HTMLDivElement;
   constructor(private videoId: string) {
     this.host = document.createElement("div");
@@ -275,6 +306,9 @@ class YouTubeSource implements AudioSource {
   onEnded(cb: () => void) {
     this.endedCb = cb;
   }
+  onError(cb: (message: string) => void) {
+    this.errorCb = cb;
+  }
   destroy() {
     clearInterval(this.poll);
     clearInterval(this.resync);
@@ -343,6 +377,7 @@ class SpotifySource implements AudioSource {
   private clock = new SmoothClock();
   private poll = 0;
   private endedCb = () => {};
+  private errorCb: (message: string) => void = () => {};
   constructor(private uri: string) {}
   async load() {
     const token = spotifyToken();
@@ -417,6 +452,9 @@ class SpotifySource implements AudioSource {
   }
   onEnded(cb: () => void) {
     this.endedCb = cb;
+  }
+  onError(cb: (message: string) => void) {
+    this.errorCb = cb;
   }
   destroy() {
     clearInterval(this.poll);

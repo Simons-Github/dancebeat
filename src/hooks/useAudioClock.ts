@@ -58,6 +58,12 @@ export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
       setEnded(true);
       latest.current.onEnded?.();
     });
+    // Runtime failure after loading (connection lost): same error state as a load failure.
+    s.onError((message) => {
+      if (cancelled) return;
+      setError(message);
+      setState("error");
+    });
     // Spotify must load inside a click handler (stage 10); everything else may load now.
     if (song.source.type !== "spotify") {
       s.load()

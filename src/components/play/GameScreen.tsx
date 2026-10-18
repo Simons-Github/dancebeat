@@ -249,6 +249,11 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
     return () => cancelAnimationFrame(raf);
   }, [timeMs, choreo, figures, flashes, view, reducedMotion, sim, song.bpm]);
 
+  // The music broke (load or runtime error): stop timers and playback; the overlay explains.
+  useEffect(() => {
+    if (audio.state === "error") controllerRef.current?.cancel();
+  }, [audio.state]);
+
   const cancel = () => {
     controllerRef.current?.cancel();
     disarmAutoStart(song.id);
@@ -283,7 +288,12 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
   let overlay = null;
   if (audio.state === "error") {
     overlay = (
-      <MessageOverlay title="Die Musik konnte nicht geladen werden" actions={toLibrary}>
+      <MessageOverlay
+        title={
+          startedRef.current ? "Die Musik ist abgebrochen" : "Die Musik konnte nicht geladen werden"
+        }
+        actions={toLibrary}
+      >
         <p className="text-base">{audio.error}</p>
       </MessageOverlay>
     );
