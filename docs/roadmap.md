@@ -57,7 +57,7 @@ Browser-Prüfung per Playwright (390x844 und 844x390) erledigt. **Offen:** Prüf
 
 - Kurze Erklärung, Kamera-Berechtigung, Live-Bild mit Silhouetten-Rahmen und Pose-Overlay auf
   Canvas. „Los geht's“ erst aktiv, wenn Schultern, Hüften, Knie und Knöchel erkannt werden.
-- Hinweise: Kamerabilder verlassen das Gerät nie; beim ersten Start werden Erkennungsmodell und
+- Hinweise: Kamerabilder verlassen das Gerät nie; beim Start der Kamera werden Erkennungsmodell und
   Laufzeit von jsDelivr und Google geladen (IP-Adresse wird übertragen, keine Bilder) (W12).
 - Fehlermeldungen: Kamera verweigert, keine Kamera, Kamera belegt, Körper nicht sichtbar,
   schlechtes Licht, Beine fehlen.

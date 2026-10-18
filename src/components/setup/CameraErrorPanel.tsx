@@ -17,7 +17,7 @@ export function CameraErrorPanel({ error, onRetry }: { error: CameraError; onRet
         className="btn-pill h-14 gap-2 self-start rounded-full px-8 text-lg focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5"
       >
         <RefreshCw aria-hidden />
-        Erneut versuchen
+        {error.kind === "interrupted" ? "Erneut starten" : "Erneut versuchen"}
       </Button>
     </div>
   );

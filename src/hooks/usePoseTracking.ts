@@ -26,6 +26,9 @@ export interface PoseFrame {
 export interface FrameInfo {
   landmarks: Landmark[] | null;
   aspect: number;
+  /** Pixel size of the video the landmarks refer to. */
+  videoWidth: number;
+  videoHeight: number;
   /** performance.now() after the detection. */
   nowMs: number;
 }
@@ -71,7 +74,11 @@ const sizeConstraints = {
   height: { ideal: 720 },
 } as const;
 
-async function openCamera(cameraId: string | undefined, onStale: () => void): Promise<MediaStream> {
+/** `onStale` returns false when the request was cancelled meanwhile: then no other camera is opened. */
+async function openCamera(
+  cameraId: string | undefined,
+  onStale: () => boolean,
+): Promise<MediaStream> {
   const open = (video: MediaTrackConstraints) =>
     navigator.mediaDevices.getUserMedia({ video, audio: false });
   if (cameraId) {
@@ -79,7 +86,7 @@ async function openCamera(cameraId: string | undefined, onStale: () => void): Pr
       return await open({ deviceId: { exact: cameraId }, ...sizeConstraints });
     } catch (e) {
       if (!isStaleCameraError(e)) throw e;
-      onStale();
+      if (!onStale()) throw e;
     }
   }
   try {
@@ -136,9 +143,16 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
     let frameCb = 0;
     let raf = 0;
     let removeWatchers = () => {};
-    const { stats } = statsRef.current;
+    // The container takes the video's shape as soon as it is known (also when rotating).
+    const syncAspect = () => {
+      if (video?.videoHeight) setAspect(video.videoWidth / video.videoHeight);
+    };
+    video?.addEventListener("loadedmetadata", syncAspect);
+    video?.addEventListener("resize", syncAspect);
+    const shared = statsRef.current;
+    const { stats } = shared;
     stats.reset();
-    statsRef.current.delegate = null;
+    shared.delegate = null;
     lastFrameAtRef.current = 0;
 
     const fail = (e: CameraError) => {
@@ -214,7 +228,13 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
           lastAspect = a;
           setAspect(a);
         }
-        cbRef.current.onFrame?.({ landmarks, aspect: a, nowMs: t1 });
+        cbRef.current.onFrame?.({
+          landmarks,
+          aspect: a,
+          videoWidth: v.videoWidth,
+          videoHeight: v.videoHeight,
+          nowMs: t1,
+        });
         if (t1 - lastLight > BRIGHTNESS_INTERVAL_MS) {
           lastLight = t1;
           const b = meter(v);
@@ -266,7 +286,7 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
           stopStream(stream);
           stream = null;
           v.srcObject = null;
-          return fail(cameraError("busy"));
+          return fail(cameraError("interrupted"));
         }
         autoRestarts.current++;
         setRestartKey((k) => k + 1);
@@ -289,16 +309,19 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       setLowLight(false);
       const unsupported = checkCameraSupport();
       if (unsupported) return fail(unsupported);
+      if (!video) return fail(cameraError("unknown"));
       setStatus("loading");
       try {
         stream = await openCamera(cameraId, () => {
-          if (!cancelled) cbRef.current.onStaleCamera?.();
+          if (cancelled) return false;
+          cbRef.current.onStaleCamera?.();
+          return true;
         });
       } catch (e: unknown) {
         if (!cancelled) fail(mapCameraError(e));
         return;
       }
-      if (cancelled || !video) {
+      if (cancelled) {
         stopStream(stream);
         stream = null;
         return;
@@ -320,6 +343,8 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
     return () => {
       cancelled = true;
       removeWatchers();
+      video?.removeEventListener("loadedmetadata", syncAspect);
+      video?.removeEventListener("resize", syncAspect);
       if (frameCb) video?.cancelVideoFrameCallback?.(frameCb);
       cancelAnimationFrame(raf);
       navigator.mediaDevices?.removeEventListener?.("devicechange", onDeviceChange);
@@ -329,6 +354,10 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       estimator?.close();
       estimator = null;
       poseRef.current = null;
+      setAspect(4 / 3);
+      setActiveDeviceId("");
+      setDelegate(null);
+      shared.delegate = null;
     };
   }, [enabled, cameraId, retryKey, restartKey]);
 

@@ -3,13 +3,20 @@ import { OVERLAY_COLORS } from "@/theme";
 import { BONES, isVisible } from "./pose";
 import type { Landmark } from "./types";
 
-/** Standing-person outline in normalized 0..1 frame coordinates, as a guide for the stance. */
+/** Box of fixed 1:2 shape (width:height) for the stance guide, centred, 85 % of the height. */
+export function guideBox(w: number, h: number) {
+  const bh = Math.min(h * 0.85, w * 0.95 * 2);
+  const bw = bh / 2;
+  return { x: (w - bw) / 2, y: (h - bh) / 2, w: bw, h: bh };
+}
+
+/** Standing-person outline drawn inside `guideBox`, so it keeps its shape in any frame. */
 function guidePath(w: number, h: number): Path2D {
+  const box = guideBox(w, h);
   const p = new Path2D();
-  const x = (v: number) => v * w;
-  const y = (v: number) => v * h;
-  const r = Math.min(w, h);
-  p.arc(x(0.5), y(0.15), r * 0.07, 0, Math.PI * 2);
+  const x = (v: number) => box.x + v * box.w;
+  const y = (v: number) => box.y + v * box.h;
+  p.arc(x(0.5), y(0.15), box.w * 0.14, 0, Math.PI * 2);
   p.moveTo(x(0.36), y(0.27));
   p.lineTo(x(0.64), y(0.27));
   p.lineTo(x(0.7), y(0.55));
@@ -23,6 +30,11 @@ function guidePath(w: number, h: number): Path2D {
   p.lineTo(x(0.3), y(0.55));
   p.closePath();
   return p;
+}
+
+/** Wipes everything (camera switch, error), e.g. a skeleton that would otherwise stay. */
+export function clearOverlay(canvas: HTMLCanvasElement) {
+  canvas.getContext("2d")?.clearRect(0, 0, canvas.width, canvas.height);
 }
 
 /**

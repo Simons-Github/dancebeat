@@ -22,9 +22,9 @@ export interface BodyStatus {
   parts: ReturnType<typeof bodyCheck>;
   /** Shoulders, hips, knees and ankles all visible in this frame. */
   allVisible: boolean;
-  /** Uninterrupted time with `allVisible`, in ms. */
+  /** Uninterrupted time with a placed body (visible, distance ok, centred), in ms. */
   heldMs: number;
-  /** Held for at least `HOLD_MS`. */
+  /** Whole body, at a good distance and centred, held for at least `HOLD_MS`. */
   ready: boolean;
   distance: Distance;
   hint: string;
@@ -45,6 +45,12 @@ export function distanceOf(lm: Landmark[] | null): Distance {
   return "ok";
 }
 
+/** Hips in the middle half of the frame width. */
+export function isCentered(lm: Landmark[] | null): boolean {
+  const hx = lm ? mid(lm[23], lm[24], 0) : null;
+  return hx === null || (hx >= 0.25 && hx <= 0.75);
+}
+
 export function hintFor(lm: Landmark[] | null, parts: BodyStatus["parts"], ready: boolean): string {
   if (!lm) return "Stell dich vor die Kamera. Ich sehe dich noch nicht.";
   if (!parts.ankles || !parts.knees) {
@@ -56,8 +62,7 @@ export function hintFor(lm: Landmark[] | null, parts: BodyStatus["parts"], ready
   const distance = distanceOf(lm);
   if (distance === "near") return "Geh einen Schritt zurück.";
   if (distance === "far") return "Komm einen Schritt näher.";
-  const hx = mid(lm[23], lm[24], 0);
-  if (hx !== null && (hx < 0.25 || hx > 0.75)) return "Stell dich in die Bildmitte.";
+  if (!isCentered(lm)) return "Stell dich in die Bildmitte.";
   return ready ? "Alles bereit. Los geht's!" : "Super, bleib kurz so stehen.";
 }
 
@@ -71,24 +76,27 @@ export function createBodyTracker(holdMs = HOLD_MS) {
     update(lm: Landmark[] | null, nowMs: number): BodyStatus {
       const parts = bodyCheck(lm);
       const allVisible = parts.shoulders && parts.hips && parts.knees && parts.ankles;
+      const distance = distanceOf(lm);
+      // Ready must never contradict a hint, so distance and centring count like visibility.
+      const placed = allVisible && distance === "ok" && isCentered(lm);
       if (lastAt !== null && nowMs - lastAt > MAX_FRAME_GAP_MS) since = null;
       lastAt = nowMs;
       // Landmarks below visibility 0.5 still count as missing; a short dropout only does not
       // restart the hold.
-      if (allVisible) lostSince = null;
+      if (placed) lostSince = null;
       else {
         lostSince ??= nowMs;
         if (nowMs - lostSince > DROPOUT_MS) since = null;
       }
-      if (allVisible && since === null) since = nowMs;
+      if (placed && since === null) since = nowMs;
       const heldMs = since === null ? 0 : nowMs - since;
-      const ready = allVisible && heldMs >= holdMs;
+      const ready = placed && heldMs >= holdMs;
       return {
         parts,
         allVisible,
         heldMs,
         ready,
-        distance: distanceOf(lm),
+        distance,
         hint: hintFor(lm, parts, ready),
       };
     },

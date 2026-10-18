@@ -1,6 +1,8 @@
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 
-const WASM = "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@1.1.1/wasm";
+/** Must equal the exact version in package.json (guarded by a test): JS and WASM have to match. */
+export const TASKS_VISION_VERSION = "1.1.1";
+const WASM = `https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@${TASKS_VISION_VERSION}/wasm`;
 const MODEL = (v: "lite" | "full" | "heavy") =>
   `https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_${v}/float16/1/pose_landmarker_${v}.task`;
 

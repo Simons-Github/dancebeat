@@ -1,5 +1,12 @@
 export type CameraErrorKind =
-  "denied" | "nocamera" | "busy" | "insecure" | "overconstrained" | "model" | "unknown";
+  | "denied"
+  | "nocamera"
+  | "busy"
+  | "interrupted"
+  | "insecure"
+  | "overconstrained"
+  | "model"
+  | "unknown";
 
 export interface CameraError {
   kind: CameraErrorKind;
@@ -11,7 +18,7 @@ export interface CameraError {
 const ERRORS: Record<CameraErrorKind, Omit<CameraError, "kind">> = {
   denied: {
     title: "Kamera-Zugriff verweigert",
-    hint: "Erlaube die Kamera in den Browser-Einstellungen (Schloss-Symbol neben der Adresse) und tippe dann auf „Erneut versuchen“.",
+    hint: "Erlaube die Kamera in den Browser-Einstellungen (Schloss-Symbol neben der Adresse; auf dem iPhone „aA“ → Website-Einstellungen → Kamera) und tippe dann auf „Erneut versuchen“.",
   },
   nocamera: {
     title: "Keine Kamera gefunden",
@@ -20,6 +27,10 @@ const ERRORS: Record<CameraErrorKind, Omit<CameraError, "kind">> = {
   busy: {
     title: "Kamera wird bereits verwendet",
     hint: "Schließe andere Apps oder Tabs, die die Kamera nutzen (Videoanruf, Kamera-App), und tippe auf „Erneut versuchen“.",
+  },
+  interrupted: {
+    title: "Die Kamera wurde unterbrochen",
+    hint: "Ein Anruf oder eine andere App hat die Kamera übernommen. Beende sie und tippe auf „Erneut starten“.",
   },
   insecure: {
     title: "Kamera nur über eine sichere Verbindung",
@@ -31,7 +42,7 @@ const ERRORS: Record<CameraErrorKind, Omit<CameraError, "kind">> = {
   },
   model: {
     title: "Erkennung konnte nicht geladen werden",
-    hint: "Beim ersten Start braucht DanceBeat eine Internetverbindung (Erkennungsmodell und Laufzeit). Prüfe die Verbindung und tippe auf „Erneut versuchen“.",
+    hint: "Beim Start der Kamera lädt DanceBeat Erkennungsmodell und Laufzeit aus dem Internet. Prüfe die Verbindung und tippe auf „Erneut versuchen“.",
   },
   unknown: {
     title: "Kamera konnte nicht gestartet werden",

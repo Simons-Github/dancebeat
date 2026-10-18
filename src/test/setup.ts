@@ -18,3 +18,6 @@ Object.defineProperty(window, "matchMedia", {
     dispatchEvent: () => {},
   }),
 });
+
+// jsdom has no canvas backend; tests that need a context mock it themselves.
+HTMLCanvasElement.prototype.getContext = () => null;

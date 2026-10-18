@@ -6,7 +6,7 @@ export function PrivacyNote() {
     <p className="flex items-start gap-2 text-sm text-white/90">
       <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
       <span>
-        Kamerabilder verlassen dein Gerät nie. Beim ersten Start werden Erkennungsmodell und
+        Kamerabilder verlassen dein Gerät nie. Beim Start der Kamera werden Erkennungsmodell und
         Laufzeit von jsDelivr und Google geladen; dabei wird deine IP-Adresse übertragen, keine
         Bilder.
       </span>

@@ -1,6 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { checkCameraSupport, isStaleCameraError, mapCameraError } from "@/lib/cameraErrors";
+import {
+  cameraError,
+  checkCameraSupport,
+  isStaleCameraError,
+  mapCameraError,
+} from "@/lib/cameraErrors";
 
 const err = (name: string) => new DOMException("x", name);
 
@@ -17,6 +22,24 @@ describe("Kamerafehler", () => {
     expect(e.kind).toBe(kind);
     expect(e.title).toMatch(title);
     expect(e.hint).toMatch(/Erneut versuchen|HTTPS|Kamera/);
+  });
+
+  it("kennt den Fall „Kamera unterbrochen“ als eigenen Typ", () => {
+    const e = cameraError("interrupted");
+    expect(e.title).toBe("Die Kamera wurde unterbrochen");
+    expect(e.hint).toMatch(/Erneut starten/);
+    // It is never produced by getUserMedia errors, only by the hook.
+    expect(mapCameraError(err("AbortError")).kind).toBe("busy");
+  });
+
+  it("nennt den iPhone-Weg bei verweigerter Kamera", () => {
+    expect(cameraError("denied").hint).toMatch(/aA.*Website-Einstellungen.*Kamera/);
+  });
+
+  it("legt nicht nahe, dass die Erkennung nach dem ersten Laden offline läuft", () => {
+    const hint = cameraError("model").hint;
+    expect(hint).not.toMatch(/ersten Start/);
+    expect(hint).toMatch(/Beim Start der Kamera/);
   });
 
   it("verträgt Nicht-Fehler", () => {

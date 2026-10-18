@@ -23,7 +23,7 @@ import {
   statusRows,
   type BodyStatus,
 } from "@/lib/bodyTracker";
-import { drawOverlay } from "@/lib/overlay";
+import { clearOverlay, drawOverlay } from "@/lib/overlay";
 import { cn } from "@/lib/utils";
 import { getSettings, useSettings } from "@/lib/settings";
 
@@ -66,18 +66,13 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
 
   // Runs in the detection loop: draws straight to the canvas, renders only when the checklist changes.
   const onFrame = useCallback(
-    ({ landmarks, nowMs }: FrameInfo) => {
+    ({ landmarks, videoWidth, videoHeight, nowMs }: FrameInfo) => {
       const status = tracker.update(landmarks, nowMs);
       const canvas = canvasRef.current;
       if (canvas) {
-        const v = canvas.parentElement?.querySelector("video");
-        if (
-          v &&
-          v.videoWidth &&
-          (canvas.width !== v.videoWidth || canvas.height !== v.videoHeight)
-        ) {
-          canvas.width = v.videoWidth;
-          canvas.height = v.videoHeight;
+        if (videoWidth && (canvas.width !== videoWidth || canvas.height !== videoHeight)) {
+          canvas.width = videoWidth;
+          canvas.height = videoHeight;
         }
         drawOverlay(canvas, landmarks, { ready: status.ready });
       }
@@ -118,6 +113,7 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
   // unlock starts over.
   useEffect(() => {
     if (status !== "ready") resetBody();
+    if (canvasRef.current) clearOverlay(canvasRef.current);
     reachedRef.current = false;
     setReached(false);
   }, [status, cameraId, resetBody]);

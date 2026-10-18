@@ -40,7 +40,7 @@ Browser-APIs (getUserMedia, MediaPipe/WASM, HTMLAudioElement, IndexedDB, localSt
 Läuft die Erkennung nicht mehr (Hintergrund, Sperre, Anruf), reagiert der Hook so: bei
 `visibilitychange` (sichtbar) wird `video.play()` erneut aufgerufen; endet die Kamera-Spur
 (`track.onended` oder `readyState "ended"`), startet er intern neu (höchstens 3 Versuche, nach
-10 s ungestörtem Lauf wieder frei, danach Fehler „Kamera belegt“). Wirft `detect` 10-mal in Folge,
+10 s ungestörtem Lauf wieder frei, danach Fehler „Die Kamera wurde unterbrochen“ mit „Erneut starten“, Typ `interrupted`). Wirft `detect` 10-mal in Folge,
 wird der Estimator geschlossen und mit CPU neu gestartet (Parameter `delegate`); scheitert auch
 das, kommt der Modellfehler. `lastFrameAtRef` hält den Zeitpunkt des letzten Frames fest.
 
@@ -108,6 +108,11 @@ UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 | Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden                       |
 | Audio-URL                      | vom Nutzer eingegebene Adresse        | URL-Song laden                           |
 
+Die ersten beiden Abrufe gehen bei jedem Start der Kamera raus (kein Service Worker, mindestens
+zur Cache-Prüfung), nicht nur beim ersten Mal. Die WASM-URL entsteht aus der Konstante
+`TASKS_VISION_VERSION` (`src/lib/mediapipe.ts`); `@mediapipe/tasks-vision` ist in `package.json`
+exakt auf `1.1.1` festgelegt und ein Test prüft, dass beides übereinstimmt.
+
 Die ersten beiden Abrufe sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
 (`src/components/setup/PrivacyNote.tsx`; W12). Ziel (Etappe 7): WASM und Modell nach `public/`
 verlegen, dann entfallen sie und der Hinweis wird angepasst.
@@ -132,7 +137,7 @@ Google Fonts oder ein anderes CDN.
   visibility ≥ 0.5 eine Sekunde lang gesehen werden. Ausfälle bis 200 ms unterbrechen nicht
   (schwache Landmarks zählen weiter als fehlend), längere Ausfälle oder eine Bildpause über 600 ms
   setzen zurück. Die Anzeige (Statuszeilen, Hinweis) wechselt erst nach 300 ms stabilem Zustand
-  (`createStatusSmoother`). „Los geht's“ rastet ein: einmal erreicht, bleibt es gültig, bis sich
+  (`createStatusSmoother`). `ready` gilt nur bei Abstand „passt“ und Mitte; Hinweis und Freigabe widersprechen sich nie. „Los geht's“ rastet ein: einmal erreicht, bleibt es gültig, bis sich
   Status oder Kamera ändern. Ein Heartbeat (250 ms) setzt die Anzeige zurück, wenn länger als
   500 ms kein Frame kam; die Freigabe bleibt. Liefert außerdem Abstand (Schulter-Knöchel-Höhe
   0.4 bis 0.85 der Bildhöhe) und Hinweistexte.
@@ -143,7 +148,10 @@ Google Fonts oder ein anderes CDN.
   Inferenzzeit und Delegate; das Diagnosefeld liest sie zweimal pro Sekunde aus einer Ref.
 - Aufstellhilfe: Das Bild wird nur per CSS gespiegelt, die Erkennung bekommt das Rohbild. Das
   Overlay-Canvas liegt im selben gespiegelten Container und hat die Pixelgröße des Videos; der
-  Container übernimmt dessen Seitenverhältnis, damit nichts zugeschnitten oder verzerrt wird.
+  Container übernimmt dessen Seitenverhältnis (gesetzt über `loadedmetadata` und `resize`, auch beim
+  Drehen), damit nichts zugeschnitten oder verzerrt wird. Der Zielrahmen wird in einer Box mit
+  festem Seitenverhältnis 1:2 (Höhe 85 % des Bildes, zentriert) gezeichnet; bei Kamerawechsel und
+  Fehler wird das Canvas geleert. `FrameInfo` trägt `videoWidth` und `videoHeight`.
 
 ## Messwerte
 

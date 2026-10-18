@@ -507,6 +507,7 @@ describe("usePoseTracking", () => {
       }
       expect(getUserMedia).toHaveBeenCalledTimes(4);
       expect(last?.status).toBe("error");
+      expect(last?.error?.kind).toBe("interrupted");
       expect(activeStreams()).toHaveLength(0);
     });
 
@@ -556,5 +557,128 @@ describe("usePoseTracking", () => {
     expect(last?.lowLight).toBe(false);
     act(() => tick());
     expect(last?.lowLight).toBe(true);
+  });
+
+  it("übernimmt das Seitenverhältnis bei loadedmetadata und resize und setzt es beim Aufräumen zurück", async () => {
+    getUserMedia.mockResolvedValue(fakeStream());
+    let size = [1280, 720];
+    vi.spyOn(HTMLVideoElement.prototype, "videoWidth", "get").mockImplementation(
+      () => size[0] ?? 0,
+    );
+    vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockImplementation(
+      () => size[1] ?? 0,
+    );
+    let last: ReturnType<typeof usePoseTracking> | undefined;
+    const { unmount } = render(
+      <Probe enabled createEstimator={() => fakeEstimator()} onState={(s) => (last = s)} />,
+    );
+    await act(flush);
+    const video = last?.videoRef.current;
+    expect(last?.aspect).toBeCloseTo(4 / 3); // model is still loading, nothing measured yet
+    act(() => void video?.dispatchEvent(new Event("loadedmetadata")));
+    expect(last?.aspect).toBeCloseTo(16 / 9);
+    size = [720, 1280]; // phone rotated
+    act(() => void video?.dispatchEvent(new Event("resize")));
+    expect(last?.aspect).toBeCloseTo(9 / 16);
+    expect(last?.activeDeviceId).toBe("cam-1");
+    unmount();
+    // Late events after cleanup are ignored (no listener left).
+    expect(() => video?.dispatchEvent(new Event("resize"))).not.toThrow();
+  });
+
+  it("setzt aspect, Kamera-ID und Delegate beim Kamerawechsel zurück", async () => {
+    getUserMedia.mockResolvedValueOnce(fakeStream("a")).mockReturnValue(new Promise(() => {}));
+    let last: ReturnType<typeof usePoseTracking> | undefined;
+    const create = () => fakeEstimator(null, true);
+    const { rerender } = render(
+      <Probe enabled cameraId="a" createEstimator={create} onState={(s) => (last = s)} />,
+    );
+    await act(flush);
+    expect(last?.activeDeviceId).toBe("a");
+    expect(last?.delegate).toBe("GPU");
+    rerender(<Probe enabled cameraId="b" createEstimator={create} onState={(s) => (last = s)} />);
+    await act(flush);
+    expect(last?.activeDeviceId).toBe("");
+    expect(last?.delegate).toBeNull();
+    expect(last?.aspect).toBeCloseTo(4 / 3);
+  });
+
+  it("ruft onStaleCamera nicht auf, wenn der Effekt schon abgebrochen ist", async () => {
+    let rejectFirst: (e: unknown) => void = () => {};
+    getUserMedia.mockReturnValueOnce(new Promise((_, rej) => (rejectFirst = rej)));
+    const onStale = vi.fn();
+    const { unmount } = render(
+      <Probe
+        enabled
+        cameraId="old"
+        onStaleCamera={onStale}
+        createEstimator={() => fakeEstimator(null, true)}
+      />,
+    );
+    unmount();
+    rejectFirst(
+      Object.assign(new DOMException("gone", "OverconstrainedError"), { constraint: "deviceId" }),
+    );
+    await flush();
+    expect(onStale).not.toHaveBeenCalled();
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+  });
+
+  it("probiert bei Größenproblem ohne Größe erneut und löscht die gespeicherte Kamera nicht", async () => {
+    getUserMedia
+      .mockRejectedValueOnce(
+        Object.assign(new DOMException("x", "OverconstrainedError"), { constraint: "width" }),
+      )
+      .mockResolvedValueOnce(fakeStream());
+    const onStale = vi.fn();
+    let last: ReturnType<typeof usePoseTracking> | undefined;
+    render(
+      <Probe
+        enabled
+        onStaleCamera={onStale}
+        createEstimator={() => fakeEstimator(null, true)}
+        onState={(s) => (last = s)}
+      />,
+    );
+    await act(flush);
+    const retry = getUserMedia.mock.calls[1]?.[0] as { video: MediaTrackConstraints };
+    expect(retry.video).toEqual({ facingMode: "user" });
+    expect(onStale).not.toHaveBeenCalled();
+    expect(last?.status).toBe("ready");
+  });
+
+  it("fordert nur Wunschgrößen an, keine harten Grenzen", async () => {
+    getUserMedia.mockResolvedValue(fakeStream());
+    render(<Probe enabled createEstimator={() => fakeEstimator(null, true)} />);
+    await act(flush);
+    const first = getUserMedia.mock.calls[0]?.[0] as { video: MediaTrackConstraints };
+    expect(JSON.stringify(first.video)).not.toMatch(/max|exact/);
+  });
+
+  it("liefert die Videogröße an onFrame", async () => {
+    getUserMedia.mockResolvedValue(fakeStream());
+    vi.spyOn(HTMLVideoElement.prototype, "videoWidth", "get").mockReturnValue(640);
+    vi.spyOn(HTMLVideoElement.prototype, "videoHeight", "get").mockReturnValue(480);
+    const onFrame = vi.fn();
+    render(<Probe enabled onFrame={onFrame} createEstimator={() => fakeEstimator(null, true)} />);
+    await act(flush);
+    tick();
+    expect(onFrame).toHaveBeenCalledWith(
+      expect.objectContaining({ videoWidth: 640, videoHeight: 480, aspect: 640 / 480 }),
+    );
+  });
+
+  it("meldet einen Fehler, statt ewig zu laden, wenn kein Video-Element da ist", async () => {
+    function NoVideo() {
+      const state = usePoseTracking({ enabled: true });
+      return (
+        <p>
+          {state.status}:{state.error?.kind}
+        </p>
+      );
+    }
+    const { findByText } = render(<NoVideo />);
+    expect(await findByText("error:unknown")).toBeInTheDocument();
+    expect(getUserMedia).not.toHaveBeenCalled();
   });
 });

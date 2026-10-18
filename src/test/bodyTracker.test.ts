@@ -93,6 +93,31 @@ describe("Körper-Check", () => {
     expect(s.ready).toBe(true);
   });
 
+  it("ist nicht bereit, solange ein Abstands- oder Mittenhinweis aktiv ist", () => {
+    const near = run(createBodyTracker(), body({}, 0.99), 0, 3000);
+    expect(near.allVisible).toBe(true);
+    expect(near.ready).toBe(false);
+    const far = run(
+      createBodyTracker(),
+      body({ 11: [0.55, 0.45, 0.9], 12: [0.45, 0.45, 0.9] }, 0.7),
+      0,
+      3000,
+    );
+    expect(far.ready).toBe(false);
+    const shifted = body().map((p) => [p[0] - 0.3, p[1], p[2]] as Landmark);
+    const off = run(createBodyTracker(), shifted, 0, 3000);
+    expect(off.ready).toBe(false);
+    expect(off.hint).toMatch(/Bildmitte/);
+  });
+
+  it("zeigt „Alles bereit“ nur, wenn ready gilt", () => {
+    const t = createBodyTracker();
+    expect(run(t, body(), 0, 500).hint).toMatch(/bleib kurz/);
+    const s = run(t, body(), 533, 700);
+    expect(s.ready).toBe(true);
+    expect(s.hint).toMatch(/Alles bereit/);
+  });
+
   it("zählt eine Bildpause nicht als durchgehende Sicht", () => {
     const t = createBodyTracker();
     t.update(body(), 0);
