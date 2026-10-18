@@ -4,7 +4,11 @@ import type { Landmark } from "./types";
 /** How long the whole body must be seen without interruption before the game may start. */
 export const HOLD_MS = 1000;
 /** A pause between two frames longer than this restarts the hold (video stalled). */
-export const MAX_FRAME_GAP_MS = 300;
+export const MAX_FRAME_GAP_MS = 600;
+/** Frames without the full body for up to this long do not interrupt the hold (model jitter). */
+export const DROPOUT_MS = 200;
+/** A changed checklist state is shown only after it stayed the same this long. */
+export const STABLE_MS = 300;
 
 /** Shoulders-to-ankles height as a fraction of the frame height. */
 export const SPAN_MIN = 0.4;
@@ -61,6 +65,7 @@ export function hintFor(lm: Landmark[] | null, parts: BodyStatus["parts"], ready
 export function createBodyTracker(holdMs = HOLD_MS) {
   let since: number | null = null;
   let lastAt: number | null = null;
+  let lostSince: number | null = null;
 
   return {
     update(lm: Landmark[] | null, nowMs: number): BodyStatus {
@@ -68,8 +73,14 @@ export function createBodyTracker(holdMs = HOLD_MS) {
       const allVisible = parts.shoulders && parts.hips && parts.knees && parts.ankles;
       if (lastAt !== null && nowMs - lastAt > MAX_FRAME_GAP_MS) since = null;
       lastAt = nowMs;
-      if (!allVisible) since = null;
-      else if (since === null) since = nowMs;
+      // Landmarks below visibility 0.5 still count as missing; a short dropout only does not
+      // restart the hold.
+      if (allVisible) lostSince = null;
+      else {
+        lostSince ??= nowMs;
+        if (nowMs - lostSince > DROPOUT_MS) since = null;
+      }
+      if (allVisible && since === null) since = nowMs;
       const heldMs = since === null ? 0 : nowMs - since;
       const ready = allVisible && heldMs >= holdMs;
       return {
@@ -84,6 +95,45 @@ export function createBodyTracker(holdMs = HOLD_MS) {
     reset() {
       since = null;
       lastAt = null;
+      lostSince = null;
+    },
+  };
+}
+
+/** Fingerprint of what the UI shows, so React only renders when the display would change. */
+export const statusKey = (b: BodyStatus) =>
+  [b.ready, b.allVisible, b.distance, b.hint, Object.values(b.parts).join()].join("|");
+
+/**
+ * Keeps checklist and hint from flickering at frame rate: a changed state is passed on only
+ * after it was stable for `stableMs`. The first status after a reset is shown immediately.
+ */
+export function createStatusSmoother(stableMs = STABLE_MS) {
+  let shown: BodyStatus | null = null;
+  let shownKey = "";
+  let candKey = "";
+  let candSince = 0;
+
+  return {
+    next(s: BodyStatus, nowMs: number): BodyStatus {
+      const key = statusKey(s);
+      if (shown === null || key === shownKey) {
+        shown = s;
+        shownKey = key;
+        candKey = key;
+      } else if (key !== candKey) {
+        candKey = key;
+        candSince = nowMs;
+      } else if (nowMs - candSince >= stableMs) {
+        shown = s;
+        shownKey = key;
+      }
+      return shown;
+    },
+    reset() {
+      shown = null;
+      shownKey = "";
+      candKey = "";
     },
   };
 }

@@ -70,8 +70,14 @@ export function mapCameraError(e: unknown): CameraError {
   }
 }
 
-/** True when the failure means the requested deviceId is stale (stored camera was unplugged). */
+/**
+ * True when the failure means the requested deviceId is stale (stored camera was unplugged).
+ * Only the `deviceId` constraint counts: a size problem must not wipe the stored camera.
+ */
 export const isStaleCameraError = (e: unknown): boolean =>
+  isOverconstrained(e) && (e as { constraint?: unknown }).constraint === "deviceId";
+
+export const isOverconstrained = (e: unknown): boolean =>
   nameOf(e) === "OverconstrainedError" || nameOf(e) === "ConstraintNotSatisfiedError";
 
 /** Null when the camera API is usable, otherwise the matching error. */

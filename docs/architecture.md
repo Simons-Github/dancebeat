@@ -23,7 +23,8 @@ Browser-APIs (getUserMedia, MediaPipe/WASM, HTMLAudioElement, IndexedDB, localSt
 
 ### Kamera → Pose → Winkel → Scoring → UI
 
-1. `usePoseTracking` öffnet die Frontkamera (`getUserMedia`, ideal 1280×720, max. 1280×720) und
+1. `usePoseTracking` öffnet die Frontkamera (`getUserMedia`, nur Wunschgröße ideal 1280×720; scheitert eine Größe, ein zweiter Versuch
+   mit `{ facingMode: "user" }` ohne Größe) und
    erzeugt über die Schnittstelle `PoseEstimator` (Standard: MediaPipe Pose Landmarker „lite“,
    VIDEO-Modus, GPU mit CPU-Fallback).
 2. Eine Schleife auf `requestVideoFrameCallback` (Fallback rAF mit Überspringen gleicher Bilder)
@@ -35,6 +36,13 @@ Browser-APIs (getUserMedia, MediaPipe/WASM, HTMLAudioElement, IndexedDB, localSt
 4. `useScoring.sample(t, angles)` wird regelmäßig (ca. alle 100 ms) mit der Spielzeit aufgerufen
    und vergleicht mit den Soll-Winkeln der Choreografie. Details: [scoring.md](scoring.md).
 5. Die UI liest Score, Combo, Sterne und das letzte Urteil.
+
+Läuft die Erkennung nicht mehr (Hintergrund, Sperre, Anruf), reagiert der Hook so: bei
+`visibilitychange` (sichtbar) wird `video.play()` erneut aufgerufen; endet die Kamera-Spur
+(`track.onended` oder `readyState "ended"`), startet er intern neu (höchstens 3 Versuche, nach
+10 s ungestörtem Lauf wieder frei, danach Fehler „Kamera belegt“). Wirft `detect` 10-mal in Folge,
+wird der Estimator geschlossen und mit CPU neu gestartet (Parameter `delegate`); scheitert auch
+das, kommt der Modellfehler. `lastFrameAtRef` hält den Zeitpunkt des letzten Frames fest.
 
 Der Hook räumt bei Unmount, Kamerawechsel oder Deaktivieren auf: Kamera-Tracks werden gestoppt,
 der Landmarker geschlossen, auch wenn ein asynchroner Schritt erst nach dem Aufräumen fertig wird.
@@ -119,13 +127,17 @@ Google Fonts oder ein anderes CDN.
   Schnittstelle bleibt bestehen.
 - Winkel hängen nicht von Körpergröße oder Abstand zur Kamera ab.
 - Licht-Check (`src/lib/brightness.ts`): alle 2 s wird das Video auf 16×12 Pixel verkleinert und
-  die Helligkeit gemessen (Schwelle 45 von 255), nur lokal.
+  die Helligkeit gemessen (Warnung unter 45 von 255, Freigabe über 55), nur lokal.
 - Körper-Check (`src/lib/bodyTracker.ts`): Schultern, Hüften, Knie und Knöchel müssen mit
-  visibility ≥ 0.5 eine Sekunde lang ohne Unterbrechung gesehen werden (ein schlechter Frame oder
-  eine Bildpause über 300 ms setzt zurück). Liefert außerdem Abstand (Schulter-Knöchel-Höhe
+  visibility ≥ 0.5 eine Sekunde lang gesehen werden. Ausfälle bis 200 ms unterbrechen nicht
+  (schwache Landmarks zählen weiter als fehlend), längere Ausfälle oder eine Bildpause über 600 ms
+  setzen zurück. Die Anzeige (Statuszeilen, Hinweis) wechselt erst nach 300 ms stabilem Zustand
+  (`createStatusSmoother`). „Los geht's“ rastet ein: einmal erreicht, bleibt es gültig, bis sich
+  Status oder Kamera ändern. Ein Heartbeat (250 ms) setzt die Anzeige zurück, wenn länger als
+  500 ms kein Frame kam; die Freigabe bleibt. Liefert außerdem Abstand (Schulter-Knöchel-Höhe
   0.4 bis 0.85 der Bildhöhe) und Hinweistexte.
 - Fehler der Kamera: `src/lib/cameraErrors.ts` ordnet `getUserMedia`-Fehler deutschen Meldungen zu.
-  Eine veraltete gespeicherte Kamera-ID (`OverconstrainedError`) fällt auf die Standardkamera
+  Eine veraltete gespeicherte Kamera-ID (`OverconstrainedError` mit `constraint === "deviceId"`) fällt auf die Standardkamera
   zurück und löscht die gespeicherte ID.
 - Diagnose (`src/lib/frameStats.ts`): Bildrate der Erkennung (letzte Sekunde), geglättete
   Inferenzzeit und Delegate; das Diagnosefeld liest sie zweimal pro Sekunde aus einer Ref.

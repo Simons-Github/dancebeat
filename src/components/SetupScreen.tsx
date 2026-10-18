@@ -15,7 +15,14 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { usePoseTracking, type FrameInfo } from "@/hooks/usePoseTracking";
-import { LIGHT_HINT, createBodyTracker, statusRows, type BodyStatus } from "@/lib/bodyTracker";
+import {
+  LIGHT_HINT,
+  createBodyTracker,
+  createStatusSmoother,
+  statusKey,
+  statusRows,
+  type BodyStatus,
+} from "@/lib/bodyTracker";
 import { drawOverlay } from "@/lib/overlay";
 import { cn } from "@/lib/utils";
 import { getSettings, useSettings } from "@/lib/settings";
@@ -25,13 +32,14 @@ const PANEL =
 const BTN =
   "btn-pill h-14 gap-2 rounded-full px-8 text-lg focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
 
-/** Fingerprint of what the UI shows, so React only renders when the display would change. */
-const keyOf = (b: BodyStatus) =>
-  [b.ready, b.allVisible, b.distance, b.hint, Object.values(b.parts).join()].join("|");
+/** No frame for this long means the detection stalled (background, lock, ended track). */
+const STALL_MS = 500;
+const HEARTBEAT_MS = 250;
 
 /**
  * Setup screen: explains, then (after a tap) starts the camera, shows the mirrored picture with
  * stance guide and skeleton, and unlocks "Los geht's" once the whole body was seen for 1 s.
+ * The unlock sticks until camera or status change: walking to the phone must not lock it again.
  */
 export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: string }) {
   const navigate = useNavigate();
@@ -41,10 +49,20 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
   const [retryKey, setRetryKey] = useState(0);
   const [showDiag, setShowDiag] = useState(false);
   const [body, setBody] = useState<BodyStatus | null>(null);
+  const [reached, setReached] = useState(false);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tracker] = useState(() => createBodyTracker());
+  const [smoother] = useState(() => createStatusSmoother());
   const lastKey = useRef("");
+  const reachedRef = useRef(false);
+
+  const resetBody = useCallback(() => {
+    tracker.reset();
+    smoother.reset();
+    lastKey.current = "";
+    setBody(null);
+  }, [tracker, smoother]);
 
   // Runs in the detection loop: draws straight to the canvas, renders only when the checklist changes.
   const onFrame = useCallback(
@@ -63,32 +81,60 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
         }
         drawOverlay(canvas, landmarks, { ready: status.ready });
       }
-      const key = keyOf(status);
+      if (status.ready && !reachedRef.current) {
+        reachedRef.current = true;
+        setReached(true);
+      }
+      // The checklist only follows a state that stayed the same for a moment.
+      const shown = smoother.next(status, nowMs);
+      const key = statusKey(shown);
       if (key !== lastKey.current) {
         lastKey.current = key;
-        setBody(status);
+        setBody(shown);
       }
     },
-    [tracker],
+    [tracker, smoother],
   );
 
-  const { videoRef, statsRef, status, error, lowLight, cameras, activeDeviceId, aspect } =
-    usePoseTracking({
-      enabled: started,
-      ...(cameraId ? { cameraId } : {}),
-      retryKey,
-      onFrame,
-      onStaleCamera: () => saveSettings({ cameraId: "" }),
-    });
+  const {
+    videoRef,
+    statsRef,
+    lastFrameAtRef,
+    status,
+    error,
+    lowLight,
+    cameras,
+    activeDeviceId,
+    aspect,
+  } = usePoseTracking({
+    enabled: started,
+    ...(cameraId ? { cameraId } : {}),
+    retryKey,
+    onFrame,
+    onStaleCamera: () => saveSettings({ cameraId: "" }),
+  });
 
-  // Camera not delivering (loading, error, switched): nothing may count as "seen".
+  // Camera not delivering (loading, error, switched): nothing may count as "seen", and the
+  // unlock starts over.
   useEffect(() => {
-    if (status !== "ready") {
-      tracker.reset();
-      lastKey.current = "";
-      setBody(null);
-    }
-  }, [status, tracker]);
+    if (status !== "ready") resetBody();
+    reachedRef.current = false;
+    setReached(false);
+  }, [status, cameraId, resetBody]);
+
+  // Heartbeat: when frames stop (tab in background, screen lock, ended track) the last body
+  // state must not stay on screen. The unlock stays.
+  useEffect(() => {
+    if (status !== "ready") return;
+    const id = setInterval(() => {
+      if (performance.now() - lastFrameAtRef.current > STALL_MS) {
+        resetBody();
+        const canvas = canvasRef.current;
+        if (canvas) drawOverlay(canvas, null, { ready: false });
+      }
+    }, HEARTBEAT_MS);
+    return () => clearInterval(id);
+  }, [status, lastFrameAtRef, resetBody]);
 
   const start = () => {
     setCameraId(getSettings().cameraId || undefined);
@@ -100,7 +146,7 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
     saveSettings({ cameraId: id });
   };
 
-  const ready = status === "ready" && !!body?.ready;
+  const ready = status === "ready" && reached;
   const rows = statusRows(body, lowLight);
   const mirror = settings.mirror;
 

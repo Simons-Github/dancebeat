@@ -24,8 +24,12 @@ describe("Kamerafehler", () => {
     expect(mapCameraError("boom").kind).toBe("unknown");
   });
 
-  it("erkennt eine veraltete Kamera-ID", () => {
-    expect(isStaleCameraError(err("OverconstrainedError"))).toBe(true);
+  it("erkennt eine veraltete Kamera-ID nur über die deviceId-Vorgabe", () => {
+    const over = (constraint?: string) =>
+      Object.assign(err("OverconstrainedError"), constraint ? { constraint } : {});
+    expect(isStaleCameraError(over("deviceId"))).toBe(true);
+    expect(isStaleCameraError(over("width"))).toBe(false);
+    expect(isStaleCameraError(over())).toBe(false);
     expect(isStaleCameraError(err("NotAllowedError"))).toBe(false);
   });
 });

@@ -1,5 +1,7 @@
 /** Mean channel value (0..255) below which the picture counts as too dark. */
 export const LOW_LIGHT_THRESHOLD = 45;
+/** Once flagged, the picture must get brighter than this before the warning goes away. */
+export const LOW_LIGHT_RELEASE = 55;
 export const BRIGHTNESS_INTERVAL_MS = 2000;
 
 /**
@@ -22,4 +24,6 @@ export function createBrightnessMeter(): (video: HTMLVideoElement) => number | n
   };
 }
 
-export const isLowLight = (brightness: number) => brightness < LOW_LIGHT_THRESHOLD;
+/** Hysteresis: warn below 45, release above 55, keep the previous answer in between. */
+export const isLowLight = (brightness: number, wasLow = false) =>
+  brightness < (wasLow ? LOW_LIGHT_RELEASE : LOW_LIGHT_THRESHOLD);

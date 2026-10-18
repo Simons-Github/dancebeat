@@ -5,14 +5,21 @@ import type { PoseDelegate, PoseEstimator } from "./poseEstimator";
 import type { Landmark } from "./types";
 
 /** MediaPipe Pose Landmarker in VIDEO mode. "lite" is the live model; GPU falls back to CPU. */
-export function createMediaPipeEstimator(model: "lite" | "full" = "lite"): PoseEstimator {
+export function createMediaPipeEstimator(
+  model: "lite" | "full" = "lite",
+  delegate?: PoseDelegate,
+): PoseEstimator {
   let landmarker: PoseLandmarker | null = null;
   let closed = false;
 
   return {
     name: `MediaPipe Pose (${model})`,
     async init() {
-      const made = await createPoseLandmarker({ mode: "VIDEO", model });
+      const made = await createPoseLandmarker({
+        mode: "VIDEO",
+        model,
+        ...(delegate ? { delegate } : {}),
+      });
       // close() may have been called while the model was loading.
       if (closed) {
         made.landmarker.close();

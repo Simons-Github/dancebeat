@@ -163,7 +163,9 @@ describe("usePoseTracking", () => {
 
   it("fällt bei veralteter Kamera-ID auf die Standardkamera zurück", async () => {
     getUserMedia
-      .mockRejectedValueOnce(new DOMException("gone", "OverconstrainedError"))
+      .mockRejectedValueOnce(
+        Object.assign(new DOMException("gone", "OverconstrainedError"), { constraint: "deviceId" }),
+      )
       .mockResolvedValueOnce(fakeStream("default"));
     const onStale = vi.fn();
     let last: ReturnType<typeof usePoseTracking> | undefined;

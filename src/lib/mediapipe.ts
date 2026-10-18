@@ -8,6 +8,8 @@ export async function createPoseLandmarker(opts: {
   mode: "VIDEO" | "IMAGE";
   model: "lite" | "full" | "heavy";
   numPoses?: number;
+  /** Force one delegate (no fallback). Without it GPU is tried first, then CPU. */
+  delegate?: "GPU" | "CPU";
 }): Promise<{ landmarker: PoseLandmarker; delegate: "GPU" | "CPU" }> {
   const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
   const fileset = await FilesetResolver.forVisionTasks(WASM);
@@ -19,6 +21,7 @@ export async function createPoseLandmarker(opts: {
       minPoseDetectionConfidence: 0.5,
       minTrackingConfidence: 0.5,
     });
+  if (opts.delegate) return { landmarker: await make(opts.delegate), delegate: opts.delegate };
   try {
     return { landmarker: await make("GPU"), delegate: "GPU" };
   } catch {

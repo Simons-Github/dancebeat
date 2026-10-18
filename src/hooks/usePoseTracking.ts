@@ -4,6 +4,7 @@ import { BRIGHTNESS_INTERVAL_MS, createBrightnessMeter, isLowLight } from "@/lib
 import {
   cameraError,
   checkCameraSupport,
+  isOverconstrained,
   isStaleCameraError,
   mapCameraError,
   type CameraError,
@@ -51,14 +52,23 @@ export interface PoseTrackingOptions {
   onFrame?: (frame: FrameInfo) => void;
   /** The requested cameraId no longer exists and the default camera was used instead. */
   onStaleCamera?: () => void;
-  createEstimator?: () => PoseEstimator;
+  /** `delegate` is set when the hook falls back to a specific delegate (CPU after GPU errors). */
+  createEstimator?: (delegate?: PoseDelegate) => PoseEstimator;
 }
 
 const stopStream = (s: MediaStream | null) => s?.getTracks().forEach((t) => t.stop());
 
+/** Detection errors in a row after which the GPU delegate is given up for CPU. */
+const MAX_DETECT_ERRORS = 10;
+/** Automatic restarts after the camera track ended (call, other app) before giving up. */
+const MAX_AUTO_RESTARTS = 3;
+/** Running this long without trouble earns the restarts back. */
+const HEALTHY_MS = 10_000;
+
+// Only `ideal`: a hard limit makes some cameras fail with OverconstrainedError.
 const sizeConstraints = {
-  width: { ideal: 1280, max: 1280 },
-  height: { ideal: 720, max: 720 },
+  width: { ideal: 1280 },
+  height: { ideal: 720 },
 } as const;
 
 async function openCamera(cameraId: string | undefined, onStale: () => void): Promise<MediaStream> {
@@ -72,7 +82,12 @@ async function openCamera(cameraId: string | undefined, onStale: () => void): Pr
       onStale();
     }
   }
-  return open({ facingMode: "user", ...sizeConstraints });
+  try {
+    return await open({ facingMode: "user", ...sizeConstraints });
+  } catch (e) {
+    if (!isOverconstrained(e)) throw e;
+    return open({ facingMode: "user" }); // once more without any size
+  }
 }
 
 /**
@@ -93,12 +108,22 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
   const [cameras, setCameras] = useState<CameraDevice[]>([]);
   const [aspect, setAspect] = useState(4 / 3);
   const [activeDeviceId, setActiveDeviceId] = useState("");
+  // Bumped to restart internally (camera track ended); not part of the public retry.
+  const [restartKey, setRestartKey] = useState(0);
+  const autoRestarts = useRef(0);
+  /** performance.now() of the last processed frame; 0 until the first one. */
+  const lastFrameAtRef = useRef(0);
 
   // Latest callbacks without restarting the camera when the caller re-renders.
   const cbRef = useRef(opts);
   useEffect(() => {
     cbRef.current = opts;
   });
+
+  // A change from outside starts with a fresh restart budget.
+  useEffect(() => {
+    autoRestarts.current = 0;
+  }, [enabled, cameraId, retryKey]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -110,9 +135,11 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
     let estimator: PoseEstimator | null = null;
     let frameCb = 0;
     let raf = 0;
+    let removeWatchers = () => {};
     const { stats } = statsRef.current;
     stats.reset();
     statsRef.current.delegate = null;
+    lastFrameAtRef.current = 0;
 
     const fail = (e: CameraError) => {
       setStatus("error");
@@ -133,8 +160,19 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       }
     };
 
-    const startLoop = (v: HTMLVideoElement, est: PoseEstimator) => {
+    // Release the camera (LED off) and report that detection is not available.
+    const modelFailed = (v: HTMLVideoElement) => {
+      stopStream(stream);
+      stream = null;
+      v.srcObject = null;
+      fail(cameraError("model"));
+    };
+
+    const startLoop = (v: HTMLVideoElement, est: PoseEstimator, active: PoseDelegate) => {
       const meter = createBrightnessMeter();
+      const startedAt = performance.now();
+      let detectErrors = 0;
+      let low = false;
       let lastTs = 0;
       let lastVideoTime = -1;
       let lastLight = -Infinity;
@@ -153,10 +191,22 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
         let landmarks: Landmark[] | null = null;
         try {
           landmarks = est.detect(v, lastTs);
+          detectErrors = 0;
         } catch {
-          return; // skip this frame
+          // Skip this frame. Errors in a row mean the delegate is broken (lost WebGL context).
+          if (++detectErrors >= MAX_DETECT_ERRORS) {
+            if (frameCb) v.cancelVideoFrameCallback?.(frameCb);
+            cancelAnimationFrame(raf);
+            est.close();
+            estimator = null;
+            if (active === "CPU") modelFailed(v);
+            else void launch(v, "CPU");
+          }
+          return;
         }
         const t1 = performance.now();
+        lastFrameAtRef.current = t1;
+        if (autoRestarts.current > 0 && t1 - startedAt > HEALTHY_MS) autoRestarts.current = 0;
         stats.record(t1, t1 - t0);
         const a = v.videoHeight ? v.videoWidth / v.videoHeight : 1;
         poseRef.current = landmarks ? { landmarks, aspect: a } : null;
@@ -168,7 +218,10 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
         if (t1 - lastLight > BRIGHTNESS_INTERVAL_MS) {
           lastLight = t1;
           const b = meter(v);
-          if (b !== null) setLowLight(isLowLight(b)); // no re-render when unchanged
+          if (b !== null) {
+            low = isLowLight(b, low);
+            setLowLight(low); // no re-render when unchanged
+          }
         }
       };
       const schedule = () => {
@@ -178,6 +231,59 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       schedule();
     };
 
+    // Starts an estimator and, once it is up, the detection loop. Used for the first start and
+    // for the CPU fallback.
+    const launch = async (v: HTMLVideoElement, delegate?: PoseDelegate) => {
+      const est = (cbRef.current.createEstimator ?? ((d) => createMediaPipeEstimator("lite", d)))(
+        delegate,
+      );
+      estimator = est;
+      let info: { delegate: PoseDelegate };
+      try {
+        info = await est.init();
+      } catch {
+        if (cancelled) return;
+        est.close();
+        return modelFailed(v); // no detection without the model
+      }
+      if (cancelled) {
+        est.close();
+        return;
+      }
+      statsRef.current.delegate = info.delegate;
+      statsRef.current.model = est.name;
+      setDelegate(info.delegate);
+      setStatus("ready");
+      startLoop(v, est, info.delegate);
+    };
+
+    // Background, lock screen and calls: iOS pauses the video and may end the camera track.
+    const watchCamera = (v: HTMLVideoElement, s: MediaStream) => {
+      const track = s.getVideoTracks()[0];
+      const restart = () => {
+        if (cancelled) return;
+        if (autoRestarts.current >= MAX_AUTO_RESTARTS) {
+          stopStream(stream);
+          stream = null;
+          v.srcObject = null;
+          return fail(cameraError("busy"));
+        }
+        autoRestarts.current++;
+        setRestartKey((k) => k + 1);
+      };
+      const onVisible = () => {
+        if (document.visibilityState !== "visible" || cancelled) return;
+        if (track?.readyState === "ended") restart();
+        else void v.play().catch(() => {});
+      };
+      if (track) track.onended = restart;
+      document.addEventListener("visibilitychange", onVisible);
+      removeWatchers = () => {
+        if (track) track.onended = null;
+        document.removeEventListener("visibilitychange", onVisible);
+      };
+    };
+
     const init = async () => {
       setError(null);
       setLowLight(false);
@@ -185,7 +291,9 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       if (unsupported) return fail(unsupported);
       setStatus("loading");
       try {
-        stream = await openCamera(cameraId, () => cbRef.current.onStaleCamera?.());
+        stream = await openCamera(cameraId, () => {
+          if (!cancelled) cbRef.current.onStaleCamera?.();
+        });
       } catch (e: unknown) {
         if (!cancelled) fail(mapCameraError(e));
         return;
@@ -201,29 +309,8 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       if (cancelled) return;
       void listCameras();
 
-      const est = (cbRef.current.createEstimator ?? (() => createMediaPipeEstimator("lite")))();
-      estimator = est;
-      let info: { delegate: PoseDelegate };
-      try {
-        info = await est.init();
-      } catch {
-        if (cancelled) return;
-        // No detection without the model: release the camera so its LED goes off.
-        stopStream(stream);
-        stream = null;
-        video.srcObject = null;
-        est.close();
-        return fail(cameraError("model"));
-      }
-      if (cancelled) {
-        est.close();
-        return;
-      }
-      statsRef.current.delegate = info.delegate;
-      statsRef.current.model = est.name;
-      setDelegate(info.delegate);
-      setStatus("ready");
-      startLoop(video, est);
+      watchCamera(video, stream);
+      await launch(video);
     };
     void init();
 
@@ -232,6 +319,7 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
 
     return () => {
       cancelled = true;
+      removeWatchers();
       if (frameCb) video?.cancelVideoFrameCallback?.(frameCb);
       cancelAnimationFrame(raf);
       navigator.mediaDevices?.removeEventListener?.("devicechange", onDeviceChange);
@@ -242,12 +330,13 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       estimator = null;
       poseRef.current = null;
     };
-  }, [enabled, cameraId, retryKey]);
+  }, [enabled, cameraId, retryKey, restartKey]);
 
   return {
     videoRef,
     poseRef,
     statsRef,
+    lastFrameAtRef,
     status: enabled ? status : ("idle" as const),
     error: enabled ? error : null,
     lowLight,

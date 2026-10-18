@@ -80,6 +80,8 @@ Screen. Handy-Test bestanden: MediaPipe läuft flüssig, **MoveNet entfällt** (
 
 ### 3. Gameplay 🔜
 
+- Aufstellhilfe: „Los geht's“ startet automatisch mit Countdown, sobald die Aufstellung erreicht
+  ist (bisher rastet nur der Knopf ein); Schalter dazu in Etappe 5.
 - Audio-Clock, Countdown 3-2-1, Piktoleiste, Coach-Strichfigur (Canvas), Score/Combo/Sterne,
   Wertungs-Popups, Gold-Move-Effekte, Pause. Bewertung alle ~100 ms. Design: [design.md](design.md).
 - Start nur per Nutzergeste (Start-Button), nötig für YouTube und iOS.
@@ -104,6 +106,7 @@ Screen. Handy-Test bestanden: MediaPipe läuft flüssig, **MoveNet entfällt** (
 
 ### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ ⏳
 
+- Einstellung „Automatisch starten“ (Aufstellhilfe startet nach Countdown von selbst).
 - Einstellungen: Kamera wählen, Lautstärke, globaler Latenz-Offset (Slider), Skelett an/aus,
   Schwierigkeit, Kamera spiegeln (nur Anzeige).
 - Sync-Test pro Song: zum Beat tippen, Offset berechnen und speichern. Warnsymbol bei Quellen mit

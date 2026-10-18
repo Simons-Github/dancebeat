@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 
 import {
   HOLD_MS,
+  DROPOUT_MS,
   MAX_FRAME_GAP_MS,
+  STABLE_MS,
   createBodyTracker,
+  createStatusSmoother,
   distanceOf,
   statusRows,
 } from "@/lib/bodyTracker";
@@ -57,21 +60,37 @@ describe("Körper-Check", () => {
     expect(run(createBodyTracker(), body({ 27: [0.5, 0.9, 0.49] }), 0, 1200).ready).toBe(false);
   });
 
-  it("startet die Sekunde neu, wenn die Sichtbarkeit einmal flackert", () => {
+  it("übersteht einen kurzen Ausfall, ohne neu zu starten", () => {
     const t = createBodyTracker();
     run(t, body(), 0, 900);
+    // The frame with the flicker itself is never ready ...
     expect(t.update(body({ 27: [0.5, 0.9, 0.1] }), 933).ready).toBe(false);
-    // 900 ms after the flicker are not enough ...
-    expect(run(t, body(), 966, 900).ready).toBe(false);
-    // ... a full second is.
-    expect(run(t, body(), 1866, 300).ready).toBe(true);
+    // ... but the hold goes on afterwards.
+    expect(run(t, body(), 966, 100).ready).toBe(true);
   });
 
-  it("startet neu, wenn niemand im Bild ist", () => {
+  it("startet neu, wenn der Ausfall länger als DROPOUT_MS dauert", () => {
     const t = createBodyTracker();
-    run(t, body(), 0, 800);
-    expect(t.update(null, 833).ready).toBe(false);
-    expect(run(t, body(), 866, 500).ready).toBe(false);
+    run(t, body(), 0, 900);
+    run(t, null, 933, DROPOUT_MS + 66);
+    // 900 ms after the outage are not enough ...
+    expect(run(t, body(), 1300, 900).ready).toBe(false);
+    // ... a full second is.
+    expect(run(t, body(), 2200, 300).ready).toBe(true);
+  });
+
+  it("zählt ein schwaches Landmark weiterhin als fehlend", () => {
+    const t = createBodyTracker();
+    const s = run(t, body({ 27: [0.5, 0.9, 0.3] }), 0, 3000);
+    expect(s.allVisible).toBe(false);
+    expect(s.ready).toBe(false);
+  });
+
+  it("verträgt langsame Erkennung (CPU, ~4 Bilder pro Sekunde)", () => {
+    const t = createBodyTracker();
+    let s = t.update(body(), 0);
+    for (let at = 250; at <= 1500; at += 250) s = t.update(body(), at);
+    expect(s.ready).toBe(true);
   });
 
   it("zählt eine Bildpause nicht als durchgehende Sicht", () => {
@@ -119,6 +138,41 @@ describe("Abstand und Hinweise", () => {
   it("bestätigt, wenn alles passt", () => {
     expect(distanceOf(body())).toBe("ok");
     expect(hint(body())).toMatch(/bleib kurz/);
+  });
+});
+
+describe("Glättung der Anzeige", () => {
+  const good = () => createBodyTracker().update(body(), 0);
+  const noFeet = () => createBodyTracker().update(body({ 27: [0, 0, 0], 28: [0, 0, 0] }), 0);
+
+  it("zeigt den ersten Zustand sofort", () => {
+    const sm = createStatusSmoother();
+    expect(sm.next(good(), 0).allVisible).toBe(true);
+  });
+
+  it("schaltet erst nach STABLE_MS um", () => {
+    const sm = createStatusSmoother();
+    sm.next(good(), 0);
+    expect(sm.next(noFeet(), 33).allVisible).toBe(true);
+    expect(sm.next(noFeet(), 33 + STABLE_MS - 1).allVisible).toBe(true);
+    expect(sm.next(noFeet(), 33 + STABLE_MS).allVisible).toBe(false);
+  });
+
+  it("ignoriert einen Wechsel, der gleich zurückspringt", () => {
+    const sm = createStatusSmoother();
+    sm.next(good(), 0);
+    sm.next(noFeet(), 33);
+    sm.next(good(), 66);
+    // The candidate timer starts over.
+    expect(sm.next(noFeet(), 100).allVisible).toBe(true);
+    expect(sm.next(noFeet(), 100 + STABLE_MS - 1).allVisible).toBe(true);
+  });
+
+  it("zeigt nach reset wieder sofort", () => {
+    const sm = createStatusSmoother();
+    sm.next(good(), 0);
+    sm.reset();
+    expect(sm.next(noFeet(), 10).allVisible).toBe(false);
   });
 });
 
