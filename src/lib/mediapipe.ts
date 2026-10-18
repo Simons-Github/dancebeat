@@ -8,7 +8,7 @@ export async function createPoseLandmarker(opts: {
   mode: "VIDEO" | "IMAGE";
   model: "lite" | "full" | "heavy";
   numPoses?: number;
-}): Promise<PoseLandmarker> {
+}): Promise<{ landmarker: PoseLandmarker; delegate: "GPU" | "CPU" }> {
   const { FilesetResolver, PoseLandmarker } = await import("@mediapipe/tasks-vision");
   const fileset = await FilesetResolver.forVisionTasks(WASM);
   const make = (delegate: "GPU" | "CPU") =>
@@ -20,8 +20,8 @@ export async function createPoseLandmarker(opts: {
       minTrackingConfidence: 0.5,
     });
   try {
-    return await make("GPU");
+    return { landmarker: await make("GPU"), delegate: "GPU" };
   } catch {
-    return await make("CPU");
+    return { landmarker: await make("CPU"), delegate: "CPU" };
   }
 }

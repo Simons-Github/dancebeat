@@ -143,10 +143,9 @@ describe("Song library", () => {
 });
 
 describe("Other routes", () => {
-  it("shows the setup placeholder with a back link", async () => {
-    await renderAt("/setup/abc");
-    expect(await screen.findByText("Aufstellhilfe folgt in Etappe 2")).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Zurück" })).toHaveAttribute("href", "/");
+  it("shows the play placeholder", async () => {
+    await renderAt("/play/abc");
+    expect(await screen.findByText("Spiel folgt in Etappe 3")).toBeInTheDocument();
   });
 
   it("shows the settings placeholder", async () => {

@@ -84,3 +84,11 @@ export const MIN_CONTRAST = { text: 4.5, large: 3 } as const;
 
 export const FLAME = "#FF8A00";
 export const ICON_OFF = "rgb(255 255 255 / 45%)";
+
+/** Colors for the setup camera overlay (drawn on canvas, so no CSS variables). */
+export const OVERLAY_COLORS = {
+  bone: "#FFFFFF",
+  joint: "#FFC93C",
+  guide: "rgb(255 255 255 / 70%)",
+  guideReady: "#7CFF4F",
+} as const;
