@@ -1,7 +1,30 @@
 import { ShieldCheck } from "lucide-react";
 
+import type { SourceSpec } from "@/lib/types";
+
+function hostOf(url: string): string | null {
+  try {
+    return new URL(url).host;
+  } catch {
+    return null;
+  }
+}
+
+function sourceSentence(source: SourceSpec | undefined): string | null {
+  if (!source) return null;
+  if (source.type === "youtube") {
+    return "Die Musik kommt von YouTube (Skript von youtube.com, Video über youtube-nocookie.com); YouTube sieht dabei deine IP-Adresse.";
+  }
+  if (source.type === "url") {
+    const origin = hostOf(source.url) ?? "der eingetragenen Adresse";
+    return `Die Musik wird von ${origin} geladen; der Server sieht deine IP-Adresse.`;
+  }
+  return null;
+}
+
 /** Names the external fetches (rule: every CDN call must be stated in the UI). */
-export function PrivacyNote() {
+export function PrivacyNote({ source }: { source?: SourceSpec }) {
+  const extra = sourceSentence(source);
   return (
     <p className="flex items-start gap-2 text-sm text-white/90">
       <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
@@ -9,6 +32,7 @@ export function PrivacyNote() {
         Kamerabilder verlassen dein Gerät nie. Beim Start der Kamera werden Erkennungsmodell und
         Laufzeit von jsDelivr und Google geladen; dabei wird deine IP-Adresse übertragen, keine
         Bilder.
+        {extra ? ` ${extra}` : null}
       </span>
     </p>
   );

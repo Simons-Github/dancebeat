@@ -33,5 +33,5 @@ function Setup() {
       </PlaceholderPage>
     );
   }
-  return <SetupScreen songId={song.id} songTitle={song.title} />;
+  return <SetupScreen songId={song.id} songTitle={song.title} songSource={song.source} />;
 }

@@ -26,6 +26,7 @@ import {
 import { unlockAudio } from "@/lib/audio/unlock";
 import { isAutoStartArmed, rearmAutoStart } from "@/lib/game/session";
 import { clearOverlay, drawOverlay } from "@/lib/overlay";
+import type { SourceSpec } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { getSettings, useSettings } from "@/lib/settings";
 
@@ -47,7 +48,15 @@ const HEARTBEAT_MS = 250;
  * that countdown, auto-start stays off for this song until "Los geht's" is tapped. The tap on
  * "Kamera starten" also unlocks audio playback for iOS (src/lib/audio/unlock.ts).
  */
-export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: string }) {
+export function SetupScreen({
+  songId,
+  songTitle,
+  songSource,
+}: {
+  songId: string;
+  songTitle: string;
+  songSource: SourceSpec;
+}) {
   const navigate = useNavigate();
   const [settings, saveSettings] = useSettings();
   const [started, setStarted] = useState(false);
@@ -187,7 +196,7 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
             <li>Geh zwei bis drei Schritte zurück, bis du von Kopf bis Fuß im Bild bist.</li>
             <li>Sorge für genug Licht, am besten von vorne.</li>
           </ol>
-          <PrivacyNote />
+          <PrivacyNote source={songSource} />
           <div className="flex flex-wrap gap-3">
             <Button size="lg" onClick={start} className={BTN}>
               <Camera aria-hidden />
@@ -281,7 +290,7 @@ export function SetupScreen({ songId, songTitle }: { songId: string; songTitle: 
             )}
 
             {showDiag && <DiagnosticsPanel statsRef={statsRef} />}
-            <PrivacyNote />
+            <PrivacyNote source={songSource} />
 
             <div className="flex flex-wrap items-center gap-3">
               <Button size="lg" disabled={!ready} onClick={playNow} className={BTN}>

@@ -55,6 +55,35 @@ describe("Aufstellhilfe", () => {
     expect(getUserMedia).not.toHaveBeenCalled();
   });
 
+  it("nennt bei lokalem Song keinen Musik-Abruf", async () => {
+    await renderAt("/setup/song-1");
+    const note = await screen.findByText(/Kamerabilder verlassen dein Gerät nie/);
+    expect(note).not.toHaveTextContent("Die Musik");
+  });
+
+  it("nennt bei YouTube-Song YouTube und die IP-Adresse", async () => {
+    library.songs = [{ ...library.songs[0]!, source: { type: "youtube", videoId: "dQw4w9WgXcQ" } }];
+    await renderAt("/setup/song-1");
+    const note = await screen.findByText(/Kamerabilder verlassen dein Gerät nie/);
+    expect(note).toHaveTextContent(
+      "Die Musik kommt von YouTube (Skript von youtube.com, Video über youtube-nocookie.com); YouTube sieht dabei deine IP-Adresse.",
+    );
+  });
+
+  it("nennt bei URL-Song den Hostnamen", async () => {
+    library.songs = [
+      {
+        ...library.songs[0]!,
+        source: { type: "url", url: "https://media.example.org:8080/a/track.mp3" },
+      },
+    ];
+    await renderAt("/setup/song-1");
+    const note = await screen.findByText(/Kamerabilder verlassen dein Gerät nie/);
+    expect(note).toHaveTextContent(
+      "Die Musik wird von media.example.org:8080 geladen; der Server sieht deine IP-Adresse.",
+    );
+  });
+
   it("zeigt nach verweigerter Berechtigung eine Erklärung mit „Erneut versuchen“", async () => {
     getUserMedia.mockRejectedValue(new DOMException("x", "NotAllowedError"));
     await renderAt("/setup/song-1");
