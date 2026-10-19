@@ -16,7 +16,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a, 8b, 8c ✅)         | Opus                                                                  |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d-1 ✅)        | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ⏳                         | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
@@ -426,7 +426,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1 umgesetzt)
 
 Aufteilung:
 
@@ -470,7 +470,28 @@ Aufteilung:
     - [ ] Vorschau bleibt während der Analyse sichtbar (Hoch- und Querformat, auch beim Scrollen)
     - [ ] Nach dem Import spielt der Song synchron: Moves treffen die Musik, Sync-Test plausibel
     - [ ] Bildschirm bleibt während der Analyse an (Wake Lock)
-- **8d Editor:** Timeline, Keyframes, Offset, Tempo, Gold Moves.
+- **8d-1 Editor-Grundfunktionen – umgesetzt, Gerätetest offen.** Route `/edit/$songId`, Einstieg
+  „Choreografie bearbeiten“ im Dialog „Song bearbeiten“. Details:
+  [architecture.md](architecture.md#choreografie-editor-etappe-8d-1).
+  - Arbeitskopie mit „Speichern“ (danach zurück zur Bibliothek), „Verwerfen“ mit Rückfrage;
+    jedes Verlassen mit Änderungen (auch Browser-/Android-Zurück) fragt nach, Neuladen warnt.
+  - Timeline mit Strichfiguren (Canvas), Zeit in Musikzeit, Gold-Markierung; Auswahl per Tippen.
+  - Gold Move umschalten, Move löschen (mindestens 2 bleiben), Gold-Vorschlag für die ganze
+    Choreografie.
+  - Offset ±1 Beat, ±100 ms, ±10 ms (höchstens ±10 s um den gespeicherten Wert, kein Move vor
+    Musikzeit 0); Tempo 0,75× /
+    1× / 1,25× (1× entfernt `playbackRate`), bei YouTube (N10) und Spotify gesperrt mit
+    Hinweis.
+  - Logik in `src/lib/choreoEditor.ts`; Tests `choreoEditor.test.ts`,
+    `choreo-editor-screen.test.tsx`, Link im Bibliothekstest. Kein Formatwechsel.
+  - Playwright (390×844 und 844×390): Einstieg über „Song bearbeiten“, Gold, +100 ms und 1,25×
+    gespeichert und nach Neuladen in IndexedDB, Rückfrage bei „Zurück“ und Browser-Zurück, Spiel im
+    Simulationsmodus mit dem bearbeiteten Song, Konsole sauber.
+  - **Gerätetest 8d-1 (offen):**
+    - [ ] Hoch- und Querformat am Handy: Timeline wischbar, Knöpfe erreichbar, Safe Areas
+    - [ ] Strichfiguren scharf (devicePixelRatio) und gut erkennbar, Gold sichtbar
+    - [ ] Nach Offset- und Tempoänderung spielt der Song im Spiel wie erwartet
+- **8d-2 (offen):** Abspielen mit Audio-Vorschau, Move-Zeiten verschieben, Moves hinzufügen.
 
 Ursprüngliche Schritte:
 
@@ -525,3 +546,5 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | N10 | YouTube ignoriert `song.playbackRate`                                                                                        | 11     |
 | N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                              | 11     |
 | N13 | Beat-Puls im Spiel (`beatsPerPulse`) begrenzt nach Song-BPM, nicht nach `bpm × playbackRate`: bei Rate > 1 über 3 Hz möglich | 11     |
+| N14 | Editor: jede Änderung (Gold, Offset) baut alle Strichfiguren der Timeline neu; bei langen Video-Choreografien spürbar?       | 11     |
+| N15 | Spiel und Sync-Test rechnen mit `playbackRate`, auch wenn die Quelle sie ignoriert (YouTube, Spotify)                        | 11     |

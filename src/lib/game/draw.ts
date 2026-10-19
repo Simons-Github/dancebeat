@@ -103,6 +103,32 @@ export function drawStickFigure(
   }
 }
 
+/** Pictogram look: gold moves in gold with glow, others in the song colors. */
+function piktoStyle(gold: boolean, colors: { accent: string; secondary: string }): FigureStyle {
+  return gold
+    ? { color: GOLD, outline: GOLD_DEEP, glow: GOLD, arrowColor: GOLD }
+    : { color: colors.accent, outline: GAME.outline, arrowColor: colors.secondary };
+}
+
+/**
+ * One static pictogram centered in its canvas (editor timeline). Drawn on demand, not per frame;
+ * a missing figure clears the canvas.
+ */
+export function drawMoveFigure(
+  canvas: HTMLCanvasElement,
+  fig: StickFigure | null,
+  gold: boolean,
+  colors: { accent: string; secondary: string },
+) {
+  const { ctx, w, h } = fitCanvas(canvas);
+  if (!ctx) return;
+  ctx.clearRect(0, 0, w, h);
+  if (!fig) return;
+  // Fit height and width (the figure is `aspect` times as wide as tall).
+  const fh = Math.min(h * 0.82, (w * 0.82) / Math.max(fig.aspect, 0.01));
+  drawStickFigure(ctx, fig, w / 2, (h - fh) / 2, fh, piktoStyle(gold, colors));
+}
+
 /** Pictograms on the bar canvas (the bar shape and marker are DOM; only figures move). */
 export function drawPiktos(
   canvas: HTMLCanvasElement,
@@ -124,9 +150,7 @@ export function drawPiktos(
     const cx =
       markerPx + ((it.x - PIKTO.markerX) / (1 - PIKTO.markerX)) * (w - markerPx - fh * 0.3);
     ctx.globalAlpha = it.alpha;
-    const style: FigureStyle = it.gold
-      ? { color: GOLD, outline: GOLD_DEEP, glow: GOLD, arrowColor: GOLD }
-      : { color: colors.accent, outline: GAME.outline, arrowColor: colors.secondary };
+    const style = piktoStyle(it.gold, colors);
     if (it.flash > 0) style.color = mix(style.color, GAME.flash, it.flash);
     drawStickFigure(ctx, fig, cx, top, fh, style);
   }

@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { Link } from "@tanstack/react-router";
-import { AudioWaveform, Download, Pencil, Trash2 } from "lucide-react";
+import { AudioWaveform, Download, ListMusic, Pencil, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -198,7 +198,8 @@ export function EditSongDialog({
         <DialogHeader>
           <DialogTitle>Song bearbeiten</DialogTitle>
           <DialogDescription>
-            Ändere Titel, Künstler und Startpunkt, prüfe den Takt im Sync-Test oder lösche den Song.
+            Ändere Titel, Künstler und Startpunkt, prüfe den Takt im Sync-Test, bearbeite die
+            Choreografie oder lösche den Song.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
@@ -278,6 +279,14 @@ export function EditSongDialog({
                 <span className="tabular-nums">{formatOffsetMs(target.syncOffsetMs)}</span>
               </p>
             </div>
+          )}
+          {target && (
+            <Button asChild variant="secondary" className={BTN}>
+              <Link to="/edit/$songId" params={{ songId: target.id }}>
+                <ListMusic aria-hidden />
+                Choreografie bearbeiten
+              </Link>
+            </Button>
           )}
           {error && (
             <p role="alert" className={ERROR}>

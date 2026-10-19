@@ -193,6 +193,18 @@ describe("Edit song dialog", () => {
     expect(screen.queryByRole("button", { name: "Song bearbeiten" })).not.toBeInTheDocument();
   });
 
+  it("links to the sync test and the choreography editor", async () => {
+    const { song, dialog } = await openEditor();
+    expect(within(dialog).getByRole("link", { name: "Sync-Test" })).toHaveAttribute(
+      "href",
+      `/sync/${song.id}`,
+    );
+    expect(within(dialog).getByRole("link", { name: "Choreografie bearbeiten" })).toHaveAttribute(
+      "href",
+      `/edit/${song.id}`,
+    );
+  });
+
   it("renames the selected song", async () => {
     library.updateDetails.mockResolvedValue();
     const { song, dialog } = await openEditor();

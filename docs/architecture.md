@@ -362,8 +362,8 @@ Pose-Spur selbst liefert `useVideoAnalysis` (siehe unten). Ablauf und Konvention
   Analyse läuft offline; ein einseitiger Filter würde die Referenzposen hinter den Beat
   verschieben. Startwerte `minCutoff` 1 Hz, `beta` 10, `dCutoff` 1 Hz, Neustart nach Lücken über
   250 ms. Ob die Werte zu echten Tanzvideos passen, zeigt sich erst mit 8b.
-- `suggestGoldMoves` ist eigenständig exportiert, damit der Editor (8d) den Vorschlag
-  wiederverwenden kann.
+- `suggestGoldMoves` ist eigenständig exportiert, damit der Editor (8d-1, `suggestGold`)
+  den Vorschlag wiederverwendet.
 - Fehlermeldungen sind deutsch, weil der Import-Dialog sie direkt zeigt.
 
 ### Video-Analyse (Etappe 8b)
@@ -434,6 +434,30 @@ den Quell-Tabs (Datei, URL, YouTube); das Video liefert nur die Bewegungen.
 - Datenschutz: Das Panel nennt, dass das Video auf dem Gerät bleibt und die Erkennung ohne
   externe Abrufe läuft (Modell von der eigenen Adresse, siehe [Externe Abrufe](#externe-abrufe)).
 
+## Choreografie-Editor (Etappe 8d-1)
+
+Route `/edit/$songId` (`src/routes/edit/$songId.tsx`, gleicher Aufbau wie der Sync-Test), Einstieg
+über „Choreografie bearbeiten“ im Dialog „Song bearbeiten“. `ChoreoEditorScreen`
+(`src/components/editor/`) arbeitet auf einer lokalen Arbeitskopie des Songs; die Bibliothek
+ändert sich erst mit „Speichern“ (`save` aus `useSongLibrary`, also `SongRepository`).
+Nach dem Speichern geht es zurück zur Bibliothek. „Verwerfen“ setzt die Kopie nach einer Rückfrage
+zurück. Wer mit ungespeicherten Änderungen geht (Knopf „Zurück“, Browser- oder Android-Zurück,
+Links), bekommt dieselbe Rückfrage (`useBlocker` von TanStack Router), beim Neuladen warnt der
+Browser (`beforeunload`).
+
+- Reine Logik in `src/lib/choreoEditor.ts` (unveränderlich, ohne React): `deleteMove`
+  (mindestens `MIN_MOVES` = 2), `toggleGold`, `suggestGold` (nutzt `suggestGoldMoves`),
+  `shiftOffset` (ganze ms, ±10 s um den gespeicherten Wert, kein Move vor Musikzeit 0), `beatLengthMs`, `setTempo` (1× entfernt
+  `playbackRate`), `supportsTempo` (nur Datei und URL), `isEdited` (Speichern/Verwerfen nur bei Änderungen), `prepareSave`.
+- Timeline: waagerecht scrollende Move-Karten mit Strichfigur der Referenzpose
+  (`moveFigures` + `drawMoveFigure` auf Canvas, gezeichnet nur bei Änderung, kein rAF), Zeit in
+  Musikzeit (`move.timeMs + offsetMs`, ohne Latenz und Sync-Offset), Gold-Markierung.
+- Der Offset verschiebt die Moves gegen die Musik; die Geräteverzögerung bleibt Sache des
+  Sync-Tests (`syncOffsetMs`). YouTube (N10) und Spotify ignorieren das Tempo; der Editor sperrt die Tempo-Knöpfe dort und
+  nennt den Grund.
+- Kein Audio, keine Kamera, keine externen Abrufe. Kein Formatwechsel (siehe
+  [choreography-format.md](choreography-format.md#editor)).
+
 ## Messwerte
 
 Aus dem Diagnosefeld der Aufstellhilfe (Zahnrad-Symbol), Erkennung mit Modell „lite“. Ziel:
@@ -470,7 +494,8 @@ erhalten). Keine `src/pages/` und kein `app/layout.tsx` anlegen.
 
 Routen der App: `/` (Bibliothek), `/setup/$songId` (Aufstellhilfe), `/play/$songId` (Spiel,
 Vollbild), `/result/$songId` (Ergebnis), `/sync/$songId` (Sync-Test pro Song, siehe
-[scoring.md](scoring.md#sync-test-pro-song)), `/settings`.
+[scoring.md](scoring.md#sync-test-pro-song)), `/edit/$songId` (Choreografie-Editor, siehe
+[oben](#choreografie-editor-etappe-8d-1)), `/settings`.
 
 ## Service Worker und Offline-Betrieb
 

@@ -124,6 +124,14 @@ gilt Videozeit = Audiozeit. Für den Bereich `[start, ende]` und eine Beat-Phase
 - `song.startOffsetMs = start`: Die Musik beginnt am Bereichsanfang. `syncOffsetMs` ist 0.
 - BPM kommt aus dem Formular. Kein Formatwechsel, keine neue Version.
 
+## Editor
+
+Der Choreografie-Editor (Etappe 8d-1, `/edit/$songId`) ändert nur `moves[].gold`, entfernt Moves
+(mindestens 2 bleiben), verschiebt `choreo.offsetMs` (ganze ms, höchstens ±10 s um den
+gespeicherten Wert, kein Move vor Musikzeit 0) und setzt das Song-Feld `playbackRate` (0,75 oder 1,25; bei 1× entfällt das
+Feld). Beim Speichern setzt er `choreo.updatedAt`, `updatedAt` des Songs setzt das Repository.
+Frames, Move-Zeiten und Labels bleiben unverändert. Kein Formatwechsel, keine neue Version.
+
 ## Export-Datei
 
 Choreografien werden ohne Audio als JSON exportiert:
