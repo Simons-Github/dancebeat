@@ -1,0 +1,363 @@
+import { describe, expect, it } from "vitest";
+import { mirrorChoreo } from "@/lib/choreo";
+import { ARM_KEYS, computeAngles, figure, isVisible, type FigureParams } from "@/lib/pose";
+import { ChoreographySchema } from "@/lib/schema";
+import type { AngleKey, Angles, Frame, Landmark, Move } from "@/lib/types";
+import {
+  choreoFromPoseTrack,
+  OneEuroFilter,
+  smoothTrack,
+  suggestGoldMoves,
+  toSquareSpace,
+  type PoseTrack,
+} from "@/lib/videoChoreo";
+
+/** Deterministic PRNG (mulberry32). */
+function rng(seed: number) {
+  let a = seed;
+  return () => {
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+/** Inverse of toSquareSpace: square-space landmarks as a per-axis normalized video frame. */
+const toVideo = (lm: Landmark[], aspect: number): Landmark[] => {
+  const s = Math.max(aspect, 1);
+  return lm.map((p) => [0.5 + ((p[0] - 0.5) * s) / aspect, 0.5 + (p[1] - 0.5) * s, p[2] ?? 1]);
+};
+
+interface TrackSpec {
+  aspect?: number;
+  durationMs?: number;
+  stepMs?: number;
+  noise?: number;
+  seed?: number;
+  pose?: (t: number) => FigureParams;
+  /** Per-sample edit (e.g. null samples, invisible points). */
+  edit?: (t: number, lm: Landmark[]) => Landmark[] | null;
+}
+
+const wave = (t: number): FigureParams => ({
+  la: 90 + 60 * Math.sin((2 * Math.PI * t) / 2000),
+  ra: 90 - 50 * Math.sin((2 * Math.PI * t) / 3000),
+  le: 30,
+  re: 20,
+  ll: 10,
+  rl: 10,
+});
+
+function makeTrack(spec: TrackSpec = {}): PoseTrack {
+  const { aspect = 16 / 9, durationMs = 8000, stepMs = 33, noise = 0, seed = 1 } = spec;
+  const pose = spec.pose ?? wave;
+  const rand = rng(seed);
+  const samples: PoseTrack["samples"] = [];
+  for (let t = 0; t <= durationMs; t += stepMs) {
+    const raw = toVideo(figure(pose(t)), aspect).map(
+      (p) =>
+        [p[0] + (rand() - 0.5) * 2 * noise, p[1] + (rand() - 0.5) * 2 * noise, p[2]] as Landmark,
+    );
+    samples.push({ timeMs: t, landmarks: spec.edit ? spec.edit(t, raw) : raw });
+  }
+  return { aspect, samples };
+}
+
+const opts = { title: "Video", bpm: 120, now: 1_760_000_000_000 };
+
+const meanErr = (a: Angles[], b: Angles[], keys: AngleKey[]) => {
+  let sum = 0,
+    n = 0;
+  a.forEach((x, i) => {
+    for (const k of keys) {
+      const u = x[k],
+        v = b[i]?.[k];
+      if (u != null && v != null) {
+        sum += Math.abs(u - v);
+        n++;
+      }
+    }
+  });
+  return sum / n;
+};
+
+describe("OneEuroFilter", () => {
+  it("startet mit dem ersten Wert und folgt einem konstanten Signal exakt", () => {
+    const f = new OneEuroFilter();
+    expect(f.filter(0.3, 0)).toBe(0.3);
+    expect(f.filter(0.3, 33)).toBeCloseTo(0.3, 10);
+    f.reset();
+    expect(f.filter(0.8, 66)).toBe(0.8);
+  });
+});
+
+describe("smoothTrack", () => {
+  it("glättet Rauschen: Winkelfehler sinkt deutlich und bleibt unter 2,5°", () => {
+    const aspect = 16 / 9;
+    const track = makeTrack({ aspect, noise: 0.01, seed: 7 });
+    const truth = track.samples.map((s) => computeAngles(figure(wave(s.timeMs))));
+    const raw = track.samples.map((s) => computeAngles(s.landmarks!, { aspect }));
+    const smooth = smoothTrack(track.samples).map((s) => computeAngles(s.landmarks!, { aspect }));
+    // Skip the first half second (filter warm-up).
+    const from = 15;
+    const keys = ARM_KEYS;
+    const eRaw = meanErr(raw.slice(from), truth.slice(from), keys);
+    const eSmooth = meanErr(smooth.slice(from), truth.slice(from), keys);
+    expect(eSmooth).toBeLessThan(eRaw * 0.6);
+    expect(eSmooth).toBeLessThan(2.5);
+  });
+
+  it("reicht unsichere Punkte unverändert durch und setzt Filter nach Lücken zurück", () => {
+    const a: Landmark[] = [
+      [0.2, 0.2, 0.9],
+      [0.4, 0.4, 0.9],
+    ];
+    const b: Landmark[] = [
+      [0.3, 0.3, 0.9],
+      [0.9, 0.9, 0.2],
+    ];
+    const c: Landmark[] = [
+      [0.6, 0.6, 0.9],
+      [0.7, 0.7, 0.9],
+    ];
+    const head = [
+      { timeMs: 0, landmarks: a },
+      { timeMs: 33, landmarks: b },
+      { timeMs: 66, landmarks: c },
+    ];
+    const out = smoothTrack([
+      ...head,
+      { timeMs: 100, landmarks: null },
+      { timeMs: 133, landmarks: a },
+      { timeMs: 1000, landmarks: c },
+    ]);
+    // Smoothed between the neighbours, not the raw value.
+    const x = out[1]!.landmarks![0]![0];
+    expect(x).not.toBe(0.3);
+    expect(x).toBeGreaterThan(0.2);
+    expect(x).toBeLessThan(0.6);
+    // Segments are independent of what lies behind a gap.
+    expect(out.slice(0, 3)).toEqual(smoothTrack(head));
+    // Invisible point: passed through, never zeroed.
+    expect(out[1]!.landmarks![1]).toEqual([0.9, 0.9, 0.2]);
+    // Point 1 restarts after its invisible sample.
+    expect(out[2]!.landmarks![1]).toEqual([0.7, 0.7, 0.9]);
+    expect(out[3]!.landmarks).toBeNull();
+    // Reset after a null sample and after a long time gap.
+    expect(out[4]!.landmarks).toEqual(a);
+    expect(out[5]!.landmarks).toEqual(c);
+  });
+});
+
+describe("toSquareSpace", () => {
+  it.each([16 / 9, 9 / 16, 4 / 3, 1])(
+    "ergibt dieselben Winkel wie computeAngles mit aspect %f",
+    (aspect) => {
+      const raw = toVideo(
+        figure({ la: 130, ra: 40, le: 50, re: 80, ll: 20, lk: 30, lean: 8 }),
+        aspect,
+      );
+      const sq = computeAngles(toSquareSpace(raw, aspect));
+      const ref = computeAngles(raw, { aspect });
+      expect(Object.keys(sq).length).toBe(9);
+      for (const [k, v] of Object.entries(ref)) expect(sq[k as AngleKey]).toBeCloseTo(v!, 6);
+    },
+  );
+});
+
+describe("choreoFromPoseTrack", () => {
+  it("liefert für 16:9, 9:16 und 1:1 dieselben Winkel und quadratische Landmarks", () => {
+    const still = () => ({ la: 120, ra: 60, le: 40, re: 70, ll: 15, rl: 25, rk: 20 });
+    const truth = figure(still());
+    const results = [16 / 9, 9 / 16, 1].map((aspect) =>
+      choreoFromPoseTrack(makeTrack({ aspect, pose: still }), { ...opts, mirror: false }),
+    );
+    const ref = computeAngles(truth);
+    for (const c of results) {
+      const f = c.frames[10]!;
+      for (const [k, v] of Object.entries(ref)) expect(f.angles[k as AngleKey]).toBeCloseTo(v!, 0);
+      for (const i of [11, 15, 23, 27]) {
+        expect(f.landmarks[i]![0]).toBeCloseTo(truth[i]![0], 3);
+        expect(f.landmarks[i]![1]).toBeCloseTo(truth[i]![1], 3);
+      }
+    }
+  });
+
+  it("überspringt Lücken und unsichere Punkte statt 0 oder falsche Winkel zu erzeugen", () => {
+    const track = makeTrack({
+      edit: (t, lm) => {
+        if (t >= 2000 && t < 2600) return null;
+        if (t >= 4000 && t < 5000) lm[15] = [0.95, 0.95, 0.1];
+        return lm;
+      },
+    });
+    const c = choreoFromPoseTrack(track, { ...opts, mirror: false });
+    expect(c.frames.some((f) => f.timeMs > 2050 && f.timeMs < 2550)).toBe(false);
+    for (const f of c.frames) {
+      for (const p of f.landmarks.slice(11, 29)) expect(p[0] === 0 && p[1] === 0).toBe(false);
+      if (f.timeMs >= 4000 && f.timeMs < 5000) {
+        expect(f.angles.leftElbow).toBeUndefined();
+        expect(f.landmarks[15]![2]).toBe(0.1);
+      } else expect(f.angles.leftElbow).toBeDefined();
+    }
+  });
+
+  it("speichert im Spiegelraum: Standard == mirrorChoreo(mirror: false)", () => {
+    const track = makeTrack({ noise: 0.003 });
+    const a = choreoFromPoseTrack(track, opts);
+    const plain = choreoFromPoseTrack(track, { ...opts, mirror: false });
+    const b = mirrorChoreo(plain);
+    expect(a.frames).toEqual(b.frames);
+    expect(a.moves).toEqual(b.moves);
+    // The dancer's right arm becomes the player's left arm.
+    expect(a.frames[5]!.angles.leftShoulder).toBe(plain.frames[5]!.angles.rightShoulder);
+    expect(a.frames[5]!.landmarks[11]).toEqual(plain.frames[5]!.landmarks[12]);
+  });
+
+  it("schneidet auf den Bereich zu und verschiebt ihn nach 0", () => {
+    const track = makeTrack({ durationMs: 10000, stepMs: 50 });
+    const c = choreoFromPoseTrack(track, {
+      ...opts,
+      mirror: false,
+      range: { startMs: 2000, endMs: 6000 },
+    });
+    expect(c.frames[0]!.timeMs).toBe(0);
+    expect(c.frames[c.frames.length - 1]!.timeMs).toBe(4000);
+    const expected = computeAngles(figure(wave(2000)));
+    // Small edge effect of the smoother at the segment start (fastest point of the wave).
+    expect(Math.abs(c.frames[0]!.angles.leftShoulder! - expected.leftShoulder!)).toBeLessThan(3);
+    expect(c.moves.every((m) => m.timeMs <= 4000)).toBe(true);
+  });
+
+  it("setzt Moves exakt aufs Beat-Raster und lässt unsichere Stellen aus", () => {
+    const track = makeTrack({
+      durationMs: 10000,
+      edit: (t, lm) => {
+        if (t >= 3000 && t < 4600) lm[23] = [lm[23]![0], lm[23]![1], 0.2];
+        return lm;
+      },
+    });
+    const c = choreoFromPoseTrack(track, {
+      ...opts,
+      mirror: false,
+      beatOffsetMs: 250,
+      beatsPerMove: 2,
+    });
+    // Beat phase lives in offsetMs; video time = timeMs + offsetMs.
+    expect(c.offsetMs).toBe(250);
+    expect(c.moves.map((m) => m.timeMs + c.offsetMs)).toEqual([
+      250, 1250, 2250, 5250, 6250, 7250, 8250, 9250,
+    ]);
+    expect(c.frames.filter((f) => f.lowVisibility).length).toBeGreaterThan(10);
+    const before = c.frames.find((f) => f.timeMs >= 1000);
+    expect(before).toBeDefined();
+    expect(before).not.toHaveProperty("lowVisibility");
+    expect(c.moves.every((m) => m.label === "Move" && m.iconId === "video")).toBe(true);
+  });
+
+  it("legt die Beat-Phase in offsetMs, Moves liegen auf k · Beat", () => {
+    const beatMs = 60000 / 120;
+    for (const beatOffsetMs of [-180, 0, 333, 1750]) {
+      const c = choreoFromPoseTrack(makeTrack({ durationMs: 8000 }), { ...opts, beatOffsetMs });
+      expect(c.offsetMs).toBeGreaterThanOrEqual(0);
+      expect(c.offsetMs).toBeLessThan(beatMs);
+      expect(((beatOffsetMs - c.offsetMs) % beatMs) + 0).toBeCloseTo(0, 5);
+      for (const m of c.moves) expect(m.timeMs % beatMs).toBeCloseTo(0, 5);
+      expect(c.frames.every((f) => f.timeMs >= 0)).toBe(true);
+    }
+  });
+
+  it("wirft bei ungültigen Optionen statt zu hängen", () => {
+    const track = makeTrack({ durationMs: 2000 });
+    for (const bad of [{ frameIntervalMs: 0 }, { bpm: 0 }, { beatsPerMove: -1 }]) {
+      expect(() => choreoFromPoseTrack(track, { ...opts, ...bad })).toThrow(/Ungültige/);
+    }
+  });
+
+  it("wählt 2 bis 4 Gold Moves", () => {
+    const c = choreoFromPoseTrack(makeTrack({ durationMs: 40000, stepMs: 50 }), opts);
+    const gold = c.moves.filter((m) => m.gold).length;
+    expect(gold).toBeGreaterThanOrEqual(2);
+    expect(gold).toBeLessThanOrEqual(4);
+  });
+
+  it("besteht das Schema und bleibt bei 3 Minuten unter 2 MB", () => {
+    const rand = rng(3);
+    const track = makeTrack({
+      durationMs: 180_000,
+      stepMs: 50,
+      noise: 0.004,
+      // Pessimistic: every visibility has two significant decimals.
+      edit: (_t, lm) => lm.map((p) => [p[0], p[1], 0.6 + 0.39 * rand()] as Landmark),
+    });
+    const c = choreoFromPoseTrack(track, opts);
+    expect(ChoreographySchema.safeParse(c).success).toBe(true);
+    expect(c.frames.length).toBeGreaterThan(1700);
+    expect(JSON.stringify(c).length).toBeLessThan(2_000_000);
+  });
+
+  it("speichert sichere Punkte ohne Visibility und bleibt dann unter 1,5 MB", () => {
+    const track = makeTrack({
+      durationMs: 180_000,
+      stepMs: 50,
+      noise: 0.004,
+      edit: (_t, lm) => lm.map((p) => [p[0], p[1], 0.995] as Landmark),
+    });
+    const c = choreoFromPoseTrack(track, opts);
+    expect(c.frames[0]?.landmarks.every((p) => p.length === 2)).toBe(true);
+    expect(JSON.stringify(c).length).toBeLessThan(1_500_000);
+  });
+
+  it("rundet Visibility knapp unter 0.5 nicht auf sichtbar", () => {
+    const track = makeTrack({
+      edit: (_t, lm) => lm.map((p, i) => (i === 15 ? [p[0], p[1], 0.4999] : p) as Landmark),
+    });
+    const c = choreoFromPoseTrack(track, { ...opts, mirror: false });
+    for (const f of c.frames) {
+      expect(isVisible(f.landmarks[15])).toBe(false);
+      expect(f.angles.leftElbow).toBeUndefined();
+    }
+  });
+
+  it("wirft bei leerer Spur oder ohne erkannte Person", () => {
+    expect(() => choreoFromPoseTrack({ aspect: 1, samples: [] }, opts)).toThrow(Error);
+    const none = makeTrack({ edit: () => null });
+    expect(() => choreoFromPoseTrack(none, opts)).toThrow(/Person/);
+  });
+});
+
+describe("suggestGoldMoves", () => {
+  const setup = (values: number[]) => {
+    const moves: Move[] = values.map((_, i) => ({
+      timeMs: i * 1000,
+      label: "Move",
+      iconId: "video",
+      gold: true,
+    }));
+    const frames: Frame[] = values.map((v, i) => ({
+      timeMs: i * 1000,
+      landmarks: [],
+      angles: { leftShoulder: v, rightShoulder: 10 },
+    }));
+    return { moves, frames };
+  };
+
+  it("nimmt die Moves mit der größten Bewegung und hält Abstand", () => {
+    // Scores: index 3 and 4 = 120, index 12 = 40; spacing for 16 moves = 4.
+    const { moves, frames } = setup([0, 0, 0, 120, 0, 0, 0, 0, 0, 0, 0, 0, 40, 40, 40, 40]);
+    const out = suggestGoldMoves(moves, frames);
+    expect(out.flatMap((m, i) => (m.gold ? [i] : []))).toEqual([3, 12]);
+  });
+
+  it("skaliert die Anzahl mit der Länge (2..4, weniger nur bei weniger Moves)", () => {
+    const count = (n: number) => {
+      const { moves, frames } = setup(Array.from({ length: n }, (_, i) => (i * 37) % 180));
+      return suggestGoldMoves(moves, frames).filter((m) => m.gold).length;
+    };
+    expect(count(1)).toBe(1);
+    expect(count(3)).toBe(2);
+    expect(count(24)).toBe(3);
+    expect(count(80)).toBe(4);
+  });
+});

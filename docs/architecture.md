@@ -345,6 +345,22 @@ Google Fonts oder ein anderes CDN.
   beim Callback, aus `captureTime` der Video-Frame-Metadaten oder ab Beginn der Erkennung; siehe
   [scoring.md](scoring.md#zeitbasis)).
 
+## Video-Import
+
+`src/lib/videoChoreo.ts` (Etappe 8a, reine Logik ohne React): `choreoFromPoseTrack` macht aus
+einer rohen Pose-Spur (`PoseTrack`: Seitenverhältnis plus Proben `{ timeMs, landmarks | null }`,
+Landmarks pro Achse normiert wie MediaPipe sie liefert) eine geprüfte `Choreography`. Die
+Pose-Spur selbst liefert ab 8b `useVideoAnalysis`. Ablauf und Konventionen:
+[choreography-format.md](choreography-format.md#video-import).
+
+- Glättung: One-Euro-Filter je Koordinate, vorwärts und rückwärts gerechnet und gemittelt. Die
+  Analyse läuft offline; ein einseitiger Filter würde die Referenzposen hinter den Beat
+  verschieben. Startwerte `minCutoff` 1 Hz, `beta` 10, `dCutoff` 1 Hz, Neustart nach Lücken über
+  250 ms. Ob die Werte zu echten Tanzvideos passen, zeigt sich erst mit 8b.
+- `suggestGoldMoves` ist eigenständig exportiert, damit der Editor (8d) den Vorschlag
+  wiederverwenden kann.
+- Fehlermeldungen sind deutsch, weil der Import-Dialog sie direkt zeigt.
+
 ## Messwerte
 
 Aus dem Diagnosefeld der Aufstellhilfe (Zahnrad-Symbol), Erkennung mit Modell „lite“. Ziel:

@@ -84,6 +84,35 @@ Winkel-Schlüssel) und kehrt `torsoLean` um; die Positionen bleiben. Das braucht
 Ein Tänzer, der frontal zur Kamera tanzt, wird ungespiegelt gezeigt, und der Spieler tanzt
 spiegelbildlich mit. Zweimal angewendet ergibt sich das Original.
 
+## Video-Import
+
+`choreoFromPoseTrack` (`src/lib/videoChoreo.ts`) baut aus einer Pose-Spur eines Videos eine
+Choreografie im Format v1:
+
+1. Zeitbereich zuschneiden; der Anfang des Bereichs wird 0.
+2. Glätten (One-Euro, vorwärts und rückwärts). Punkte mit `visibility < 0.5` laufen nie durch den
+   Filter und bleiben unsichtbar; nach einer Lücke beginnt der Filter des Punkts neu.
+3. Winkel über `computeAngles(…, { aspect })` aus den Rohkoordinaten. Gespeichert werden die
+   Landmarks im quadratischen Raum: mit `s = max(aspect, 1)` gilt
+   `x' = 0.5 + (x − 0.5) · aspect / s` und `y' = 0.5 + (y − 0.5) / s`. Die längere Bildseite
+   füllt also 0..1, die kürzere liegt mittig.
+4. Spiegeln (`mirrorChoreo`) ist Standard, weil ein Video den Tänzer ungespiegelt zeigt (siehe
+   [Spiegeln](#spiegeln)). Bereits gespiegelte Aufnahmen (Selfie) mit `mirror: false`.
+5. Frames etwa alle 100 ms. Koordinaten auf 4 Stellen gerundet, Winkel auf 1 Stelle. Die
+   Visibility wird auf 2 Stellen **abgerundet**, damit kein unsicherer Punkt über die Schwelle
+   rutscht. Ab 0.99 entfällt sie (`[x, y]` = voll sichtbar). `lowVisibility` steht, wenn nicht
+   beide Schultern und beide Hüften sichtbar sind. Drei Minuten ergeben etwa 1,3 MB JSON.
+6. Moves alle `beatsPerMove` Beats (Standard 2) ab `beatOffsetMs`. Ein Rasterpunkt entfällt,
+   wenn der Frame dort fehlt, `lowVisibility` hat oder weniger als 4 Arm- und Beinwinkel trägt.
+   `label` ist „Move“, `iconId` ist „video“. Die Beat-Phase (`beatOffsetMs` modulo Beatlänge)
+   landet in `offsetMs`; Frames und Moves rücken um sie nach vorn (Frames vor 0 entfallen). So
+   liegen die Moves auf `k · Beatlänge`, wie Beat-Puls und Sync-Test es erwarten, und die Lage
+   zum Audio bleibt gleich.
+7. Gold-Vorschlag: 2–4 Moves (etwa jeder achte) mit der größten Winkeländerung zum vorigen Move,
+   mit Mindestabstand über den Song verteilt.
+
+Bleiben weniger als 2 Frames oder 2 Moves übrig, bricht der Import mit einer Meldung ab.
+
 ## Export-Datei
 
 Choreografien werden ohne Audio als JSON exportiert:
