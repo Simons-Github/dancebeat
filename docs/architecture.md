@@ -264,8 +264,6 @@ UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 
 | Was                            | Von                                   | Wann                                      |
 | ------------------------------ | ------------------------------------- | ----------------------------------------- |
-| MediaPipe-WASM-Laufzeit        | cdn.jsdelivr.net                      | Aufstellhilfe (Start der Pose-Erkennung)  |
-| Pose-Modell (`.task`)          | storage.googleapis.com                | Aufstellhilfe (Start der Pose-Erkennung)  |
 | YouTube-IFrame-API (Skript)    | www.youtube.com                       | YouTube-Song im Spiel laden; in der       |
 | YouTube-Player, Video          | www.youtube-nocookie.com              | Aufstellhilfe benannt                     |
 | Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden                        |
@@ -274,19 +272,39 @@ UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 Der Dialog „Song hinzufügen“ ruft selbst nichts ab, nennt aber schon beim Anlegen den Host der
 Audio-URL bzw. youtube-nocookie.com als spätere Gegenstelle.
 
-Die ersten beiden Abrufe gehen bei jedem Start der Kamera raus (kein Service Worker, mindestens
-zur Cache-Prüfung), nicht nur beim ersten Mal. Die WASM-URL entsteht aus der Konstante
-`TASKS_VISION_VERSION` (`src/lib/mediapipe.ts`); `@mediapipe/tasks-vision` ist in `package.json`
-exakt auf `1.1.1` festgelegt und ein Test prüft, dass beides übereinstimmt.
+**Pose-Erkennung ohne externe Abrufe (Etappe 7b-1):** MediaPipe-WASM-Laufzeit und Pose-Modell
+kommen von der eigenen Adresse der App (`<base>mediapipe/wasm/…`,
+`<base>mediapipe/models/pose_landmarker_lite.task`, siehe `src/lib/mediapipe.ts`).
+
+- WASM: `vite-plugins/mediapipeWasm.ts` liefert die Dateien im Dev-Server direkt aus
+  `node_modules/@mediapipe/tasks-vision/wasm` aus und kopiert sie beim Build nach
+  `dist/mediapipe/wasm/`. JS und WASM passen damit immer zur installierten Paketversion; die
+  frühere Versionskonstante samt Test entfällt. Nicht im Repo.
+- Modell: `scripts/fetch-models.ts` (`bun run fetch-models`, automatisch vor `dev`, `dev:https`,
+  `build`, `build:dev`) lädt das lite-Modell einmalig von einer fest versionierten Google-URL nach
+  `public/mediapipe/models/` (gitignored) und prüft SHA-256 (`scripts/models.ts`). Ohne Netz und
+  ohne vorhandene Datei bricht der Build mit Meldung ab. „full“/„heavy“ (Etappe 8) müssen dort
+  erst ergänzt werden.
+- Das Hosting muss `.wasm` als `application/wasm` ausliefern (`vite preview` tut das).
+- **Telemetrie gesperrt:** `@mediapipe/tasks-vision` 1.1.1 hat einen fest eingebauten Logger
+  (kein Schalter in der API), der Nutzungsdaten (Task-Typ, Modus, OS-Klasse, Latenzen, Version;
+  keine Bilder) alle 60 s und beim `close()` an `odml.pa.googleapis.com/v1/log` schickt.
+  `vite-plugins/csp.ts` setzt deshalb in `index.html` eine CSP, die nur `connect-src`
+  beschränkt: `'self' blob: data:` (Dev zusätzlich `ws: wss:` für HMR). Andere Direktiven bleiben
+  bewusst offen (Audio-URLs über `<audio>`, YouTube-Skript und -Iframe). Der Logger scheitert
+  und stoppt sich; Chrome meldet das als zwei Konsolenfehler („violates the following Content
+  Security Policy directive“). Diese Fehler sind erwartet und gelten nicht als Fehler aus eigenem
+  Code. Spotify (Etappe 10) braucht dann `accounts.spotify.com` und `api.spotify.com` in der
+  Policy. Gilt nur für von Vite ausgelieferte `index.html` (dev, build, preview).
 
 Alle Abrufe außer Spotify sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
-(`src/components/setup/PrivacyNote.tsx`; W12): die ersten beiden immer, bei YouTube-Songs
-zusätzlich YouTube (Skript von youtube.com, Video über youtube-nocookie.com), bei URL-Songs der
-Hostname der Adresse; beide mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Der Sync-Test
+(`src/components/setup/PrivacyNote.tsx`; W12): immer „Kamerabilder verlassen dein Gerät nie“
+und dass die Erkennung vollständig auf dem Gerät läuft, bei YouTube-Songs zusätzlich YouTube
+(Skript von youtube.com, Video über youtube-nocookie.com), bei URL-Songs der Hostname der
+Adresse; beide mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Der Sync-Test
 (`/sync/$songId`) startet keine Kamera; er nennt per `PrivacyNote camera={false}` nur den Abruf
 der Songquelle (YouTube bzw. Host der Audio-URL, bei lokalen Dateien nichts). Spotify-Songs
-lädt er nicht (folgt mit Etappe 10). Ziel (Etappe 7): WASM und Modell nach `public/`
-verlegen, dann entfallen sie und der Hinweis wird angepasst.
+lädt er nicht (folgt mit Etappe 10).
 
 **Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
 selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gibt keine Anfrage an

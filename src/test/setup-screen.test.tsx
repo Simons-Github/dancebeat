@@ -55,12 +55,12 @@ afterEach(() => {
 });
 
 describe("Aufstellhilfe", () => {
-  it("erklärt, nennt die externen Abrufe und fragt die Kamera erst nach dem Tippen an", async () => {
+  it("erklärt den Datenschutz ohne externe Abrufe und fragt die Kamera erst nach dem Tippen an", async () => {
     await renderAt("/setup/song-1");
     expect(await screen.findByRole("button", { name: "Kamera starten" })).toBeInTheDocument();
-    expect(screen.getByText(/Kamerabilder verlassen dein Gerät nie/)).toHaveTextContent(
-      "jsDelivr und Google geladen; dabei wird deine IP-Adresse übertragen, keine Bilder.",
-    );
+    const note = screen.getByText(/Kamerabilder verlassen dein Gerät nie/);
+    expect(note).toHaveTextContent("Die Bewegungserkennung läuft vollständig auf deinem Gerät.");
+    expect(note).not.toHaveTextContent(/jsDelivr|Google/);
     expect(getUserMedia).not.toHaveBeenCalled();
   });
 

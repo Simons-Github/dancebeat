@@ -38,7 +38,7 @@ export function PrivacyNote({
       <ShieldCheck aria-hidden className="mt-0.5 size-4 shrink-0" />
       <span>
         {camera &&
-          "Kamerabilder verlassen dein Gerät nie. Beim Start der Kamera werden Erkennungsmodell und Laufzeit von jsDelivr und Google geladen; dabei wird deine IP-Adresse übertragen, keine Bilder."}
+          "Kamerabilder verlassen dein Gerät nie. Die Bewegungserkennung läuft vollständig auf deinem Gerät."}
         {camera && extra ? " " : null}
         {extra}
       </span>

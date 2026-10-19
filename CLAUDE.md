@@ -107,9 +107,9 @@ Der Server heißt **`dancebeat-playwright`**, seine Tools tragen das Präfix
 Server): nicht verwenden, den Nutzer informieren.
 
 - Vorher `bun run dev` starten und `http://localhost:5173` öffnen. Nur localhost und 127.0.0.1
-  sind erlaubt; andere Origins blockiert der Browser (`ERR_BLOCKED_BY_CLIENT`). Für Etappe 2
-  `https://cdn.jsdelivr.net` und `https://storage.googleapis.com` in `network.allowedOrigins`
-  ergänzen. Die Sperre ist eine Schutzhilfe, keine Sicherheitsgrenze.
+  sind erlaubt; andere Origins blockiert der Browser (`ERR_BLOCKED_BY_CLIENT`). MediaPipe kommt
+  seit Etappe 7b-1 von localhost, CDN-Freigaben sind dafür nicht mehr nötig. Die Sperre ist eine
+  Schutzhilfe, keine Sicherheitsgrenze.
 - **Vor jedem Test mit Kamera** per `ps aux | grep -i playwright` prüfen, dass der laufende
   Playwright-Chromium headless läuft und die Flags `--use-fake-device-for-media-stream` und
   `--use-fake-ui-for-media-stream` trägt, und dass der MCP-Server der projektlokale aus `.mcp.json`
@@ -124,7 +124,9 @@ Server): nicht verwenden, den Nutzer informieren.
 - Jeden Screen in Hochformat 390×844 (Standard) und Querformat 844×390 (`browser_resize`)
   prüfen, per Snapshot und bei Layoutfragen per Screenshot.
 - Nach jeder Navigation und Interaktion `browser_console_messages` lesen; Fehler und Warnungen
-  aus eigenem Code müssen vor dem Commit weg.
+  aus eigenem Code müssen vor dem Commit weg. Erwartet und kein eigener Fehler: die
+  CSP-Meldungen zu `odml.pa.googleapis.com` (gesperrte MediaPipe-Telemetrie, siehe
+  [docs/architecture.md](docs/architecture.md#externe-abrufe)).
 - Ausgaben landen in `.playwright-mcp/` (ignoriert). Echte Kamera, Audio-Latenz und iOS bleiben
   Gerätetests.
 

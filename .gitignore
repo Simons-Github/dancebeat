@@ -44,6 +44,9 @@ dist-ssr
 *.webm
 *.mkv
 
+# MediaPipe models (downloaded by scripts/fetch-models.ts)
+public/mediapipe/models/
+
 # Misc
 coverage
 

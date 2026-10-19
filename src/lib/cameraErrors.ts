@@ -42,7 +42,7 @@ const ERRORS: Record<CameraErrorKind, Omit<CameraError, "kind">> = {
   },
   model: {
     title: "Erkennung konnte nicht geladen werden",
-    hint: "Beim Start der Kamera lädt DanceBeat Erkennungsmodell und Laufzeit aus dem Internet. Prüfe die Verbindung und tippe auf „Erneut versuchen“.",
+    hint: "Beim Start der Kamera lädt DanceBeat Erkennungsmodell und Laufzeit von der eigenen Adresse der App. Prüfe die Verbindung zur App und tippe auf „Erneut versuchen“.",
   },
   unknown: {
     title: "Kamera konnte nicht gestartet werden",

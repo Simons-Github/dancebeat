@@ -15,7 +15,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | 🔜 (7a umgesetzt)          | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | 🔜 (7a, 7b-1 umgesetzt)    | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ⏳                         | Opus                                                                  |
@@ -43,6 +43,8 @@ verständlich angezeigt.
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
+✅ W12 (Etappe 2, 3b, 7b-1): externe Abrufe in der UI benannt; MediaPipe-WASM und Pose-Modell
+kommen seit 7b-1 von der eigenen Adresse, der Hinweis nennt sie nicht mehr.
 
 ## Etappen
 
@@ -331,7 +333,7 @@ Start-Offset im Dialog „Song hinzufügen“ entfällt: einstellbar über „So
 - [ ] Bildschirmsperre: seit 7a hält ein Wake Lock das Display an (siehe Gerätetest 7a);
       sperrt es trotzdem, pausiert das Spiel über `visibilitychange`.
 
-### 7. PWA und Gerätefunktionen 🔜 (7a umgesetzt, 7b offen)
+### 7. PWA und Gerätefunktionen 🔜 (7a, 7b-1 umgesetzt, 7b-2 offen)
 
 **7a Wake Lock, Haptik, Manifest – umgesetzt, Gerätetest offen.**
 
@@ -360,10 +362,30 @@ Start-Offset im Dialog „Song hinzufügen“ entfällt: einstellbar über „So
       Browserleiste. iOS: „Zum Home-Bildschirm“, Icon, Statusleiste über dem Inhalt lesbar,
       Safe Areas.
 
-**7b Offline (geplant):** Service Worker (Offline, Cache), MediaPipe-WASM und Pose-Modell lokal
-in `public/`, damit nach der Installation keine externen Abrufe mehr nötig sind (W12: Hinweistext
-dann anpassen). Vorher zu entscheiden: eigener Service Worker oder `vite-plugin-pwa` (neue
-Abhängigkeit); Modell per Download-Skript oder im Repo.
+**7b-1 MediaPipe lokal – umgesetzt, Gerätetest offen.** WASM-Laufzeit und lite-Modell kommen
+von der eigenen Adresse der App statt von jsDelivr und Google (Details:
+[architecture.md](architecture.md#externe-abrufe)). WASM per Vite-Plugin aus `node_modules`, Modell
+per Download-Skript mit SHA-256-Prüfung (gitignored, läuft vor `dev` und `build`). Der
+Datenschutzhinweis der Aufstellhilfe nennt keine MediaPipe-Abrufe mehr (W12 erledigt), die
+Fehlermeldung beim Modell-Ladefehler verweist auf die Verbindung zur App. Die eingebaute
+MediaPipe-Telemetrie an `odml.pa.googleapis.com` sperrt eine CSP (`connect-src`), siehe
+architecture.md. Nur die tatsächlich geladenen WASM-Varianten (SIMD, ohne SIMD) werden
+ausgeliefert; der Build bricht ab, wenn das Modell fehlt. Modell-Typ auf „lite“ eingeengt.
+Playwright (nur localhost erlaubt, Fake-Kamera): WASM und Modell kommen mit 200 von localhost,
+die Erkennung läuft (Statuszeilen werden ausgewertet), keine Abrufe an fremde Hosts; nach
+dem Verlassen der Aufstellhilfe blockiert die CSP den Telemetrie-Abruf (Konsolenmeldung, kein
+Netzwerkabruf). Eine echte Pose liefert das Testbild nicht.
+
+Gerätetest 7b-1 (offen):
+
+- [ ] iPhone und Android: Aufstellhilfe startet die Erkennung wie bisher (GPU, sonst CPU),
+      Ladezeit beim ersten Start notieren; im Netzwerk-Tab keine fremden Hosts.
+- [ ] iOS Safari: CSP-Meta greift (Telemetrie blockiert), HMR über `dev:https` funktioniert.
+
+**7b-2 Service Worker (geplant):** Offline-Betrieb und Cache für App-Hülle, WASM und Modell.
+Vorher zu entscheiden: eigener Service Worker oder `vite-plugin-pwa` (neue Abhängigkeit). WASM
+gibt es in drei Varianten zu je ca. 13 MB; für den Cache nur die tatsächlich geladene Variante
+(Laufzeit-Cache statt Precache).
 
 ### 8. „Tanz aus Video erstellen“ mit Editor ⏳
 
@@ -409,7 +431,6 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                       | 10     |
 | W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                       | 3b     |
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                       | 3b     |
-| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                     | 7      |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                     | 11     |
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                 | 11     |
 | N6  | `@tanstack/react-query` bisher ungenutzt                                                                                     | 11     |

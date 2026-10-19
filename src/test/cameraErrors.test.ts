@@ -40,6 +40,7 @@ describe("Kamerafehler", () => {
     const hint = cameraError("model").hint;
     expect(hint).not.toMatch(/ersten Start/);
     expect(hint).toMatch(/Beim Start der Kamera/);
+    expect(hint).not.toMatch(/Internet/);
   });
 
   it("verträgt Nicht-Fehler", () => {

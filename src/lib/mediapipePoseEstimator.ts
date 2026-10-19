@@ -1,12 +1,12 @@
 import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 
-import { createPoseLandmarker } from "./mediapipe";
+import { createPoseLandmarker, type PoseModel } from "./mediapipe";
 import type { PoseDelegate, PoseEstimator } from "./poseEstimator";
 import type { Landmark } from "./types";
 
 /** MediaPipe Pose Landmarker in VIDEO mode. "lite" is the live model; GPU falls back to CPU. */
 export function createMediaPipeEstimator(
-  model: "lite" | "full" = "lite",
+  model: PoseModel = "lite",
   delegate?: PoseDelegate,
 ): PoseEstimator {
   let landmarker: PoseLandmarker | null = null;
