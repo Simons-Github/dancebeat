@@ -82,19 +82,23 @@ umgesetzt). Ein Fehler des Elements nach dem Laden hält die Uhr an und löst `o
 
 - Die Uhr läuft nur im Zustand PLAYING. BUFFERING, PAUSED, CUED und ENDED halten sie an; jede
   Zustandsänderung gleicht hart ab, im Spiel zusätzlich alle 500 ms (Resync).
-- `play()` löst erst bei PLAYING auf. Ist der Player nach 4 s noch UNSTARTED oder CUED
-  (`YT_PLAY_TIMEOUT_MS`), gilt der Start als blockiert (kein Tipp erreichte das Iframe); bei
-  BUFFERING wird bis 15 s (`YT_BUFFER_TIMEOUT_MS`) gewartet. In beiden Fällen wird `play()`
-  abgelehnt, der `GameController` zeigt dann `blocked` („Zum Starten tippen“). Nach einer Ablehnung
-  wartet der nächste `play()`-Aufruf ohne Timeouts, bis ein erfolgreicher Start die Timeouts
-  wieder scharf schaltet.
+- `play()` löst erst bei PLAYING auf. Ist der Player nach 4 s (`YT_PLAY_TIMEOUT_MS`) nicht im
+  Zustand PLAYING, gilt der Start als blockiert (kein Tipp erreichte das Iframe): `play()` wird
+  abgelehnt, der `GameController` zeigt `blocked`. Das gilt auch für BUFFERING, weil iOS einen
+  verweigerten Start oft als dauerhaftes BUFFERING meldet (Gerätetest 3b: Countdown blieb nach
+  einem Reload bei „1“ stehen). Bei BUFFERING wird das Video nicht angehalten; startet es doch
+  noch, kommt das als Start von außen an und das Spiel verlässt `blocked` von selbst. Nach einer
+  Ablehnung wartet der nächste `play()`-Aufruf ohne Timeout, bis ein erfolgreicher Start den
+  Timeout wieder scharf schaltet.
 - `seek` vor dem ersten Start (UNSTARTED, CUED, ENDED) wird in `pendingSeekMs` gemerkt und von
   `play()` angewandt, weil `seekTo` ein nie gestartetes Video starten würde (Annahme, am Gerät
   prüfen). Im Pausenzustand (PAUSED) wird direkt gesprungen, ohne zu starten.
 - Der Player ist im Spiel sichtbar: Er füllt die Coach-Ecke (Box mindestens 200 × 200 px, Vorgabe
   der YouTube-API; siehe [design.md](design.md)). Sonst `pointer-events-none`; im Zustand
-  `blocked` liegt die Box über der Ebene (`z-40`) und ist antippbar, das Overlay zeigt „Falls
-  nichts passiert, tippe direkt auf das Video.“ Meldet YouTube danach PLAYING ohne ausstehendes
+  `blocked` liegt die Box groß in der Bildmitte über der Ebene (`fixed`, `z-40`, goldener Rand) und
+  ist antippbar, das Overlay zeigt „Tippe auf das Video, um zu starten.“ und darunter den Knopf
+  „Zum Starten tippen“ (Desktop, Tastatur). iOS reicht einen Tipp auf der Seite nicht ins Iframe
+  weiter, dort startet nur der Tipp aufs Video. Meldet YouTube danach PLAYING ohne ausstehendes
   `play()`, ruft die Quelle `onExternalStart`, setzt `refusedOnce` zurück und startet den Resync.
   Ob der Tipp aufs Video auf iOS startet, zeigt nur der Gerätetest.
 - Laden: IFrame-API-Skript mit Timeout 15 s (nicht zwischengespeichert, nächster Versuch lädt neu),

@@ -515,18 +515,19 @@ describe("Spielscreen mit YouTube-Quelle", () => {
     expect(phase()).toBe("playing");
   });
 
-  it("blocked: Hinweis aufs Video, Host antippbar; Start im Video führt nach playing", async () => {
+  it("blocked: Video groß in der Mitte und antippbar; Start im Video führt nach playing", async () => {
     const song = library.songs[0];
     if (!song) throw new Error("no song");
     library.songs = [{ ...song, source: { type: "youtube", videoId: "aaaaaaaaaaa" } }];
     audio.refuse = true;
     await renderAt(`/play/${SONG_ID}?sim=1`);
     const host = screen.getByLabelText("YouTube-Video");
-    expect(host).toHaveClass("pointer-events-none");
+    expect(host).toHaveClass("pointer-events-none", "absolute");
     await advance(5100);
     expect(phase()).toBe("blocked");
-    expect(screen.getByText("Falls nichts passiert, tippe direkt auf das Video.")).toBeVisible();
-    expect(host).toHaveClass("pointer-events-auto", "z-40");
+    expect(screen.getByText("Tippe auf das Video, um zu starten.")).toBeVisible();
+    expect(screen.getByRole("button", { name: "Zum Starten tippen" })).toBeInTheDocument();
+    expect(host).toHaveClass("pointer-events-auto", "fixed", "z-40");
     expect(host).not.toHaveClass("pointer-events-none");
 
     // Tap inside the iframe: the page sees no click, only the source's signal.
@@ -536,8 +537,8 @@ describe("Spielscreen mit YouTube-Quelle", () => {
     act(() => audio.external?.());
     await advance(20);
     expect(phase()).toBe("playing");
-    expect(screen.queryByText(/tippe direkt auf das Video/)).toBeNull();
-    expect(host).toHaveClass("pointer-events-none", "z-20");
+    expect(screen.queryByText(/Tippe auf das Video/)).toBeNull();
+    expect(host).toHaveClass("pointer-events-none", "absolute", "z-20");
     expect(audio.calls.filter((c) => c === "play")).toHaveLength(1);
   });
 
@@ -547,7 +548,7 @@ describe("Spielscreen mit YouTube-Quelle", () => {
     await advance(5100);
     expect(phase()).toBe("blocked");
     expect(screen.getByRole("button", { name: "Zum Starten tippen" })).toBeInTheDocument();
-    expect(screen.queryByText(/tippe direkt auf das Video/)).toBeNull();
+    expect(screen.queryByText(/Tippe auf das Video/)).toBeNull();
   });
 
   it("Lokale Songs behalten den Coach und bekommen keinen Container", async () => {

@@ -148,7 +148,8 @@ Gerätetest 3a (Handy):
 [architecture.md](architecture.md#audiosource--spielzeit).
 
 - W5: YouTube-Uhr läuft nur bei PLAYING; `play()` löst erst dann auf; Autoplay-Sperre wird nach
-  4 s (UNSTARTED/CUED) bzw. 15 s (BUFFERING) erkannt und als `blocked` gezeigt.
+  4 s ohne PLAYING erkannt (auch bei BUFFERING, siehe Gerätetest-Befunde unten) und als
+  `blocked` gezeigt.
 - W7: sichtbarer YouTube-Player in der Coach-Ecke (≥ 200 × 200 px, `youtube-nocookie.com`);
   `seek` vor dem Start wird gemerkt, im Pausenzustand springt es ohne zu starten; ungenutztes
   Feld entfernt. Im Zustand `blocked` ist das Video antippbar (Hinweis im Overlay), ein Start im
@@ -169,6 +170,19 @@ Gerätetest 3b (Handy: `bun run dev:https`, `?devsong=youtube:<ID>` bzw.
   Netz weg → Uhr hält bzw. „Die Musik ist abgebrochen“; Datenschutzhinweis nennt YouTube/Host.
 - Desktop: beide Quellen komplett durchspielen; Video mit gesperrtem Einbetten → verständliche
   Meldung; im Netzwerk-Tab kommt das Iframe von `youtube-nocookie.com`.
+
+Gerätetest-Befunde 3b (iPhone, 2026-10-19):
+
+- YouTube nach Reload von `/play/…`: Countdown blieb bei „1“ stehen, Tippen half nicht. Ursache:
+  iOS meldet den verweigerten Start als BUFFERING, die Erkennung wartete dann bis 15 s; der Knopf
+  im Overlay erreicht das Iframe auf iOS nicht. **Behoben:** Ablehnung nach 4 s auch bei
+  BUFFERING, im Zustand `blocked` liegt das Video groß in der Mitte mit „Tippe auf das Video, um
+  zu starten.“ Gerätetest offen.
+- Ein Video zeigte am iPhone „Dieses Video ist nicht verfügbar“, am MacBook lief es. Ein zweites
+  Video lief am iPhone; vermutlich sperrt der Rechteinhaber die Einbettung auf Mobilgeräten. Kein
+  App-Fehler.
+- Musik am iPhone übersteuert bzw. viel zu laut (lokale Datei und URL). Offen, noch nicht
+  untersucht.
 
 ### 4. Ergebnis-Screen und Highscores ✅
 

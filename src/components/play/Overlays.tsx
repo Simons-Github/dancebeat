@@ -81,25 +81,33 @@ export function CountdownOverlay({ count, onCancel }: { count: number; onCancel:
 }
 
 /**
- * play() was refused without a gesture: this tap starts the audio. `hint` (YouTube) points to the
- * video in the coach corner, which stays free and tappable.
+ * play() was refused without a gesture: this tap starts the audio. With `video` (YouTube) the
+ * player sits enlarged in the middle of the screen, above this layer: iOS does not pass a tap on
+ * the page into the iframe, so the tap on the video is the main way. The button stays for desktop
+ * and keyboard.
  */
-export function BlockedOverlay({ onTap, hint }: { onTap: () => void; hint?: string }) {
+export function BlockedOverlay({ onTap, video = false }: { onTap: () => void; video?: boolean }) {
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => ref.current?.focus(), []);
-  return (
-    <Layer>
-      <div className="flex flex-col items-center gap-4">
-        <Button ref={ref} size="lg" onClick={onTap} className={cn(GAME_BTN, "h-20 px-10 text-2xl")}>
+  if (video) {
+    return (
+      <div className="safe-pad absolute inset-0 z-30 flex flex-col items-center justify-between bg-black/60">
+        <p role="status" className="font-title text-center text-2xl landscape:text-xl">
+          Tippe auf das Video, um zu starten.
+        </p>
+        <Button ref={ref} size="lg" variant="secondary" onClick={onTap} className={GAME_BTN}>
           <Play aria-hidden />
           Zum Starten tippen
         </Button>
-        {hint && (
-          <p className="bg-(--hud-scrim) max-w-xs rounded-2xl px-4 py-2 text-center text-base font-bold">
-            {hint}
-          </p>
-        )}
       </div>
+    );
+  }
+  return (
+    <Layer>
+      <Button ref={ref} size="lg" onClick={onTap} className={cn(GAME_BTN, "h-20 px-10 text-2xl")}>
+        <Play aria-hidden />
+        Zum Starten tippen
+      </Button>
     </Layer>
   );
 }

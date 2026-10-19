@@ -406,7 +406,7 @@ export function GameScreen({
           if (motion) void requestMotionPermission();
           controllerRef.current?.tap();
         }}
-        {...(isYouTube ? { hint: "Falls nichts passiert, tippe direkt auf das Video." } : {})}
+        video={isYouTube}
       />
     );
   } else if (phase === "paused") {
@@ -510,9 +510,12 @@ export function GameScreen({
               ref={ytHostRef}
               aria-label="YouTube-Video"
               className={cn(
-                "absolute bottom-0 left-0 size-[max(200px,min(38vw,28dvh))] overflow-hidden rounded-2xl landscape:size-[max(200px,min(26vw,42dvh))]",
-                // Blocked: above the layer and tappable, the tap in the iframe starts YouTube.
-                phase === "blocked" ? "pointer-events-auto z-40" : "pointer-events-none z-20",
+                "overflow-hidden rounded-2xl",
+                // Blocked: large in the middle of the screen, above the layer and tappable; the tap
+                // in the iframe starts YouTube (on iOS the only way). Same node, so the player stays.
+                phase === "blocked"
+                  ? "pointer-events-auto fixed inset-0 z-40 m-auto size-[max(200px,min(80vw,48dvh))] ring-4 ring-gold landscape:size-[max(200px,min(45vw,60dvh))]"
+                  : "pointer-events-none absolute bottom-0 left-0 z-20 size-[max(200px,min(38vw,28dvh))] landscape:size-[max(200px,min(26vw,42dvh))]",
               )}
             />
           ) : (

@@ -200,19 +200,33 @@ describe("YouTubeSource: Start und Autoplay-Sperre", () => {
     src.destroy();
   });
 
-  it("(d) bei BUFFERING wird weiter gewartet, Ablehnung erst nach 15 s", async () => {
+  it("(d) BUFFERING nach 4 s gilt als blockiert (iOS), ohne das Puffern anzuhalten", async () => {
     const { src, player } = await loaded();
     const p = track(src.play());
     player.emit(PlayerState.BUFFERING);
-    await advance(mod.YT_PLAY_TIMEOUT_MS);
-    expect(p.state).toBe("pending");
-    expect(player.pauseVideo).not.toHaveBeenCalled();
-    await advance(mod.YT_BUFFER_TIMEOUT_MS - mod.YT_PLAY_TIMEOUT_MS - 1);
+    await advance(mod.YT_PLAY_TIMEOUT_MS - 1);
     expect(p.state).toBe("pending");
     await advance(1);
     expect(p.state).toBe("rejected");
-    expect((p.error as Error).message).toBe("YouTube-Video lädt nicht. Prüfe Link und Verbindung.");
-    expect(player.pauseVideo).toHaveBeenCalledTimes(1);
+    expect((p.error as Error).message).toBe("YouTube hat den Start blockiert. Tippe zum Starten.");
+    expect(player.pauseVideo).not.toHaveBeenCalled();
+    expect(src.getTimeMs()).toBe(0);
+    src.destroy();
+  });
+
+  it("(d) startet ein langsamer Start nach der Ablehnung doch, meldet er sich als Start von außen", async () => {
+    const { src, player } = await loaded();
+    const onExternal = vi.fn();
+    src.onExternalStart?.(onExternal);
+    const p = track(src.play());
+    player.emit(PlayerState.BUFFERING);
+    await advance(mod.YT_PLAY_TIMEOUT_MS);
+    expect(p.state).toBe("rejected");
+
+    player.emit(PlayerState.PLAYING);
+    expect(onExternal).toHaveBeenCalledTimes(1);
+    await advance(500);
+    expect(src.getTimeMs()).toBe(500);
     src.destroy();
   });
 
@@ -251,7 +265,7 @@ describe("YouTubeSource: Start und Autoplay-Sperre", () => {
     src.pause();
     player.emit(PlayerState.CUED);
     const third = track(src.play());
-    expect(vi.getTimerCount()).toBe(3); // resync + 4 s + 15 s
+    expect(vi.getTimerCount()).toBe(2); // resync + 4 s
     await advance(mod.YT_PLAY_TIMEOUT_MS);
     expect(third.state).toBe("rejected");
     expect(player.pauseVideo).toHaveBeenCalledTimes(3); // refusal, pause, refusal
@@ -272,7 +286,7 @@ describe("YouTubeSource: Start und Autoplay-Sperre", () => {
   it("pause() und destroy() lehnen ein ausstehendes play() ab und räumen die Timeouts auf", async () => {
     const { src } = await loaded();
     const a = track(src.play());
-    expect(vi.getTimerCount()).toBe(3); // resync + 4 s + 15 s
+    expect(vi.getTimerCount()).toBe(2); // resync + 4 s
     src.pause();
     await tick();
     expect(a.state).toBe("rejected");
@@ -465,7 +479,7 @@ describe("YouTubeSource: Start von außen (Tipp aufs Video)", () => {
     src.pause();
     player.emit(PlayerState.CUED);
     const next = track(src.play());
-    expect(vi.getTimerCount()).toBe(3); // resync + 4 s + 15 s
+    expect(vi.getTimerCount()).toBe(2); // resync + 4 s
     await advance(mod.YT_PLAY_TIMEOUT_MS);
     expect(next.state).toBe("rejected");
     src.destroy();

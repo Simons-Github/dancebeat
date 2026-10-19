@@ -243,12 +243,11 @@ export function parseYouTubeId(input: string) {
 }
 
 /**
- * `play()` waits for PLAYING. Still UNSTARTED or CUED after this time: autoplay was refused
- * (no gesture reached the iframe). Assumed value, to be tuned on devices.
+ * `play()` waits for PLAYING. Not PLAYING after this time: the start counts as refused (no gesture
+ * reached the iframe). iOS often reports BUFFERING for a refused start and stays there, so
+ * BUFFERING counts too; a slow but allowed start still arrives later as an external start.
  */
 export const YT_PLAY_TIMEOUT_MS = 4000;
-/** BUFFERING at the refusal check: wait up to this time (from `play()`) before giving up. */
-export const YT_BUFFER_TIMEOUT_MS = 15000;
 
 const YT_STATE_UNSTARTED = -1;
 
@@ -433,22 +432,17 @@ class YouTubeSource implements AudioSource {
     player.playVideo();
     this.startResync(api);
     if (!this.refusedOnce) {
-      const refuse = (message: string) => {
-        this.refusedOnce = true;
-        this.active = false;
-        player.pauseVideo();
-        this.settlePlay(new Error(message));
-      };
       pending.timers.push(
         window.setTimeout(() => {
           const s = this.ytState;
-          if (s === YT_STATE_UNSTARTED || s === api.PlayerState.CUED)
-            refuse("YouTube hat den Start blockiert. Tippe zum Starten.");
+          if (s === api.PlayerState.PLAYING) return;
+          this.refusedOnce = true;
+          this.active = false;
+          // Buffering keeps going: should it start after all, stateChanged reports an external
+          // start and the game leaves "blocked" by itself.
+          if (s !== api.PlayerState.BUFFERING) player.pauseVideo();
+          this.settlePlay(new Error("YouTube hat den Start blockiert. Tippe zum Starten."));
         }, YT_PLAY_TIMEOUT_MS),
-        window.setTimeout(
-          () => refuse("YouTube-Video lädt nicht. Prüfe Link und Verbindung."),
-          YT_BUFFER_TIMEOUT_MS,
-        ),
       );
     }
     return promise;
