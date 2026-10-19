@@ -65,7 +65,7 @@ export function SetupScreen({
   const [showDiag, setShowDiag] = useState(false);
   const [body, setBody] = useState<BodyStatus | null>(null);
   const [reached, setReached] = useState(false);
-  const [autoStart] = useState(() => isAutoStartArmed(songId));
+  const [autoStart] = useState(() => getSettings().autoStart && isAutoStartArmed(songId));
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tracker] = useState(() => createBodyTracker());
@@ -170,7 +170,7 @@ export function SetupScreen({
     rearmAutoStart(songId);
     play();
   };
-  // Auto-start (always on until the setting in stage 5).
+  // Auto-start: setting "autoStart" and not cancelled during the countdown of this song.
   useEffect(() => {
     if (ready && autoStart) play();
   }, [ready, autoStart, play]);
@@ -260,11 +260,13 @@ export function SetupScreen({
                 {lowLight && <p className="text-base">{LIGHT_HINT}</p>}
                 {autoStart ? (
                   <p className="text-base">Sobald alles passt, geht es von selbst los.</p>
-                ) : (
+                ) : settings.autoStart ? (
                   <p className="text-base">
                     Automatischer Start ist aus, weil du abgebrochen hast. Tippe auf „Los
                     geht&apos;s“, wenn du bereit bist.
                   </p>
+                ) : (
+                  <p className="text-base">Tippe auf „Los geht&apos;s“, wenn du bereit bist.</p>
                 )}
               </>
             )}

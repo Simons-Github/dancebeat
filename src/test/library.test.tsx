@@ -4,6 +4,7 @@ import { cleanup, fireEvent, render, screen, within } from "@testing-library/rea
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Song } from "@/lib/types";
+import { resetSettingsCacheForTests } from "@/lib/settings";
 import { routeTree } from "@/routeTree.gen";
 import { makeChoreo, makeSong } from "./fixtures";
 
@@ -120,6 +121,7 @@ describe("Song library", () => {
     cleanup();
 
     localStorage.setItem("dancebeat.settings", JSON.stringify({ lastSongId: "gone" }));
+    resetSettingsCacheForTests(); // storage was edited behind the settings module's back
     await renderAt("/");
     expect(await screen.findByRole("button", { name: /Pink Pulse/ })).toHaveAttribute(
       "aria-pressed",
@@ -148,9 +150,9 @@ describe("Other routes", () => {
     expect(await screen.findByText("Song nicht gefunden")).toBeInTheDocument();
   });
 
-  it("shows the settings placeholder", async () => {
+  it("shows the settings screen", async () => {
     await renderAt("/settings");
-    expect(await screen.findByText("Einstellungen folgen")).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Spiel" })).toBeInTheDocument();
   });
 
   it("shows the German 404 page for unknown paths", async () => {

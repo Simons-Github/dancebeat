@@ -1,7 +1,8 @@
 import type { AngleKey, Angles, Rating } from "./types";
 import { ARM_KEYS, angleDiff } from "./pose";
 
-export type Difficulty = "leicht" | "normal" | "schwer";
+export const DIFFICULTIES = ["leicht", "normal", "schwer"] as const;
+export type Difficulty = (typeof DIFFICULTIES)[number];
 export const TOLERANCE: Record<Difficulty, number> = { leicht: 1.3, normal: 1, schwer: 0.8 };
 export const POINTS: Record<Rating, number> = {
   PERFECT: 1000,

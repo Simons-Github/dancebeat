@@ -151,6 +151,21 @@ describe("Aufstellhilfe: Einrasten und Heartbeat", () => {
     expect(router.state.location.pathname).toBe("/play/song-1");
   });
 
+  it("Einstellung „Automatisch starten“ aus: kein Auto-Start, Knopf startet", async () => {
+    resetSessionForTests(); // armed for this song, but the setting is off
+    localStorage.setItem("dancebeat.settings", JSON.stringify({ autoStart: false }));
+    const router = await startSetup();
+    expect(screen.queryByText(/Automatischer Start ist aus/)).not.toBeInTheDocument();
+    expect(screen.queryByText("Sobald alles passt, geht es von selbst los.")).toBeNull();
+    expect(screen.getByText("Tippe auf „Los geht's“, wenn du bereit bist.")).toBeInTheDocument();
+    await runFrames(1500);
+    expect(goButton()).toBeEnabled();
+    expect(router.state.location.pathname).toBe("/setup/song-1");
+    fireEvent.click(goButton());
+    await idle(10);
+    expect(router.state.location.pathname).toBe("/play/song-1");
+  });
+
   it("schaltet erst nach einer Sekunde im Bild frei", async () => {
     await startSetup();
     await runFrames(500);

@@ -1,4 +1,9 @@
 import "@testing-library/jest-dom/vitest";
+import { afterEach } from "vitest";
+
+import { resetSettingsCacheForTests } from "@/lib/settings";
+
+afterEach(resetSettingsCacheForTests);
 
 Object.defineProperty(window, "scrollTo", {
   writable: true,
@@ -28,3 +33,10 @@ HTMLMediaElement.prototype.play = function () {
 };
 HTMLMediaElement.prototype.pause = () => {};
 HTMLMediaElement.prototype.load = () => {};
+
+// jsdom has no ResizeObserver (Radix slider and switch measure with it).
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};

@@ -192,6 +192,15 @@ die IndexedDB-Implementierung; eine Server-Variante kann dieselbe Schnittstelle 
   Transaktion geschrieben, `delete` entfernt beides in einer Transaktion.
 - Promises lösen erst nach `oncomplete` der Transaktion auf. `QuotaExceededError` wird zu
   `StorageFullError` mit deutscher Meldung.
+- Einstellungen (`src/lib/settings.ts`) werden beim Lesen mit zod geprüft, pro Feld: ein
+  ungültiger Wert fällt auf seinen Standard zurück, die übrigen bleiben erhalten. Lautstärke und
+  Latenz-Ausgleich (±500 ms) werden begrenzt, unbekannte Schlüssel verworfen. Schreibfehler
+  (Quota, privater Modus) werden abgefangen; die Oberfläche arbeitet dann mit dem Wert im
+  Speicher weiter. `autoStart` (Standard an) steuert den Auto-Start der Aufstellhilfe.
+  Einstellungen haben bewusst keine Version und keine Migration: jedes Feld fällt über zod
+  `.catch` auf seinen Standard zurück, Formatänderungen ergänzen also nur Felder mit Standardwert.
+  Das Schema liegt in `settings.ts` und nicht in `schema.ts`, weil es eine gerätelokale
+  Vorliebe ist und keine Bibliotheksdaten.
 - `src/lib/library/storage.ts`: `requestPersistentStorage()` (Safari löscht sonst Daten nicht
   installierter Seiten nach 7 Tagen ohne Nutzung) und `getStorageUsage()` für die Anzeige.
 

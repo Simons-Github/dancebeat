@@ -13,7 +13,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
 | 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳                         | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a)                    | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
@@ -191,11 +191,23 @@ Umgesetzt:
 - **Offen:** Gerätetest (Animationen, Konfetti-Leistung, Lesbarkeit). Nach einem Neuladen ist der
   Endstand weg und der Screen zeigt „Kein Ergebnis“; das ist so gewollt.
 
-### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ ⏳
+### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a umgesetzt)
 
-- Einstellung „Automatisch starten“ (Aufstellhilfe startet nach Countdown von selbst).
-- Einstellungen: Kamera wählen, Lautstärke, globaler Latenz-Offset (Slider), Skelett an/aus,
-  Schwierigkeit, Kamera spiegeln (nur Anzeige).
+**5a Einstellungen – umgesetzt, Gerätetest offen.**
+
+- `/settings` (`SettingsScreen`): Schwierigkeit, „Automatisch starten“, Lautstärke,
+  Latenz-Ausgleich (±500 ms, Schritt 10, „Zurücksetzen“), Skelett, Beat-Puls, Kamerabild
+  spiegeln, belegter Speicher (`getStorageUsage`). Slider schreiben beim Loslassen.
+- Neue Einstellung `autoStart`; die Aufstellhilfe startet nur bei `autoStart` und scharfem Auto-Start.
+- Settings werden beim Lesen pro Feld mit zod geprüft; Schreibfehler werden abgefangen.
+- Kamerawahl bleibt in der Aufstellhilfe: Gerätenamen gibt es erst nach der Kamera-Berechtigung.
+  In den Einstellungen nur „Gespeicherte Kamera vergessen“.
+- Playwright (390×844 und 844×390): Werte bleiben nach Neuladen, kaputte Werte im localStorage
+  fallen auf Standard zurück, Seite scrollt, Konsole sauber.
+- **Offen:** Gerätetest (Slider-Bedienung per Touch, Lesbarkeit, Safe Areas).
+
+**Noch offen in Etappe 5:**
+
 - Sync-Test pro Song: zum Beat tippen, Offset berechnen und speichern. Warnsymbol bei Quellen mit
   geringer Timing-Genauigkeit (YouTube, Spotify).
 - Löschen und Umbenennen von Songs (über `SongRepository`). Seed-Regel: gelöschte Demo-Songs
@@ -267,7 +279,7 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                           | 10     |
 | W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                           | 3b     |
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                           | 3b     |
-| W11 | Persistenz anfragen, Speicheranzeige, Settings-Validierung                                                                       | 5      |
+| W11 | Teilweise: Settings-Validierung erledigt (5a); Persistenz-Anfrage und `StorageFullError`-Anzeige offen                           | 5      |
 | W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                         | 7      |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                         | 11     |
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                     | 11     |
