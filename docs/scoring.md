@@ -172,8 +172,39 @@ Die Abweichung wird durch den Toleranzfaktor der Schwierigkeit geteilt und dann 
 
 ## Bewegungsmodus
 
-`sample` nimmt optional eine Funktion `intensityRating`, die statt der Winkel ein Urteil liefert
-(geplant für den Bewegungsmodus mit DeviceMotion, Etappe 6).
+Spielen ohne Kamera: Das Handy liegt in der Hand, DeviceMotion misst die Bewegungsintensität um
+jeden Move. Logik in `src/lib/motion.ts`, Konstanten in `MOTION`.
+
+- **Messgröße:** Betrag der linearen Beschleunigung (`event.acceleration`, m/s², ohne
+  Schwerkraft). Fehlt sie, Ersatz aus `accelerationIncludingGravity` mit Hochpass: Die Schwerkraft
+  wird per Tiefpass geschätzt (`gravityAlpha` 0,8) und abgezogen. Messungen mit fehlender Achse
+  werden verworfen.
+- **Zeitstempel:** Jede Messung bekommt beim Eintreffen die Spielzeit (`useAudioClock`), nie
+  `event.timeStamp`, und nur während `playing`. Springt die Spielzeit zurück (Start, Neustart),
+  leert der Aufrufer den Puffer (`MotionMeter.reset()`); „Weiter“ spult nicht zurück, Messungen
+  von vor der Pause zählen also im selben Fenster weiter. Der Puffer hält höchstens 600 Messungen.
+- **Fenster:** wie im Winkelmodus `move.timeMs ± MOVE_WINDOW_MS` (250 ms). Wert = Mittelwert des
+  Betrags im Fenster. Weniger als `MOTION.minSamples` (3) Messungen → kein Wert → X; fehlende Daten
+  zählen nie als 0.
+- **Urteil** (`judgeIntensity`), Schwellen in m/s², mal Faktor je Schwierigkeit (leicht 0,7,
+  normal 1, schwer 1,4), Gold-Moves zusätzlich × 1,25. Startwerte, am Gerät abzustimmen.
+
+| Urteil  | normal                   | leicht   | schwer   |
+| ------- | ------------------------ | -------- | -------- |
+| PERFECT | ≥ 6                      | ≥ 4,2    | ≥ 8,4    |
+| SUPER   | ≥ 4                      | ≥ 2,8    | ≥ 5,6    |
+| GOOD    | ≥ 2,5                    | ≥ 1,75   | ≥ 3,5    |
+| OK      | ≥ 1,2                    | ≥ 0,84   | ≥ 1,68   |
+| X       | darunter, oder kein Wert | darunter | darunter |
+
+- **Ablauf:** `Scorer.sample(t, null, intensityRating)` ersetzt den Winkelvergleich; die Funktion
+  bekommt Move und Fenster (`fromMs`, `toMs`). Der `GameController` mit `motion`-Abhängigkeit wertet
+  nur über die Uhr (höchstens alle `sampleMs`, kein Stall-Pfad); der Hinweis erscheint, wenn
+  `bodyMissingMs` lang keine Sensormessung kam. Punkte, Combo, Gold und Sterne wie im Kameramodus.
+- **Grenze:** Dauerhaftes Schütteln wird belohnt. Geprüft wird nur, ob um die Moves herum genug
+  Bewegung ist, nicht welche Bewegung und nicht, ob sie im Takt liegt.
+- **Highscore:** wird wie im Kameramodus gespeichert (gleicher Song, gleiches Feld, kein
+  Formatwechsel). Ein Bewegungsmodus-Ergebnis kann also einen Kamera-Highscore überschreiben.
 
 ## Simulierter Spieler
 

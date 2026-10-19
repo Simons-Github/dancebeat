@@ -187,3 +187,29 @@ describe("seekTo und startOffsetMs", () => {
     spy.mockRestore();
   });
 });
+
+describe("Bewegungsmodus (intensityRating)", () => {
+  it("ersetzt den Winkelvergleich und bekommt Move und Fenster", () => {
+    const c = choreo(2, [1]);
+    const s = new Scorer(c);
+    const rating = vi.fn(() => "GOOD" as const);
+    s.sample(1000, null, rating);
+    expect(rating).not.toHaveBeenCalled();
+    const results = s.sample(2300, s.target(1)!, rating);
+    expect(results.map((r) => r.rating)).toEqual(["GOOD", "GOOD"]);
+    expect(rating).toHaveBeenNthCalledWith(
+      1,
+      c.moves[0],
+      1000 - MOVE_WINDOW_MS,
+      1000 + MOVE_WINDOW_MS,
+    );
+    expect(rating).toHaveBeenNthCalledWith(
+      2,
+      c.moves[1],
+      2000 - MOVE_WINDOW_MS,
+      2000 + MOVE_WINDOW_MS,
+    );
+    // Gold still multiplies the points.
+    expect(results[1]?.points).toBe(POINTS.GOOD * GOLD_FACTOR);
+  });
+});

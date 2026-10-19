@@ -6,6 +6,7 @@ import { GameScreen } from "@/components/play/GameScreen";
 import { useSongLibrary } from "@/hooks/useSongLibrary";
 import { useSongTheme } from "@/hooks/useSongTheme";
 import { parseSimParams } from "@/lib/game/simulatedPlayer";
+import { parsePlayMode } from "@/lib/motion";
 
 export const Route = createFileRoute("/play/$songId")({
   component: Play,
@@ -19,6 +20,8 @@ function Play() {
   const song = songs.find((s) => s.id === songId);
   // Dev builds only: `?sim=1&noise=10&miss=0.1` plays without camera (see simulatedPlayer.ts).
   const sim = import.meta.env.DEV ? parseSimParams(search) : null;
+  // `?mode=motion`: movement mode without camera (all builds).
+  const mode = parsePlayMode(search);
 
   useEffect(() => {
     if (song) {
@@ -44,5 +47,6 @@ function Play() {
       </PlaceholderPage>
     );
   }
-  return <GameScreen key={song.id} song={song} sim={sim} />;
+  // Keyed on the mode too: switching camera ↔ motion needs a fresh controller.
+  return <GameScreen key={`${song.id}:${mode}`} song={song} sim={sim} mode={mode} />;
 }

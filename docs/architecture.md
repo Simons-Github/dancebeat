@@ -161,6 +161,23 @@ Abbrechen im Countdown ──▶ /setup/$songId
 - Piktogramme (`src/lib/game/pikto.ts`): reine Funktionen für Positionen (`piktoLayout`),
   Blitzplan (höchstens 3 pro Sekunde), Strichfiguren aus Landmarks (`stickFigure`) und die feste
   Coach-Ansicht (`coachView`). Gezeichnet wird in `src/lib/game/draw.ts`.
+- **Bewegungsmodus** (alle Builds): `/play/<id>?mode=motion` (`parsePlayMode` in
+  `src/lib/motion.ts`). Die Aufstellhilfe startet ihn über „Ohne Kamera spielen“ (in der
+  Startkarte und neben dem Kamera-Fehler); der Tipp ruft `unlockAudio()` und
+  `requestMotionPermission()` synchron auf. Nach „granted“ wartet `probeMotionSensor()` bis zu
+  1 s (`MOTION.probeTimeoutMs`) auf ein `devicemotion`-Event mit Messwerten; erst dann geht es
+  ins Spiel, sonst „Dieses Gerät hat keinen Bewegungssensor.“ (Desktop und Android ohne Sensor
+  melden „granted“ ohne Dialog). Im Spiel ist `usePoseTracking` aus (kein `getUserMedia`, kein
+  Video, kein Skelett, keine Kamera-Pause, kein Skelett-Schalter im Pausenmenü). Datenfluss:
+  `useDeviceMotion` (Listener auf `devicemotion` im Effekt, Callback-Ref, kein `setState`) →
+  `MotionMeter.push(timeMs(), …)` mit der Spielzeit aus `useAudioClock`, nur in `playing` → der
+  Controller bekommt die Dep `motion` (`motionScoring(meter, () => difficulty)`), schließt die
+  Fenster allein über die Uhr und meldet `bodyMissing` ohne Sensordaten („Keine Bewegung erkannt
+  – Handy in der Hand halten.“). Der Messpuffer wird bei Start und Neustart geleert (Countdown
+  mit Vorlauf, die Spielzeit springt zurück); „Weiter“ behält ihn. In `blocked` fragt „Zum
+  Starten tippen“ die Sensor-Berechtigung erneut an (iOS nach Neuladen). Bewertung:
+  [scoring.md](scoring.md#bewegungsmodus). `?mode=motion` hat Vorrang vor `?sim=1`; die Route
+  keyt `GameScreen` auf Song und Modus.
 - **Simulationsmodus** (nur Dev-Server): `/play/<id>?sim=1&noise=<Grad>&miss=<0..1>` ersetzt die
   Kamera durch `simulatedAngles` (Winkel der Choreografie plus Rauschen). Alle Stellen stehen
   hinter `import.meta.env.DEV`; im Produktions-Build ist der Code nicht enthalten (geprüft per

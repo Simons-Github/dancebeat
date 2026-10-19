@@ -14,7 +14,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
+| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
@@ -293,11 +293,43 @@ Umgesetzt:
 
 Start-Offset im Dialog „Song hinzufügen“ entfällt: einstellbar über „Song bearbeiten“.
 
-### 6. Bewegungsmodus ⏳
+### 6. Bewegungsmodus ✅ (Gerätetest offen)
 
 - Wenn keine Kamera erlaubt ist: Handy in der Hand halten. DeviceMotion (inkl.
   iOS-Berechtigungsabfrage) misst die Bewegungsintensität im Takt; Bewertung über
   `intensityRating` in `useScoring`.
+
+**Umgesetzt:**
+
+- Logik: `src/lib/motion.ts` (`MotionMeter`, `judgeIntensity`, `requestMotionPermission`,
+  `parsePlayMode`), Dep `motion` im `GameController`, dritter Parameter von `Scorer.sample`.
+  Schwellen und Grenzen in [scoring.md](scoring.md#bewegungsmodus).
+- Aufstellhilfe: Knopf „Ohne Kamera spielen“ mit kurzem Hinweis in der Startkarte und neben dem
+  Kamera-Fehler. Abgelehnt: „Bewegungssensor nicht erlaubt …“, kein Sensor: „Dieses Gerät hat
+  keinen Bewegungssensor.“ (auch, wenn nach „granted“ binnen 1 s keine Messung kommt).
+- Spiel mit `?mode=motion`: keine Kamera, kein Video, kein Skelett; Hinweis „Keine Bewegung
+  erkannt – Handy in der Hand halten.“; dezentes Badge „Bewegungsmodus“; Pausenmenü ohne
+  Skelett-Schalter. Messungen mit Spielzeit aus `useAudioClock`, Puffer-Reset bei Start und
+  Neustart (nicht bei Weiter). Highscore wie im Kameramodus.
+- Tests: Spielscreen (kein `getUserMedia`, synthetische `devicemotion`-Events ergeben Urteile,
+  ohne Events Hinweis und X), Aufstellhilfe (Knopf, Navigation, Ablehnung, kein Sensor),
+  `useDeviceMotion`.
+- Nur am Gerät prüfbar: echte Sensorwerte, iOS-Dialog, Gefühl der Schwellen.
+
+**Gerätetest 6 (offen):**
+
+- [ ] iOS: Berechtigungsdialog erscheint beim Tipp auf „Ohne Kamera spielen“, Ablehnung zeigt
+      die Meldung.
+- [ ] iOS: `/play/<id>?mode=motion` neu laden → „Zum Starten tippen“ fragt erneut, danach kommen
+      Messungen an (sonst Hinweis „Keine Bewegung erkannt“).
+- [ ] Gerät ohne Sensor bzw. Desktop: nach etwa 1 s Meldung „Dieses Gerät hat keinen
+      Bewegungssensor.“, auf echten Handys startet das Spiel ohne spürbare Wartezeit.
+- [ ] Android ohne `acceleration` (nur `accelerationIncludingGravity`): Hochpass-Ersatz liefert
+      sinnvolle Werte, kein Ausschlag beim Start.
+- [ ] Schwellen: fühlt sich PERFECT verdient an, wird Stillhalten zu X, Gold spürbar schwerer;
+      je Schwierigkeit.
+- [ ] Bildschirmsperre: ohne Kamera kann das Handy während des Songs sperren (Wake Lock erst in
+      Etappe 7); dann pausiert das Spiel über `visibilitychange`.
 
 ### 7. PWA und Gerätefunktionen ⏳
 

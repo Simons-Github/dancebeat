@@ -17,6 +17,7 @@ import { RatingPopup } from "@/components/play/RatingPopup";
 import { CameraErrorPanel } from "@/components/setup/CameraErrorPanel";
 import { Button } from "@/components/ui/button";
 import { useAudioClock } from "@/hooks/useAudioClock";
+import { useDeviceMotion } from "@/hooks/useDeviceMotion";
 import { usePoseTracking, type FrameInfo } from "@/hooks/usePoseTracking";
 import { useScoring } from "@/hooks/useScoring";
 import { claimSharedElement } from "@/lib/audio/unlock";
@@ -29,6 +30,13 @@ import { recordResultSafely } from "@/lib/game/results";
 import { disarmAutoStart, setLastResult } from "@/lib/game/session";
 import { simulatedAngles, type SimOptions } from "@/lib/game/simulatedPlayer";
 import { songRepository } from "@/lib/library/repository";
+import {
+  MotionMeter,
+  motionScoring,
+  requestMotionPermission,
+  type MotionSample,
+  type PlayMode,
+} from "@/lib/motion";
 import { MOVE_WINDOW_MS } from "@/lib/scorer";
 import { computeAngles } from "@/lib/pose";
 import { getSettings, useSettings } from "@/lib/settings";
@@ -57,8 +65,21 @@ const INITIAL: GameState = {
  * detection callback and draws to canvases; React renders only on phase changes and judgements.
  *
  * `sim` (dev builds only) replaces the camera with the choreography's own angles plus noise.
+ * `mode="motion"` plays without camera: the phone's motion sensor rates each move by intensity
+ * (src/lib/motion.ts); no video, no skeleton, no camera pause. It wins over `sim`.
  */
-export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }) {
+export function GameScreen({
+  song,
+  sim: simOption,
+  mode = "camera",
+}: {
+  song: Song;
+  sim: SimOptions | null;
+  mode?: PlayMode;
+}) {
+  const motion = mode === "motion";
+  const sim = motion ? null : simOption;
+  const noCamera = motion || !!sim;
   const navigate = useNavigate();
   const [settings, saveSettings] = useSettings();
   const reducedMotion = useReducedMotion() ?? false;
@@ -93,6 +114,19 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
   });
   const scoring = useScoring(choreo, settings.difficulty);
   const timeMs = audio.timeMs;
+  // Movement mode: sensor measurements filed under game time. Settings load after the first
+  // render, so the controller reads the difficulty through a ref.
+  const [meter] = useState(() => new MotionMeter());
+  const difficulty = useRef(settings.difficulty);
+  difficulty.current = settings.difficulty;
+  const onMotion = useCallback(
+    (sample: MotionSample) => {
+      // Only while the music runs: the clock stands still in countdown and pause.
+      if (controllerRef.current?.state.phase === "playing") meter.push(timeMs(), sample);
+    },
+    [meter, timeMs],
+  );
+  useDeviceMotion(motion, onMotion);
 
   useEffect(() => setSfxVolume(settings.volume), [settings.volume]);
   // The stored camera is read once, then the camera starts (no restart when settings load).
@@ -112,13 +146,13 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
   }, []);
 
   const camera = usePoseTracking({
-    enabled: !sim && cameraId !== null,
+    enabled: !noCamera && cameraId !== null,
     ...(cameraId ? { cameraId } : {}),
     retryKey,
     onFrame,
     onStaleCamera: () => saveSettings({ cameraId: "" }),
   });
-  const cameraReady = !!sim || camera.status === "ready";
+  const cameraReady = noCamera || camera.status === "ready";
 
   // What the end of the game hands to the result screen. The best result is stored in the song
   // first; a storage error or a slow save is logged and never keeps the player from the result.
@@ -170,7 +204,13 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
       startOffsetMs: song.startOffsetMs,
       endMs,
       rate: song.playbackRate ?? 1,
-      onState: setGame,
+      onState: (s) => {
+        // Start and restart rewind the song and begin with the lead-in (count 0): measurements
+        // from before belong to another song time. "Weiter" keeps them (no rewind, count 3).
+        if (s.phase === "countdown" && s.count === 0) meter.reset();
+        setGame(s);
+      },
+      ...(motion ? { motion: motionScoring(meter, () => difficulty.current) } : {}),
       onEnd: () => finishRef.current(),
       onBeep: (n) => sfx.beep(n === 0),
     });
@@ -321,20 +361,29 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
         <p className="text-base">{audio.error}</p>
       </MessageOverlay>
     );
-  } else if (!sim && camera.error && phase !== "paused") {
+  } else if (!noCamera && camera.error && phase !== "paused") {
     overlay = (
       <MessageOverlay title="Ohne Kamera geht es nicht" actions={backToSetup}>
         <CameraErrorPanel error={camera.error} onRetry={() => setRetryKey((k) => k + 1)} />
       </MessageOverlay>
     );
   } else if (phase === "preparing") {
-    overlay = <PreparingOverlay onCancel={cancel} />;
+    overlay = (
+      <PreparingOverlay
+        onCancel={cancel}
+        {...(motion ? { label: "Musik wird vorbereitet …" } : {})}
+      />
+    );
   } else if (phase === "countdown" && game.count !== null) {
     overlay = <CountdownOverlay count={game.count} onCancel={cancel} />;
   } else if (phase === "blocked") {
     overlay = (
       <BlockedOverlay
-        onTap={() => controllerRef.current?.tap()}
+        onTap={() => {
+          // After a reload iOS asks again; this tap is the gesture it needs.
+          if (motion) void requestMotionPermission();
+          controllerRef.current?.tap();
+        }}
         {...(isYouTube ? { hint: "Falls nichts passiert, tippe direkt auf das Video." } : {})}
       />
     );
@@ -343,8 +392,8 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
       <PauseMenu
         reason={game.pauseReason}
         canResume={cameraReady && visible}
-        cameraError={sim ? null : camera.error}
-        skeleton={settings.skeleton}
+        cameraError={noCamera ? null : camera.error}
+        skeleton={motion ? null : settings.skeleton}
         beatPulse={settings.beatPulse}
         onResume={() => controllerRef.current?.resume()}
         onRestart={() => controllerRef.current?.restart()}
@@ -365,7 +414,7 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
     >
       {/* Camera picture (mirrored like a mirror) with skeleton. */}
       <div className={cn("absolute inset-0", settings.mirror && "-scale-x-100")}>
-        {!sim && (
+        {!noCamera && (
           <video
             ref={camera.videoRef}
             muted
@@ -374,11 +423,13 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
             className="size-full object-cover"
           />
         )}
-        <canvas
-          ref={skeletonRef}
-          aria-hidden
-          className={cn("absolute inset-0 size-full", sim ? "object-contain" : "object-cover")}
-        />
+        {!motion && (
+          <canvas
+            ref={skeletonRef}
+            aria-hidden
+            className={cn("absolute inset-0 size-full", sim ? "object-contain" : "object-cover")}
+          />
+        )}
       </div>
       <div
         aria-hidden
@@ -426,7 +477,9 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
               role="status"
               className="bg-(--hud-scrim) absolute inset-x-0 top-8 mx-auto w-fit max-w-full rounded-2xl px-4 py-2 text-center text-base font-bold"
             >
-              Wir sehen dich nicht. Stell dich wieder ganz ins Bild.
+              {motion
+                ? "Keine Bewegung erkannt – Handy in der Hand halten."
+                : "Wir sehen dich nicht. Stell dich wieder ganz ins Bild."}
             </p>
           )}
           <RatingPopup judgement={scoring.last} />
@@ -453,6 +506,11 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
       {import.meta.env.DEV && sim && (
         <p className="absolute bottom-2 right-3 z-20 rounded-full bg-black/70 px-3 py-1 text-xs font-bold">
           SIMULATION · Rauschen {sim.noiseDeg}° · Ausfall {Math.round(sim.missRate * 100)} %
+        </p>
+      )}
+      {motion && (
+        <p className="absolute bottom-2 right-3 z-20 rounded-full bg-black/50 px-3 py-1 text-xs font-bold text-white/90">
+          Bewegungsmodus
         </p>
       )}
       {overlay}

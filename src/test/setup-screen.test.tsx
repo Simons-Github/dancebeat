@@ -1,8 +1,9 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { probeMotionSensor, requestMotionPermission } from "@/lib/motion";
 import type { Song } from "@/lib/types";
 import { routeTree } from "@/routeTree.gen";
 import { makeChoreo, makeSong } from "./fixtures";
@@ -12,10 +13,18 @@ vi.mock("@/hooks/useSongLibrary", () => ({
   useSongLibrary: () => ({ songs: library.songs, loading: library.loading }),
 }));
 
+vi.mock("@/lib/motion", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/motion")>()),
+  requestMotionPermission: vi.fn(),
+  probeMotionSensor: vi.fn(),
+}));
+
 const getUserMedia = vi.fn();
 
+let router: ReturnType<typeof createRouter>;
+
 async function renderAt(path: string) {
-  const router = createRouter({
+  router = createRouter({
     routeTree,
     context: { queryClient: new QueryClient() },
     history: createMemoryHistory({ initialEntries: [path] }),
@@ -100,5 +109,61 @@ describe("Aufstellhilfe", () => {
   it("meldet einen unbekannten Song", async () => {
     await renderAt("/setup/gibt-es-nicht");
     expect(await screen.findByText("Song nicht gefunden")).toBeInTheDocument();
+  });
+});
+
+describe("Aufstellhilfe: Ohne Kamera spielen", () => {
+  const permission = vi.mocked(requestMotionPermission);
+  const probe = vi.mocked(probeMotionSensor);
+  beforeEach(() => {
+    permission.mockReset();
+    probe.mockReset();
+    probe.mockResolvedValue(true);
+  });
+
+  it("Knopf in der Startkarte; erlaubt → Spiel im Bewegungsmodus ohne Kamera", async () => {
+    permission.mockResolvedValue("granted");
+    await renderAt("/setup/song-1");
+    fireEvent.click(await screen.findByRole("button", { name: "Ohne Kamera spielen" }));
+    expect(permission).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "Ohne Kamera spielen" })).toBeDisabled();
+    await waitFor(() => expect(router.state.location.pathname).toBe("/play/song-1"));
+    expect(router.state.location.search).toEqual({ mode: "motion" });
+    expect(getUserMedia).not.toHaveBeenCalled();
+  });
+
+  it("abgelehnt → Meldung, bleibt auf der Aufstellhilfe", async () => {
+    permission.mockResolvedValue("denied");
+    await renderAt("/setup/song-1");
+    fireEvent.click(await screen.findByRole("button", { name: "Ohne Kamera spielen" }));
+    expect(await screen.findByText(/Bewegungssensor nicht erlaubt/)).toBeInTheDocument();
+    expect(router.state.location.pathname).toBe("/setup/song-1");
+    expect(probe).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: "Ohne Kamera spielen" })).toBeEnabled();
+  });
+
+  it("erlaubt, aber keine Messwerte (Desktop, kein Sensor) → Meldung statt Spiel", async () => {
+    permission.mockResolvedValue("granted");
+    probe.mockResolvedValue(false);
+    await renderAt("/setup/song-1");
+    fireEvent.click(await screen.findByRole("button", { name: "Ohne Kamera spielen" }));
+    expect(await screen.findByText("Dieses Gerät hat keinen Bewegungssensor.")).toBeInTheDocument();
+    expect(probe).toHaveBeenCalledTimes(1);
+    expect(router.state.location.pathname).toBe("/setup/song-1");
+  });
+
+  it("kein Sensor → eigene Meldung", async () => {
+    permission.mockResolvedValue("unsupported");
+    await renderAt("/setup/song-1");
+    fireEvent.click(await screen.findByRole("button", { name: "Ohne Kamera spielen" }));
+    expect(await screen.findByText("Dieses Gerät hat keinen Bewegungssensor.")).toBeInTheDocument();
+  });
+
+  it("auch neben dem Kamera-Fehler verfügbar", async () => {
+    getUserMedia.mockRejectedValue(new DOMException("x", "NotAllowedError"));
+    await renderAt("/setup/song-1");
+    fireEvent.click(await screen.findByRole("button", { name: "Kamera starten" }));
+    expect(await screen.findByText("Kamera-Zugriff verweigert")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Ohne Kamera spielen" })).toBeInTheDocument();
   });
 });

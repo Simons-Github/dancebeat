@@ -13,6 +13,9 @@ import type { Angles, Choreography, Move, Rating } from "./types";
 /** A move is judged by the best pose within ±MOVE_WINDOW_MS around its time. */
 export const MOVE_WINDOW_MS = 250;
 
+/** Movement mode: rates a move from its window [fromMs, toMs] instead of the angles. */
+export type IntensityRating = (move: Move, fromMs: number, toMs: number) => Rating;
+
 export interface MoveResult {
   index: number;
   rating: Rating;
@@ -104,9 +107,9 @@ export class Scorer {
   /**
    * Records the player's pose at game time `t` (null = no usable pose) and judges every move
    * whose window ended before `t`. Returns the moves judged by this call.
-   * `intensityRating` replaces the angle comparison (movement mode, stage 6).
+   * `intensityRating` replaces the angle comparison (movement mode); it gets the move's window.
    */
-  sample(t: number, player: Angles | null, intensityRating?: () => Rating): MoveResult[] {
+  sample(t: number, player: Angles | null, intensityRating?: IntensityRating): MoveResult[] {
     if (!Number.isFinite(t)) return [];
     const moves = this.moves;
     if (player) {
@@ -125,7 +128,7 @@ export class Scorer {
       if (!m || t <= m.timeMs + MOVE_WINDOW_MS) break;
       const i = this.next++;
       const rating = intensityRating
-        ? intensityRating()
+        ? intensityRating(m, m.timeMs - MOVE_WINDOW_MS, m.timeMs + MOVE_WINDOW_MS)
         : judge(this.best[i] ?? null, this.difficulty);
       out.push(this.finalize(i, m, rating));
     }

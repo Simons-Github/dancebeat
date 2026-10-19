@@ -28,12 +28,18 @@ function Layer({ children, label }: { children: ReactNode; label?: string }) {
   );
 }
 
-export function PreparingOverlay({ onCancel }: { onCancel: () => void }) {
+export function PreparingOverlay({
+  onCancel,
+  label = "Kamera und Musik werden vorbereitet …",
+}: {
+  onCancel: () => void;
+  label?: string;
+}) {
   return (
     <Layer>
       <div className={cn(PANEL, "items-center text-center")} role="status">
         <Loader2 aria-hidden className="size-10 motion-safe:animate-spin" />
-        <p className="text-lg font-bold">Kamera und Musik werden vorbereitet …</p>
+        <p className="text-lg font-bold">{label}</p>
         <Button size="lg" variant="secondary" onClick={onCancel} className={GAME_BTN}>
           <X aria-hidden />
           Abbrechen
@@ -120,7 +126,8 @@ export function PauseMenu({
   reason: PauseReason | null;
   canResume: boolean;
   cameraError: CameraError | null;
-  skeleton: boolean;
+  /** null: no skeleton (movement mode), the switch is hidden. */
+  skeleton: boolean | null;
   beatPulse: boolean;
   onResume: () => void;
   onRestart: () => void;
@@ -164,12 +171,14 @@ export function PauseMenu({
           </Button>
         </div>
         <div className="flex flex-col gap-3 border-t border-white/20 pt-4">
-          <div className="flex items-center justify-between gap-3">
-            <Label htmlFor="toggle-skeleton" className="text-base">
-              Skelett anzeigen
-            </Label>
-            <Switch id="toggle-skeleton" checked={skeleton} onCheckedChange={onSkeleton} />
-          </div>
+          {skeleton !== null && (
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="toggle-skeleton" className="text-base">
+                Skelett anzeigen
+              </Label>
+              <Switch id="toggle-skeleton" checked={skeleton} onCheckedChange={onSkeleton} />
+            </div>
+          )}
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="toggle-pulse" className="text-base">
               Beat-Puls am Rand

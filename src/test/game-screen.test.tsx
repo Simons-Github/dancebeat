@@ -357,6 +357,122 @@ describe("Spielscreen (Simulationsmodus)", () => {
   });
 });
 
+/** Synthetic `devicemotion` event (jsdom has no DeviceMotionEvent). */
+function shake(magnitude: number) {
+  const e = Object.assign(new Event("devicemotion"), {
+    acceleration: { x: magnitude, y: 0, z: 0 },
+    accelerationIncludingGravity: { x: magnitude, y: 9.81, z: 0 },
+  });
+  act(() => void window.dispatchEvent(e));
+}
+
+describe("Spielscreen im Bewegungsmodus", () => {
+  function stubCamera() {
+    const getUserMedia = vi.fn();
+    vi.stubGlobal("isSecureContext", true);
+    const original = Object.getOwnPropertyDescriptor(navigator, "mediaDevices");
+    Object.defineProperty(navigator, "mediaDevices", {
+      configurable: true,
+      value: { getUserMedia, enumerateDevices: vi.fn(async () => []) },
+    });
+    onTestFinished(() => {
+      if (original) Object.defineProperty(navigator, "mediaDevices", original);
+      else Reflect.deleteProperty(navigator, "mediaDevices");
+    });
+    return getUserMedia;
+  }
+
+  it("startet ohne Kamera; Bewegung im Takt ergibt Urteile statt X", async () => {
+    const getUserMedia = stubCamera();
+    localStorage.setItem("dancebeat.settings", JSON.stringify({ cameraId: "cam-1" }));
+    const { container } = await renderAt(`/play/${SONG_ID}?mode=motion`);
+    expect(phase()).toBe("countdown");
+    expect(screen.getByText("Bewegungsmodus")).toBeInTheDocument();
+    // Shaking during the countdown must not count (the clock stands still there).
+    shake(30);
+    await advance(5000);
+    expect(phase()).toBe("playing");
+    for (let i = 0; i < 200 && phase() === "playing"; i++) {
+      shake(7);
+      await advance(20);
+    }
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    expect(getUserMedia).not.toHaveBeenCalled();
+    expect(container.querySelector("video")).toBeNull();
+    expect(scene.estimators).toHaveLength(0);
+    const r = getLastResult(SONG_ID)!;
+    expect(r.counts.X).toBe(0);
+    expect(r.counts.PERFECT).toBeGreaterThan(0);
+  });
+
+  it("ohne Sensordaten: Hinweis statt Kamera-Hinweis, alle Moves X", async () => {
+    stubCamera();
+    await renderAt(`/play/${SONG_ID}?mode=motion`);
+    await advance(5000);
+    await advance(2700);
+    expect(screen.getByText(/Keine Bewegung erkannt/)).toBeInTheDocument();
+    expect(screen.queryByText(/Wir sehen dich nicht/)).toBeNull();
+    for (let i = 0; i < 20; i++) await advance(100);
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    expect(getLastResult(SONG_ID)!.counts.X).toBe(4);
+  });
+
+  it("Pause mitten im Move-Fenster: Messungen davor zählen nach „Weiter“ weiter", async () => {
+    stubCamera();
+    await renderAt(`/play/${SONG_ID}?mode=motion`);
+    await advance(5000);
+    expect(phase()).toBe("playing");
+    // Move 2 at 500 ms, window 250–750 ms: two measurements before the pause, two after.
+    await advance(400);
+    shake(7);
+    await advance(20);
+    shake(7);
+    await advance(20);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await advance(10);
+    fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
+    await advance(3000);
+    expect(phase()).toBe("playing");
+    shake(7);
+    await advance(20);
+    shake(7);
+    for (let i = 0; i < 60 && phase() === "playing"; i++) await advance(100);
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    // Moves 1, 3 and 4 had no measurements; move 2 counts all four (alone it would be X).
+    expect(getLastResult(SONG_ID)!.counts.X).toBe(3);
+  });
+
+  it("Neustart leert den Messpuffer", async () => {
+    stubCamera();
+    await renderAt(`/play/${SONG_ID}?mode=motion`);
+    await advance(5000);
+    for (let i = 0; i < 10; i++) {
+      shake(7);
+      await advance(20);
+    }
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    fireEvent.click(screen.getByRole("button", { name: "Neustart" }));
+    await advance(5000);
+    expect(phase()).toBe("playing");
+    for (let i = 0; i < 60 && phase() === "playing"; i++) await advance(100);
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    expect(getLastResult(SONG_ID)!.counts.X).toBe(4);
+  });
+
+  it("Pausenmenü ohne Skelett-Schalter, „Weiter“ spielt weiter", async () => {
+    stubCamera();
+    await renderAt(`/play/${SONG_ID}?mode=motion`);
+    await advance(5000);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(screen.getByRole("dialog", { name: "Pause" })).toBeInTheDocument();
+    expect(screen.queryByLabelText("Skelett anzeigen")).toBeNull();
+    expect(screen.getByLabelText("Beat-Puls am Rand")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Weiter" }));
+    await advance(3000);
+    expect(phase()).toBe("playing");
+  });
+});
+
 describe("Spielscreen mit YouTube-Quelle", () => {
   it("zeigt den Player-Container statt des Coach-Canvas und reicht ihn an die Quelle", async () => {
     const song = library.songs[0];

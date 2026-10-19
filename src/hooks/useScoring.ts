@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Scorer, type MoveResult, type ScoreSnapshot } from "@/lib/scorer";
+import { Scorer, type IntensityRating, type MoveResult, type ScoreSnapshot } from "@/lib/scorer";
 import type { Difficulty } from "@/lib/scoring";
-import type { Angles, Choreography, Rating } from "@/lib/types";
+import type { Angles, Choreography } from "@/lib/types";
 
 export interface Judgement extends MoveResult {
   /** Unique per judgement, for popup keys. */
@@ -10,7 +10,7 @@ export interface Judgement extends MoveResult {
 
 /** What the game loop needs from scoring; `Scorer` and this hook both provide it. */
 export interface ScoringPort {
-  sample(t: number, player: Angles | null): void;
+  sample(t: number, player: Angles | null, intensityRating?: IntensityRating): void;
   seekTo(t: number): void;
   reset(): void;
   done(): boolean;
@@ -38,15 +38,18 @@ export function useScoring(choreo: Choreography | null, difficulty: Difficulty) 
     setLast(null);
   }, [scorer]);
 
-  const sample = useCallback((t: number, player: Angles | null, intensityRating?: () => Rating) => {
-    const s = scorerRef.current;
-    if (!s) return;
-    const results = s.sample(t, player, intensityRating);
-    const r = results.at(-1);
-    if (!r) return;
-    setSnapshot(s.snapshot());
-    setLast({ ...r, id: ++seq.current });
-  }, []);
+  const sample = useCallback(
+    (t: number, player: Angles | null, intensityRating?: IntensityRating) => {
+      const s = scorerRef.current;
+      if (!s) return;
+      const results = s.sample(t, player, intensityRating);
+      const r = results.at(-1);
+      if (!r) return;
+      setSnapshot(s.snapshot());
+      setLast({ ...r, id: ++seq.current });
+    },
+    [],
+  );
 
   const seekTo = useCallback((t: number) => {
     const s = scorerRef.current;

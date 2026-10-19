@@ -1,5 +1,6 @@
 import { frameGameTimeMs } from "../audio/clock";
-import type { Angles } from "../types";
+import type { IntensityRating } from "../scorer";
+import type { Angles, Move, Rating } from "../types";
 
 export type GamePhase = "preparing" | "countdown" | "playing" | "paused" | "blocked" | "ended";
 export type PauseReason = "user" | "hidden" | "camera";
@@ -21,7 +22,7 @@ export interface GameAudio {
 }
 
 export interface GameScoring {
-  sample(t: number, player: Angles | null): void;
+  sample(t: number, player: Angles | null, intensityRating?: IntensityRating): void;
   seekTo(t: number): void;
   reset(): void;
   done(): boolean;
@@ -48,6 +49,13 @@ export const DEFAULT_TIMING: GameTiming = {
   bodyMissingMs: 2500,
 };
 
+/** Movement mode (no camera): moves are rated from sensor intensity instead of angles. */
+export interface GameMotion {
+  rating(move: Move, fromMs: number, toMs: number): Rating;
+  /** Game time of the last sensor measurement (-Infinity before the first). */
+  lastSampleMs(): number;
+}
+
 export interface GameDeps {
   audio: GameAudio;
   /** The game clock (`useAudioClock().timeMs`). The only time source for scoring. */
@@ -60,6 +68,8 @@ export interface GameDeps {
   /** Song playback rate; converts frame ages (wall time) into song time. */
   rate?: number;
   timing?: Partial<GameTiming>;
+  /** Set: movement mode. No frames, no stall path; `bodyMissing` means no sensor data. */
+  motion?: GameMotion;
   onState(state: GameState): void;
   onEnd(): void;
   /** Countdown sound: 3, 2, 1, and 0 for "go". */
@@ -98,10 +108,13 @@ export class GameController {
   /** Token of the play() still awaiting the audio (-1: none). Stale once the token moves on. */
   private pendingPlay = -1;
   private disposed = false;
+  private readonly motionRating: IntensityRating | undefined;
 
   constructor(deps: GameDeps) {
     this.deps = deps;
     this.timing = { ...DEFAULT_TIMING, ...deps.timing };
+    const motion = deps.motion;
+    this.motionRating = motion && ((m, from, to) => motion.rating(m, from, to));
   }
 
   get state(): GameState {
@@ -249,7 +262,9 @@ export class GameController {
     this.clearTimers();
     this.playToken++;
     // Judge whatever is still open (audio shorter than the choreography: those moves are X).
-    this.deps.scoring.sample(Math.max(this.deps.timeMs(), this.deps.endMs), null);
+    const end = Math.max(this.deps.timeMs(), this.deps.endMs);
+    if (this.motionRating) this.deps.scoring.sample(end, null, this.motionRating);
+    else this.deps.scoring.sample(end, null);
     this.deps.audio.pause();
     this.set({ phase: "ended", count: null, bodyMissing: false });
     this.deps.onEnd();
@@ -272,6 +287,10 @@ export class GameController {
     if (this.s.phase !== "playing") return;
     const now = this.deps.timeMs();
     const { sampleMs, stallMs, bodyMissingMs } = this.timing;
+    if (this.deps.motion && this.motionRating) {
+      this.tickMotion(now, this.deps.motion, this.motionRating);
+      return;
+    }
     const f = this.frame;
     if (f && f.t - this.lastSampleT >= sampleMs) {
       this.deps.scoring.sample(f.t, f.angles);
@@ -282,6 +301,19 @@ export class GameController {
       this.deps.scoring.sample(now - stallMs, null);
     }
     const missing = now - this.lastBodyT > bodyMissingMs;
+    if (missing !== this.s.bodyMissing) this.set({ bodyMissing: missing });
+    if (now >= this.deps.endMs && this.deps.scoring.done()) this.finish();
+  }
+
+  /** Movement mode: the clock alone closes the windows; the sensor buffer supplies the ratings. */
+  private tickMotion(now: number, motion: GameMotion, rating: IntensityRating) {
+    const { sampleMs, bodyMissingMs } = this.timing;
+    if (now - this.lastSampleT >= sampleMs) {
+      this.deps.scoring.sample(now, null, rating);
+      this.lastSampleT = now;
+    }
+    // lastBodyT (set when play starts) gives the sensor the same grace period as the camera.
+    const missing = now - Math.max(this.lastBodyT, motion.lastSampleMs()) > bodyMissingMs;
     if (missing !== this.s.bodyMissing) this.set({ bodyMissing: missing });
     if (now >= this.deps.endMs && this.deps.scoring.done()) this.finish();
   }

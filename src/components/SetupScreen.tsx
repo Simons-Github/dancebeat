@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { ArrowLeft, Camera, Gauge, Loader2, Play } from "lucide-react";
+import { ArrowLeft, Camera, Gauge, Loader2, Play, Smartphone } from "lucide-react";
 
 import { BodyChecklist } from "@/components/setup/BodyChecklist";
 import { CameraErrorPanel } from "@/components/setup/CameraErrorPanel";
@@ -25,6 +25,7 @@ import {
 } from "@/lib/bodyTracker";
 import { unlockAudio } from "@/lib/audio/unlock";
 import { isAutoStartArmed, rearmAutoStart } from "@/lib/game/session";
+import { probeMotionSensor, requestMotionPermission, type MotionPermission } from "@/lib/motion";
 import { clearOverlay, drawOverlay } from "@/lib/overlay";
 import type { SourceSpec } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -34,6 +35,12 @@ const PANEL =
   "bg-(--scrim-banner) shadow-pop flex flex-col gap-4 rounded-3xl border border-white/15 p-5 text-white backdrop-blur-md";
 const BTN =
   "btn-pill h-14 gap-2 rounded-full px-8 text-lg focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
+
+const MOTION_REFUSED: Record<Exclude<MotionPermission, "granted">, string> = {
+  denied:
+    "Bewegungssensor nicht erlaubt. Erlaube den Zugriff in den Browser-Einstellungen und versuche es noch einmal.",
+  unsupported: "Dieses Gerät hat keinen Bewegungssensor.",
+};
 
 /** No frame for this long means the detection stalled (background, lock, ended track). */
 const STALL_MS = 500;
@@ -47,6 +54,9 @@ const HEARTBEAT_MS = 250;
  * Once unlocked, the game starts on its own (the play route counts down). After "Abbrechen" in
  * that countdown, auto-start stays off for this song until "Los geht's" is tapped. The tap on
  * "Kamera starten" also unlocks audio playback for iOS (src/lib/audio/unlock.ts).
+ *
+ * "Ohne Kamera spielen" (before the camera starts, and next to a camera error) asks for the motion
+ * sensor and starts the movement mode (`?mode=motion`).
  */
 export function SetupScreen({
   songId,
@@ -66,6 +76,16 @@ export function SetupScreen({
   const [body, setBody] = useState<BodyStatus | null>(null);
   const [reached, setReached] = useState(false);
   const [autoStart] = useState(() => getSettings().autoStart && isAutoStartArmed(songId));
+  const [motionError, setMotionError] = useState<string | null>(null);
+  const [motionChecking, setMotionChecking] = useState(false);
+  // The sensor check takes up to a second; leaving meanwhile must not navigate afterwards.
+  const mounted = useRef(true);
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+    };
+  }, []);
 
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [tracker] = useState(() => createBodyTracker());
@@ -170,6 +190,54 @@ export function SetupScreen({
     rearmAutoStart(songId);
     play();
   };
+  const playWithoutCamera = () => {
+    // Both synchronously inside the tap: iOS needs the gesture for audio and for the sensor.
+    unlockAudio();
+    const permission = requestMotionPermission();
+    setMotionError(null);
+    setMotionChecking(true);
+    void permission.then(async (p) => {
+      // "granted" comes without a prompt also on desktops and phones without a sensor: wait for
+      // a first real measurement.
+      const refused = p !== "granted" ? p : (await probeMotionSensor()) ? null : "unsupported";
+      if (!mounted.current) return;
+      setMotionChecking(false);
+      if (refused) {
+        setMotionError(MOTION_REFUSED[refused]);
+        return;
+      }
+      rearmAutoStart(songId);
+      void navigate({ to: "/play/$songId", params: { songId }, search: { mode: "motion" } });
+    });
+  };
+  const withoutCamera = (
+    <div className="flex flex-col gap-2">
+      <p className="text-base text-white/90">
+        Ohne Kamera: Halte das Handy fest in der Hand und beweg dich im Takt. Bewertet wird, wie
+        kräftig du dich bewegst.
+      </p>
+      <Button
+        size="lg"
+        variant="secondary"
+        onClick={playWithoutCamera}
+        disabled={motionChecking}
+        className={cn(BTN, "self-start")}
+      >
+        <Smartphone aria-hidden />
+        Ohne Kamera spielen
+      </Button>
+      {motionChecking && (
+        <p role="status" className="text-base">
+          Bewegungssensor wird geprüft …
+        </p>
+      )}
+      {motionError && (
+        <p role="alert" className="text-base font-bold">
+          {motionError}
+        </p>
+      )}
+    </div>
+  );
   // Auto-start: setting "autoStart" and not cancelled during the countdown of this song.
   useEffect(() => {
     if (ready && autoStart) play();
@@ -211,6 +279,7 @@ export function SetupScreen({
               </Link>
             </Button>
           </div>
+          <div className="border-t border-white/20 pt-4 landscape:pt-3">{withoutCamera}</div>
         </div>
       ) : (
         <>
@@ -246,7 +315,10 @@ export function SetupScreen({
               select); in portrait the video keeps at least 35dvh. */}
           <div className={cn(PANEL, "min-h-0 overflow-y-auto landscape:w-80")}>
             {error ? (
-              <CameraErrorPanel error={error} onRetry={retry} />
+              <>
+                <CameraErrorPanel error={error} onRetry={retry} />
+                {withoutCamera}
+              </>
             ) : (
               <>
                 <h1 className="font-title text-stroke text-2xl">Stell dich auf</h1>

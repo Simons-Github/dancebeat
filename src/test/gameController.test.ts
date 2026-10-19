@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { GameController, type GameDeps, type GameState } from "@/lib/game/controller";
+import { MotionMeter, motionScoring } from "@/lib/motion";
 import { Scorer } from "@/lib/scorer";
 import { makeChoreo } from "./fixtures";
 
@@ -412,5 +413,91 @@ describe("Blocked: doppelter Tipp und Start von außen", () => {
     await advance(16);
     expect(ctl.state.phase).toBe("playing");
     expect(audio.pause).not.toHaveBeenCalled();
+  });
+});
+
+describe("Bewegungsmodus", () => {
+  function motionDeps() {
+    const motion = { rating: vi.fn(() => "SUPER" as const), lastSampleMs: vi.fn(() => -Infinity) };
+    return motion;
+  }
+
+  it("wertet nur über die Uhr, höchstens alle 100 ms, mit motion.rating", async () => {
+    const motion = motionDeps();
+    const env = setup({ motion });
+    env.ctl.start();
+    await env.advance(5100);
+    env.scoring.sample.mockClear();
+    await env.advance(1000);
+    const calls = env.scoring.sample.mock.calls as unknown[][];
+    expect(calls.length).toBeGreaterThanOrEqual(9);
+    expect(calls.length).toBeLessThanOrEqual(11);
+    for (const c of calls) {
+      expect(c[1]).toBeNull();
+      expect(typeof c[2]).toBe("function");
+    }
+    // No stall path: every sample is at the current game time, not now - stallMs.
+    expect(calls.at(-1)?.[0]).toBeGreaterThan(env.audio.pos - 100);
+  });
+
+  it("Kamerabilder werden ignoriert", async () => {
+    const env = setup({ motion: motionDeps() });
+    env.ctl.start();
+    await env.advance(5100);
+    env.audio.pos = 3000;
+    env.ctl.pushFrame({ leftShoulder: 90 }, 80);
+    env.scoring.sample.mockClear();
+    env.ctl.tick();
+    expect(env.scoring.sample).not.toHaveBeenCalledWith(2920, { leftShoulder: 90 });
+  });
+
+  it("Hinweis ohne Sensormessung, weg sobald Messungen kommen", async () => {
+    const motion = motionDeps();
+    const env = setup({ motion });
+    env.ctl.start();
+    await env.advance(5100);
+    await env.advance(2000);
+    expect(env.ctl.state.bodyMissing).toBe(false); // grace period after the start
+    await env.advance(1000);
+    expect(env.ctl.state.bodyMissing).toBe(true);
+    motion.lastSampleMs.mockImplementation(() => env.audio.pos);
+    await env.advance(16);
+    expect(env.ctl.state.bodyMissing).toBe(false);
+  });
+
+  it("finish() bewertet offene Moves über motion.rating", async () => {
+    const env = setup({ motion: motionDeps() });
+    env.ctl.start();
+    await env.advance(5100);
+    env.ctl.finish();
+    expect(env.scoring.sample).toHaveBeenLastCalledWith(10_000, null, expect.any(Function));
+  });
+
+  it("mit echtem Scorer und MotionMeter: Bewegung um die Moves ergibt Urteile, Ruhe ergibt X", async () => {
+    const c = makeChoreo([
+      { la: 90, ra: 90 },
+      { la: 170, ra: 170 },
+      { la: 20, ra: 160 },
+    ]);
+    const choreo = { ...c, moves: c.moves.map((m, i) => ({ ...m, timeMs: 1000 + i * 1000 })) };
+    const scorer = new Scorer(choreo);
+    const meter = new MotionMeter();
+    const env = setup({
+      scoring: scorer,
+      endMs: 4000,
+      motion: motionScoring(meter, () => "normal"),
+    });
+    env.ctl.start();
+    await env.advance(5000);
+    for (let t = 0; t < 4200; t += 16) {
+      const pos = env.audio.pos;
+      // Strong movement around the first two moves, nothing around the third.
+      if (pos < 2400) meter.push(pos, { linear: { x: 8, y: 0, z: 0 }, withGravity: null });
+      await env.advance(16);
+    }
+    const snap = scorer.snapshot();
+    expect(snap.counts.PERFECT).toBe(2);
+    expect(snap.counts.X).toBe(1);
+    expect(env.onEnd).toHaveBeenCalled();
   });
 });
