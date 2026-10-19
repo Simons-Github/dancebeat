@@ -13,7 +13,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
 | 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a, 5b, 5c, 5d)        | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
@@ -36,6 +36,7 @@ Combo-Regel (OK hält, X bricht).
 Choreo-Wechsel. N4: Soundeffekte nutzen den beim Tippen entsperrten gemeinsamen `AudioContext`.
 W9 teilweise: `type` als Union, Lade-Race beim Songwechsel, `ended`/`error` zurückgesetzt,
 `visibilitychange` → Pause.
+✅ N12 (Etappe 5): Aufstellhilfe im Querformat scrollt, Karte nicht mehr unter der Kopfzeile.
 ✅ N3 (Etappe 5b): Seed-Regel prüft die Bibliothek, gelöschte Demos bleiben weg.
 ✅ W11 (Etappe 5a, 5c): Settings mit zod geprüft, Persistenz-Anfrage beim Anlegen, `StorageFullError`
 verständlich angezeigt.
@@ -194,7 +195,7 @@ Umgesetzt:
 - **Offen:** Gerätetest (Animationen, Konfetti-Leistung, Lesbarkeit). Nach einem Neuladen ist der
   Endstand weg und der Screen zeigt „Kein Ergebnis“; das ist so gewollt.
 
-### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a, 5b, 5c, 5d umgesetzt)
+### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ ✅
 
 **5a Einstellungen – umgesetzt, Gerätetest offen.**
 
@@ -257,8 +258,9 @@ Umgesetzt:
 - Berechnung `computeSyncOffset` in `src/lib/sync.ts` (zyklisch, Median, Ausreißer, MAD), Details
   und Vorzeichen in [scoring.md](scoring.md#sync-test-pro-song). Kein Formatwechsel:
   `syncOffsetMs` gab es schon.
+- Playwright (390×844 und 844×390): 12 Taps per Leertaste, Vorschlag, Konsole sauber.
 - **Offen:** Gerätetest (Tap-Latenz von Touch und Bildschirm, iOS-Start im Tipp, YouTube-Start
-  im Tipp, Bluetooth-Kopfhörer), Playwright-Durchlauf in Hoch- und Querformat.
+  im Tipp, Bluetooth-Kopfhörer).
 
 **5d Teil 2 Feinjustierung und Start-Offset – umgesetzt, Gerätetest offen.**
 
@@ -273,12 +275,21 @@ Umgesetzt:
   Künstler und Start-Offset werden zusammen gespeichert (`useSongLibrary().updateDetails`, ersetzt
   `rename`). Kein Formatwechsel: `startOffsetMs` gab es schon.
 - **Offen:** Gerätetest: ob das Licht am Gerät mit dem gehörten Beat übereinstimmt (Bluetooth,
-  iOS), Bedienung der Knöpfe per Touch, Dezimaltastatur auf iOS; Playwright-Durchlauf in Hoch-
-  und Querformat.
+  iOS), Bedienung der Knöpfe per Touch, Dezimaltastatur auf iOS.
+- Playwright (390×844 und 844×390): Vorschlag übernehmen, ±10 ms, Speichern; „Start ab“ 2,5 s
+  und Offset bleiben nach Neuladen, Dialog scrollt im Querformat, Konsole sauber.
 
-**Noch offen in Etappe 5:**
+**N12 Aufstellhilfe im Querformat – umgesetzt, Gerätetest offen.**
 
-- N12 (Aufstellhilfe im Querformat).
+- Vor dem Kamerastart scrollt `main`; die Karte wird per `my-auto` nur zentriert, solange sie
+  passt (kein `justify-center`, das den Kopf unter die Kopfzeile schob). Überschrift im
+  Querformat kleiner.
+- Mit Kamera schrumpft und scrollt die Seitenkarte in beiden Formaten; im Hochformat behält das
+  Video mindestens 35dvh.
+- Playwright mit Fake-Kamera (390×844 und 844×390, mit Diagnose): „Kamera starten“, „Los
+  geht's“, „Zurück“ und Diagnose erreichbar, Konsole sauber (nur MediaPipe-interne Warnungen).
+- **Offen:** Gerätetest (Notch, Adressleiste, iOS-Scrollen). Kosmetisch: Der Schatten der Karte
+  wird beim Scrollen am Rand abgeschnitten.
 
 Start-Offset im Dialog „Song hinzufügen“ entfällt: einstellbar über „Song bearbeiten“.
 
@@ -334,19 +345,18 @@ Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
 Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
-| ID  | Befund                                                                                                                           | Etappe |
-| --- | -------------------------------------------------------------------------------------------------------------------------------- | ------ |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                           | 10     |
-| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                           | 3b     |
-| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                           | 3b     |
-| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                         | 7      |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                         | 11     |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                     | 11     |
-| N6  | `@tanstack/react-query` bisher ungenutzt                                                                                         | 11     |
-| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                                             | 11     |
-| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                               | 11     |
-| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked`                         | 11     |
-| N10 | YouTube ignoriert `song.playbackRate`                                                                                            | 11     |
-| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                                  | 11     |
-| N12 | Aufstellhilfe im Querformat (844×390): Karte oben unter der Kopfzeile, Knöpfe unten abgeschnitten, kein Scrollen (seit Etappe 2) | 5      |
-| N13 | Beat-Puls im Spiel (`beatsPerPulse`) begrenzt nach Song-BPM, nicht nach `bpm × playbackRate`: bei Rate > 1 über 3 Hz möglich     | 11     |
+| ID  | Befund                                                                                                                       | Etappe |
+| --- | ---------------------------------------------------------------------------------------------------------------------------- | ------ |
+| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                       | 10     |
+| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                       | 3b     |
+| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                       | 3b     |
+| W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                     | 7      |
+| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                     | 11     |
+| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                 | 11     |
+| N6  | `@tanstack/react-query` bisher ungenutzt                                                                                     | 11     |
+| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                                         | 11     |
+| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                           | 11     |
+| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked`                     | 11     |
+| N10 | YouTube ignoriert `song.playbackRate`                                                                                        | 11     |
+| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                              | 11     |
+| N13 | Beat-Puls im Spiel (`beatsPerPulse`) begrenzt nach Song-BPM, nicht nach `bpm × playbackRate`: bei Rate > 1 über 3 Hz möglich | 11     |

@@ -181,12 +181,14 @@ export function SetupScreen({
     <main
       className={cn(
         "safe-pad flex min-h-0 flex-1 gap-3",
-        started ? "flex-col landscape:flex-row" : "items-center justify-center",
+        // Pre-start: main scrolls; the card's auto margins center it only while it fits, so its
+        // top never slides under the header (unlike justify-center).
+        started ? "flex-col landscape:flex-row" : "flex-col items-center overflow-y-auto",
       )}
     >
       {!started ? (
-        <div className={cn(PANEL, "max-w-xl overflow-y-auto")}>
-          <h1 className="font-title text-stroke text-3xl">Aufstellhilfe</h1>
+        <div className={cn(PANEL, "my-auto w-full max-w-xl shrink-0 landscape:gap-3")}>
+          <h1 className="font-title text-stroke text-3xl landscape:text-2xl">Aufstellhilfe</h1>
           <p className="text-base text-white/90">
             Gleich tanzt du zu „{songTitle}“. Die Kamera sieht dich, damit DanceBeat deine
             Bewegungen bewerten kann.
@@ -212,7 +214,7 @@ export function SetupScreen({
         </div>
       ) : (
         <>
-          <div className="relative grid min-h-0 min-w-0 flex-1 place-items-center [container-type:size]">
+          <div className="relative grid min-h-0 min-w-0 flex-1 place-items-center [container-type:size] portrait:min-h-[35dvh]">
             <div
               className="relative overflow-hidden rounded-3xl border border-white/20 bg-black shadow-pop"
               style={{ aspectRatio: aspect, width: `min(100cqw, calc(100cqh * ${aspect}))` }}
@@ -240,12 +242,9 @@ export function SetupScreen({
             </div>
           </div>
 
-          <div
-            className={cn(
-              PANEL,
-              "min-h-0 shrink-0 overflow-y-auto landscape:w-80 landscape:shrink",
-            )}
-          >
+          {/* Shrinks and scrolls when its content outgrows the space (diagnostics, camera
+              select); in portrait the video keeps at least 35dvh. */}
+          <div className={cn(PANEL, "min-h-0 overflow-y-auto landscape:w-80")}>
             {error ? (
               <CameraErrorPanel error={error} onRetry={retry} />
             ) : (
