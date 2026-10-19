@@ -8,6 +8,8 @@
     "vitest.config.ts",
     "eslint.config.js"
   ],
+  // Service worker entry needs the WebWorker lib; checked by tsconfig.sw.json.
+  "exclude": ["src/sw/sw.ts"],
   "compilerOptions": {
     "target": "ES2022",
     "jsx": "react-jsx",

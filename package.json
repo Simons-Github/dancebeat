@@ -20,7 +20,7 @@
     "test:watch": "vitest",
     "predev:https": "bun scripts/fetch-models.ts",
     "dev:https": "DEV_HTTPS=1 vite dev",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.sw.json"
   },
   "overrides": {
     "rolldown": "1.2.1"

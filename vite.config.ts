@@ -6,6 +6,7 @@ import { defineConfig } from "vite";
 
 import { csp } from "./vite-plugins/csp";
 import { mediapipeWasm } from "./vite-plugins/mediapipeWasm";
+import { serviceWorker } from "./vite-plugins/serviceWorker";
 
 // Plain client-side SPA: index.html is the entry, no server and no prerendering.
 // HTTPS is opt-in (`bun run dev:https` sets DEV_HTTPS=1): phone cameras need a secure context.
@@ -25,6 +26,8 @@ export default defineConfig({
     mediapipeWasm(),
     // connect-src only: blocks MediaPipe telemetry (see vite-plugins/csp.ts).
     csp(),
+    // Offline: own service worker as dist/sw.js with injected precache list (build only).
+    serviceWorker(),
     ...(useHttps ? [basicSsl()] : []),
   ],
 });

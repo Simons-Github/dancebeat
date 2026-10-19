@@ -2,6 +2,7 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { RouterProvider } from "@tanstack/react-router";
 
+import { registerServiceWorker } from "./lib/serviceWorker";
 import { getRouter } from "./router";
 import "./styles.css";
 
@@ -21,3 +22,7 @@ createRoot(rootEl).render(
     <RouterProvider router={router} />
   </StrictMode>,
 );
+
+// Entry file is the accepted place for browser APIs at module level (like createRoot/document).
+// Called after render; the function itself defers registration to window `load`.
+registerServiceWorker();

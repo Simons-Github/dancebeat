@@ -15,7 +15,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | 🔜 (7a, 7b-1 umgesetzt)    | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ⏳                         | Opus                                                                  |
@@ -333,7 +333,7 @@ Start-Offset im Dialog „Song hinzufügen“ entfällt: einstellbar über „So
 - [ ] Bildschirmsperre: seit 7a hält ein Wake Lock das Display an (siehe Gerätetest 7a);
       sperrt es trotzdem, pausiert das Spiel über `visibilitychange`.
 
-### 7. PWA und Gerätefunktionen 🔜 (7a, 7b-1 umgesetzt, 7b-2 offen)
+### 7. PWA und Gerätefunktionen ✅ (Gerätetest offen)
 
 **7a Wake Lock, Haptik, Manifest – umgesetzt, Gerätetest offen.**
 
@@ -382,10 +382,35 @@ Gerätetest 7b-1 (offen):
       Ladezeit beim ersten Start notieren; im Netzwerk-Tab keine fremden Hosts.
 - [ ] iOS Safari: CSP-Meta greift (Telemetrie blockiert), HMR über `dev:https` funktioniert.
 
-**7b-2 Service Worker (geplant):** Offline-Betrieb und Cache für App-Hülle, WASM und Modell.
-Vorher zu entscheiden: eigener Service Worker oder `vite-plugin-pwa` (neue Abhängigkeit). WASM
-gibt es in drei Varianten zu je ca. 13 MB; für den Cache nur die tatsächlich geladene Variante
-(Laufzeit-Cache statt Precache).
+**7b-2 Service Worker – umgesetzt, Gerätetest offen.** Eigener Service Worker ohne neue
+Abhängigkeit (Entscheidung gegen `vite-plugin-pwa`). Details:
+[architecture.md](architecture.md#service-worker-und-offline-betrieb).
+
+- `src/sw/` (Strategie und Handler als reine, getestete Funktionen, `sw.ts` als Einstieg);
+  `vite-plugins/serviceWorker.ts` baut daraus beim Build ein eigenständiges `sw.js` (IIFE, keine
+  Imports) und fügt Precache-Liste und Versionen ein. Registrierung nur im Produktions-Build
+  (`src/lib/serviceWorker.ts`), im Dev-Server kein Service Worker.
+- App-Hülle im Precache; WASM und Modell im Laufzeit-Cache beim ersten Laden (nur die
+  tatsächlich geladene WASM-Variante). Jede Navigation bekommt die `index.html` aus dem
+  Precache (App-Shell), damit Seite und Caches immer zur selben Version gehören. Fremde Adressen (YouTube, Audio-URLs), Range-Anfragen und Nicht-GET laufen am
+  Service Worker vorbei. Kein `skipWaiting`: ein Update greift erst, wenn alle Tabs der App
+  geschlossen sind.
+- Playwright (`bun run preview`, 390×844 und 844×390): Service Worker aktiv, 60 Dateien im
+  Precache; nach der Aufstellhilfe liegen nur `vision_wasm_internal.*` und das lite-Modell im
+  Laufzeit-Cache; offline starten Bibliothek, Deep Link `/setup/…` und `/settings`, die
+  Erkennung läuft, alle Antworten aus dem Service Worker, keine fehlgeschlagenen Abrufe,
+  Konsole ohne Fehler (nur MediaPipe-interne Warnungen).
+- Kein Hinweis „Update verfügbar“ in der Oberfläche (bei Bedarf später).
+
+Gerätetest 7b-2 (offen):
+
+- [ ] Android-Chrome und iOS (Safari und Home-Bildschirm-App): einmal online die Aufstellhilfe
+      öffnen, dann Flugmodus → App startet, Aufstellhilfe erkennt, ein Demo-Song lässt sich
+      spielen (Kamera- und Bewegungsmodus).
+- [ ] iOS: Cache von etwa 20 MB wird angenommen und bleibt nach Tagen ohne Nutzung erhalten
+      (installierte PWA).
+- [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
+      Caches weg (DevTools → Application → Cache Storage).
 
 ### 8. „Tanz aus Video erstellen“ mit Editor ⏳
 

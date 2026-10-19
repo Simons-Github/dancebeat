@@ -192,13 +192,14 @@ Abbrechen im Countdown ──▶ /setup/$songId
 
 ## Speicher
 
-| Was                             | Wo                                      | Zugriff                        |
-| ------------------------------- | --------------------------------------- | ------------------------------ |
-| Songs inkl. Choreografie        | IndexedDB `dancebeat`, Store `songs`    | `SongRepository`               |
-| Audiodateien                    | IndexedDB, Store `blobs`                | `SongRepository.getAudio`      |
-| Einstellungen                   | `localStorage` `dancebeat.settings`     | `useSettings`                  |
-| Gelöschte Demo-Songs (IDs)      | `localStorage` `dancebeat.deletedDemos` | `seedDemos`, `markDemoDeleted` |
-| Spotify-Token und PKCE-Verifier | `sessionStorage`                        | `lib/audio/sources.ts`         |
+| Was                              | Wo                                      | Zugriff                        |
+| -------------------------------- | --------------------------------------- | ------------------------------ |
+| Songs inkl. Choreografie         | IndexedDB `dancebeat`, Store `songs`    | `SongRepository`               |
+| Audiodateien                     | IndexedDB, Store `blobs`                | `SongRepository.getAudio`      |
+| Einstellungen                    | `localStorage` `dancebeat.settings`     | `useSettings`                  |
+| Gelöschte Demo-Songs (IDs)       | `localStorage` `dancebeat.deletedDemos` | `seedDemos`, `markDemoDeleted` |
+| Spotify-Token und PKCE-Verifier  | `sessionStorage`                        | `lib/audio/sources.ts`         |
+| App-Hülle, MediaPipe-WASM/Modell | Cache Storage `dancebeat-*`             | Service Worker (`src/sw/`)     |
 
 **SongRepository** (`src/lib/library/repository.ts`) ist die einzige Schnittstelle zur
 Bibliothek: `list`, `get`, `save`, `delete`, `getAudio`, `export`, `import`. Vorerst gibt es nur
@@ -382,6 +383,47 @@ Routen der App: `/` (Bibliothek), `/setup/$songId` (Aufstellhilfe), `/play/$song
 Vollbild), `/result/$songId` (Ergebnis), `/sync/$songId` (Sync-Test pro Song, siehe
 [scoring.md](scoring.md#sync-test-pro-song)), `/settings`.
 
+## Service Worker und Offline-Betrieb
+
+Eigener Service Worker (Etappe 7b-2), keine Bibliothek. Er ruft nichts außerhalb der eigenen
+Adresse ab, deshalb gibt es keinen neuen Eintrag unter [Externe Abrufe](#externe-abrufe).
+
+- **Quellen:** `src/sw/strategy.ts` (Zuordnung `classifyRequest`, Cache-Namen, reine
+  Funktionen), `src/sw/handlers.ts` (`install`, `activate`, `handleFetch` mit übergebenen
+  `caches`/`fetch`, in Vitest mit Fakes getestet), `src/sw/sw.ts` (Einstieg, WebWorker-Typen über
+  `tsconfig.sw.json`; `bun run typecheck` prüft beide tsconfigs).
+- **Build:** `vite-plugins/serviceWorker.ts` startet in `generateBundle` einen getrennten
+  `vite.build()` (Lib-Modus, IIFE) und gibt `sw.js` ungehasht im Wurzelverzeichnis von `dist/`
+  aus. Ein klassisches Skript ohne `import` läuft auch in älterem iOS Safari; der getrennte
+  Modulgraph verhindert, dass App-Chunks in den Service Worker geraten. Der Build bricht ab, wenn
+  die Ausgabe `import` enthält oder `index.html` fehlt.
+- **Registrierung:** `registerServiceWorker()` (`src/lib/serviceWorker.ts`) aus `main.tsx`, nur bei
+  `import.meta.env.PROD`, nach `load`, Fehler bleiben still. Im Dev-Server gibt es keinen Service
+  Worker (HMR); `vite preview` hat einen.
+- **Caches:**
+  - `dancebeat-precache-<version>`: `index.html`, alle gehashten JS/CSS-Dateien (auch die
+    Routen-Chunks), Schriften, Manifest, Favicon, Icons. Version = SHA-256 über Namen und
+    Inhalte. Wird bei `install` vollständig geladen (`cache: "reload"`), danach cache-first.
+  - `dancebeat-mediapipe-<hash>`: WASM und Modell, cache-first, beim ersten erfolgreichen Abruf
+    gefüllt. So liegt nur die wirklich geladene WASM-Variante im Cache (ca. 13 MB plus 5,8 MB
+    Modell). Der Name hängt am Inhalt von WASM und Modell, nicht an der App-Version: ein reines
+    App-Update behält den Cache, ein MediaPipe-Update legt einen neuen an.
+  - `activate` löscht alle `dancebeat-`-Caches außer den aktuellen.
+- **Anfragen:** Jede Navigation (auch Deep Links) bekommt die `index.html` aus dem Precache des
+  aktiven Service Workers, online wie offline (App-Shell). So passen Seite, Chunks und
+  MediaPipe-Cache immer zur selben Version; ein Netz-Abruf mit veralteter Seite kann nicht
+  entstehen, und schlechtes Netz verzögert den Start nicht. Nur wenn die Hülle fehlt (Cache
+  geräumt), geht die Navigation ans Netz. Eine per Umleitung gespeicherte Hülle (Hosts, die
+  `/index.html` auf `/` umleiten) wird neu verpackt, weil Browser umgeleitete Antworten für
+  Navigationen ablehnen. Dateien, deren Pfadteil mit `.` beginnt, kommen nicht in den Precache. Am Service Worker
+  vorbei: Nicht-GET, Range-Anfragen (Audio), fremde Adressen (YouTube, Audio-URLs), `blob:`,
+  `data:`, URLs mit Query, nicht vorgecachte eigene Dateien.
+- **Updates:** kein `skipWaiting`, damit nie mitten im Spiel Dateien wechseln. Ein neuer Service
+  Worker übernimmt, sobald kein Tab der alten Version mehr offen ist. `clients.claim()` wirkt
+  nur bei der Erstinstallation, damit schon die erste Sitzung WASM und Modell cacht. Einen Hinweis
+  „Update verfügbar“ gibt es noch nicht.
+- Die CSP (`connect-src`) bleibt unverändert: Der Service Worker ruft nur die eigene Adresse ab.
+
 ## Build und Werkzeuge
 
 - Pfad-Alias `@` → `src/` (tsconfig `paths`, in Vite über `resolve.tsconfigPaths`).
@@ -389,8 +431,8 @@ Vollbild), `/result/$songId` (Ergebnis), `/sync/$songId` (Sync-Test pro Song, si
 - `bunfig.toml` setzt eine 24-Stunden-Schutzfrist für neue Paketversionen.
 - PWA (Etappe 7a): `public/manifest.webmanifest` und `public/icons/` werden unverändert nach
   `dist/` kopiert. Farben im Manifest und `theme-color` in `index.html` sind Kopien von
-  `APP_BACKGROUND` aus `theme.ts`; `src/test/manifest.test.ts` hält sie gleich. Noch kein
-  Service Worker (Etappe 7b).
+  `APP_BACKGROUND` aus `theme.ts`; `src/test/manifest.test.ts` hält sie gleich. Service Worker
+  siehe [unten](#service-worker-und-offline-betrieb).
 - Gerätefunktionen: Wake Lock (`src/lib/wakeLock.ts`) und Vibration (`src/lib/haptics.ts`)
   prüfen die API und schlagen still fehl; beide nur aus Effekten heraus aufgerufen.
 - Statisches Hosting braucht einen SPA-Fallback auf `index.html` für Deep Links
