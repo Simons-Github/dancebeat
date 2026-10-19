@@ -8,6 +8,12 @@ export const SONG_PALETTES = [
   { accent: "#FF3B3B", secondary: "#3BFFF2" },
 ] as const;
 
+/**
+ * Dark app background as hex (approximation of `--background` in src/styles.css, oklch(0.32 0.14 330)).
+ * Used for the web manifest and the theme-color meta; keep public/manifest.webmanifest and index.html in sync.
+ */
+export const APP_BACKGROUND = "#560553";
+
 export const GOLD = "#FFC93C";
 export const GOLD_DEEP = "#E89B00";
 

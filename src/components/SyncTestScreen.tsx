@@ -5,6 +5,7 @@ import { AlertTriangle, ArrowLeft, Check, Play, RotateCcw, Square } from "lucide
 import { PrivacyNote } from "@/components/setup/PrivacyNote";
 import { Button } from "@/components/ui/button";
 import { useAudioClock } from "@/hooks/useAudioClock";
+import { useWakeLock } from "@/hooks/useWakeLock";
 import { gameTimeMs } from "@/lib/audio/clock";
 import { isLowPrecision } from "@/lib/audio/sources";
 import { claimSharedElement } from "@/lib/audio/unlock";
@@ -182,6 +183,8 @@ export function SyncTestScreen({
   }, [tap]);
 
   const playing = phase === "playing";
+  // Keep the screen on while the test runs (no touch input besides the taps).
+  useWakeLock(phase === "starting" || phase === "playing");
   const { bpm } = song;
   const latencyMs = settings.latencyMs;
   const choreoOffsetMs = song.choreo.offsetMs;

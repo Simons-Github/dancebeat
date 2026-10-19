@@ -225,6 +225,35 @@ describe("Spielscreen (Simulationsmodus)", () => {
     expect(path()).toBe("/");
   });
 
+  it("hält den Bildschirm wach und vibriert bei PERFECT", async () => {
+    const release = vi.fn(async () => {});
+    const request = vi.fn(async () => ({ release, addEventListener: () => {} }));
+    const vibrate = vi.fn();
+    vi.stubGlobal(
+      "navigator",
+      Object.assign(Object.create(navigator), { wakeLock: { request }, vibrate }),
+    );
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    expect(request).toHaveBeenCalledWith("screen");
+    await advance(5000);
+    for (let i = 0; i < 40; i++) await advance(100);
+    // Four PERFECT moves, one buzz each.
+    expect(vibrate).toHaveBeenCalledTimes(4);
+    expect(release).toHaveBeenCalled();
+  });
+
+  it("gibt die Bildschirmsperre in der Pause frei", async () => {
+    const release = vi.fn(async () => {});
+    const request = vi.fn(async () => ({ release, addEventListener: () => {} }));
+    vi.stubGlobal("navigator", Object.assign(Object.create(navigator), { wakeLock: { request } }));
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    expect(release).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await advance(10);
+    expect(release).toHaveBeenCalledTimes(1);
+  });
+
   it("Perfekter simulierter Spieler: alle Moves PERFECT, Ende führt zum Ergebnis", async () => {
     library.songs = library.songs.map((s) => ({ ...s, stars: 0 }));
     await renderAt(`/play/${SONG_ID}?sim=1`);

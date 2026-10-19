@@ -20,6 +20,7 @@ import { useAudioClock } from "@/hooks/useAudioClock";
 import { useDeviceMotion } from "@/hooks/useDeviceMotion";
 import { usePoseTracking, type FrameInfo } from "@/hooks/usePoseTracking";
 import { useScoring } from "@/hooks/useScoring";
+import { useWakeLock } from "@/hooks/useWakeLock";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { scrimCss } from "@/lib/contrast";
 import { beatPulse } from "@/lib/game/beat";
@@ -37,6 +38,7 @@ import {
   type MotionSample,
   type PlayMode,
 } from "@/lib/motion";
+import { vibrateFor } from "@/lib/haptics";
 import { MOVE_WINDOW_MS } from "@/lib/scorer";
 import { computeAngles } from "@/lib/pose";
 import { getSettings, useSettings } from "@/lib/settings";
@@ -231,6 +233,26 @@ export function GameScreen({
     startedRef.current = true;
     controllerRef.current?.start();
   }, [game.phase, audio.state, cameraReady, visible]);
+
+  // Keep the screen on while the round runs; in movement mode (no camera) the phone is not touched
+  // and could lock mid-song. Not while paused or on an error screen: a player who walked away
+  // should not come back to a drained battery.
+  useWakeLock(
+    (game.phase === "preparing" ||
+      game.phase === "countdown" ||
+      game.phase === "playing" ||
+      game.phase === "blocked") &&
+      audio.state !== "error" &&
+      !(camera.error && !noCamera),
+  );
+
+  // One buzz per new judgement (React sees at most one per move, never per frame).
+  const lastJudgement = scoring.last;
+  useEffect(() => {
+    if (lastJudgement) vibrateFor(lastJudgement.rating, lastJudgement.gold, settings.haptics);
+    // Only a new judgement fires; toggling the setting must not replay the last one.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastJudgement]);
 
   // Background tab, lock screen, app switch: pause.
   useEffect(() => {

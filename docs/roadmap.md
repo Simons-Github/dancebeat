@@ -15,7 +15,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | 🔜 (7a umgesetzt)          | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ⏳                         | Opus                                                                  |
@@ -328,15 +328,42 @@ Start-Offset im Dialog „Song hinzufügen“ entfällt: einstellbar über „So
       sinnvolle Werte, kein Ausschlag beim Start.
 - [ ] Schwellen: fühlt sich PERFECT verdient an, wird Stillhalten zu X, Gold spürbar schwerer;
       je Schwierigkeit.
-- [ ] Bildschirmsperre: ohne Kamera kann das Handy während des Songs sperren (Wake Lock erst in
-      Etappe 7); dann pausiert das Spiel über `visibilitychange`.
+- [ ] Bildschirmsperre: seit 7a hält ein Wake Lock das Display an (siehe Gerätetest 7a);
+      sperrt es trotzdem, pausiert das Spiel über `visibilitychange`.
 
-### 7. PWA und Gerätefunktionen ⏳
+### 7. PWA und Gerätefunktionen 🔜 (7a umgesetzt, 7b offen)
 
-- Web-App-Manifest, Service Worker (Offline, Homescreen), Wake Lock, Haptik
-  (`navigator.vibrate` bei PERFECT).
-- MediaPipe-WASM und Pose-Modell lokal in `public/`, damit nach der Installation keine externen
-  Abrufe mehr nötig sind (W12: Hinweistext dann anpassen).
+**7a Wake Lock, Haptik, Manifest – umgesetzt, Gerätetest offen.**
+
+- Wake Lock (`src/lib/wakeLock.ts`, `useWakeLock`): Display bleibt an im Vorlauf, Countdown,
+  Spiel und bei „blocked“, nicht in der Pause und nicht auf Fehlerbildschirmen (wer weggeht, soll
+  keinen leeren Akku vorfinden); im Sync-Test beim Starten und Abspielen. Eine Anfrage, die während
+  des Wartens erneut gewünscht wurde (wieder sichtbar), wird danach einmal wiederholt. Nach `visibilitychange` → sichtbar wird neu angefordert; fehlende API oder Ablehnung
+  bleiben still. Wichtig vor allem im Bewegungsmodus (ohne Kamera sperrt das Handy sonst).
+- Haptik (`src/lib/haptics.ts`): 30 ms bei PERFECT, Muster 40-40-80 ms bei getroffenem Gold Move,
+  einmal pro Urteil. Einstellung „Vibration“ (`haptics`, Standard an) im Abschnitt „Spiel“;
+  iOS Safari kennt `navigator.vibrate` nicht (Hinweis im Schalter).
+- Web-App-Manifest `public/manifest.webmanifest` (`standalone`, beliebige Ausrichtung), Icons in
+  `public/icons/` aus dem eigenen Favicon-Motiv (SVG, PNG 192/512, maskierbar 512, Apple 180;
+  `icon-maskable.svg` ist nur die Quelle des PNG). `index.html`: Manifest, `theme-color`,
+  Apple-Metas. Hintergrund- und Themenfarbe `APP_BACKGROUND` in `theme.ts` (Hex-Näherung von
+  `--background`); `manifest.test.ts` prüft Manifest und `index.html` dagegen.
+- Ohne Service Worker: Android-Chrome bietet die Installation an, offline läuft die App noch nicht.
+
+**Gerätetest 7a (offen):**
+
+- [ ] Bewegungsmodus und Kameramodus: Display bleibt einen ganzen Song lang an, auch nach
+      App-Wechsel und Rückkehr; nach dem Ergebnis-Screen sperrt es wieder normal.
+- [ ] Android: Vibration bei PERFECT und Gold spürbar, nicht störend; Schalter „Vibration“ aus →
+      keine Vibration.
+- [ ] Android: „App installieren“ erscheint, Icon (maskiert) und Name stimmen, Start ohne
+      Browserleiste. iOS: „Zum Home-Bildschirm“, Icon, Statusleiste über dem Inhalt lesbar,
+      Safe Areas.
+
+**7b Offline (geplant):** Service Worker (Offline, Cache), MediaPipe-WASM und Pose-Modell lokal
+in `public/`, damit nach der Installation keine externen Abrufe mehr nötig sind (W12: Hinweistext
+dann anpassen). Vorher zu entscheiden: eigener Service Worker oder `vite-plugin-pwa` (neue
+Abhängigkeit); Modell per Download-Skript oder im Repo.
 
 ### 8. „Tanz aus Video erstellen“ mit Editor ⏳
 

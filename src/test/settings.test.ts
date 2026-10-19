@@ -49,6 +49,14 @@ describe("settings", () => {
     });
   });
 
+  it("enables haptics by default and falls back on a bad value", () => {
+    expect(DEFAULT_SETTINGS.haptics).toBe(true);
+    store({ haptics: "an" });
+    expect(getSettings().haptics).toBe(true);
+    store({ haptics: false });
+    expect(getSettings().haptics).toBe(false);
+  });
+
   it("clamps volume and latency into their ranges", () => {
     store({ volume: 7, latencyMs: -9000 });
     expect(getSettings().volume).toBe(1);

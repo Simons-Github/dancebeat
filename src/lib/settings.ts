@@ -21,6 +21,7 @@ const D = {
   onboarded: false,
   lastSongId: "",
   autoStart: true,
+  haptics: true,
 };
 
 /**
@@ -49,6 +50,8 @@ export const SettingsSchema = z.object({
   lastSongId: z.string().catch(D.lastSongId),
   /** Setup screen starts the game by itself as soon as the body was seen (countdown follows). */
   autoStart: z.boolean().catch(D.autoStart),
+  /** Vibrate on PERFECT and Gold Move hits (where `navigator.vibrate` exists; not on iOS). */
+  haptics: z.boolean().catch(D.haptics),
 });
 
 export type Settings = z.output<typeof SettingsSchema>;

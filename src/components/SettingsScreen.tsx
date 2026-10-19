@@ -134,6 +134,13 @@ export function SettingsScreen() {
             checked={settings.autoStart}
             onChange={(autoStart) => save({ autoStart })}
           />
+          <SwitchRow
+            id="haptics"
+            label="Vibration"
+            hint="Kurzes Vibrieren bei PERFECT und getroffenen Gold Moves. Nicht auf dem iPhone verfügbar."
+            checked={settings.haptics}
+            onChange={(haptics) => save({ haptics })}
+          />
         </Section>
 
         <Section title="Ton">

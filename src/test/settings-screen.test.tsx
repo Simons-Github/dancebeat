@@ -37,6 +37,8 @@ describe("Einstellungen", () => {
     expect(stored().skeleton).toBe(false);
     fireEvent.click(screen.getByRole("switch", { name: "Automatisch starten" }));
     expect(stored().autoStart).toBe(false);
+    fireEvent.click(screen.getByRole("switch", { name: "Vibration" }));
+    expect(stored().haptics).toBe(false);
     fireEvent.click(screen.getByRole("button", { name: "Schwer" }));
     expect(stored().difficulty).toBe("schwer");
     expect(screen.getByRole("button", { name: "Schwer" })).toHaveAttribute("aria-pressed", "true");

@@ -213,8 +213,8 @@ die IndexedDB-Implementierung; eine Server-Variante kann dieselbe Schnittstelle 
   ungültiger Wert fällt auf seinen Standard zurück, die übrigen bleiben erhalten. Lautstärke und
   Latenz-Ausgleich (±500 ms) werden begrenzt, unbekannte Schlüssel verworfen. Schreibfehler
   (Quota, privater Modus) werden abgefangen; die Oberfläche arbeitet dann mit dem Wert im
-  Speicher weiter. `autoStart` (Standard an) steuert den Auto-Start der Aufstellhilfe.
-  Einstellungen haben bewusst keine Version und keine Migration: jedes Feld fällt über zod
+  Speicher weiter. `autoStart` (Standard an) steuert den Auto-Start der Aufstellhilfe,
+  `haptics` (Standard an) die Vibration bei PERFECT und Gold. Einstellungen haben bewusst keine Version und keine Migration: jedes Feld fällt über zod
   `.catch` auf seinen Standard zurück, Formatänderungen ergänzen also nur Felder mit Standardwert.
   Das Schema liegt in `settings.ts` und nicht in `schema.ts`, weil es eine gerätelokale
   Vorliebe ist und keine Bibliotheksdaten.
@@ -369,5 +369,11 @@ Vollbild), `/result/$songId` (Ergebnis), `/sync/$songId` (Sync-Test pro Song, si
 - Pfad-Alias `@` → `src/` (tsconfig `paths`, in Vite über `resolve.tsconfigPaths`).
 - `tsconfig.json` beschränkt globale Typen über `types`; neue `@types`-Pakete dort eintragen.
 - `bunfig.toml` setzt eine 24-Stunden-Schutzfrist für neue Paketversionen.
+- PWA (Etappe 7a): `public/manifest.webmanifest` und `public/icons/` werden unverändert nach
+  `dist/` kopiert. Farben im Manifest und `theme-color` in `index.html` sind Kopien von
+  `APP_BACKGROUND` aus `theme.ts`; `src/test/manifest.test.ts` hält sie gleich. Noch kein
+  Service Worker (Etappe 7b).
+- Gerätefunktionen: Wake Lock (`src/lib/wakeLock.ts`) und Vibration (`src/lib/haptics.ts`)
+  prüfen die API und schlagen still fehl; beide nur aus Effekten heraus aufgerufen.
 - Statisches Hosting braucht einen SPA-Fallback auf `index.html` für Deep Links
   (`vite preview` macht das bereits).
