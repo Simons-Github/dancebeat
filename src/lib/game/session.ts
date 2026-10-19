@@ -1,7 +1,8 @@
 import type { GameResult } from "../types";
 
 /**
- * Small in-memory hand-over between screens (no persistence; highscores come with stage 4):
+ * Small in-memory hand-over between screens (not persisted; highscore and stars are stored in the
+ * song by `recordResult` in results.ts before the result is handed over):
  * - the final result for /result/$songId,
  * - whether the setup may start the game on its own. After "Abbrechen" in the countdown the
  *   setup would otherwise send the player straight back into the game; auto-start stays off for

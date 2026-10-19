@@ -3,6 +3,7 @@ import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/rea
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { RESULT_SAVE_TIMEOUT_MS } from "@/lib/game/results";
 import { getLastResult, isAutoStartArmed, resetSessionForTests } from "@/lib/game/session";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import type { Song } from "@/lib/types";
@@ -12,6 +13,19 @@ import { makeChoreo, makeSong } from "./fixtures";
 const library = vi.hoisted(() => ({ songs: [] as Song[] }));
 vi.mock("@/hooks/useSongLibrary", () => ({
   useSongLibrary: () => ({ songs: library.songs, loading: false }),
+}));
+/** In-memory repository over library.songs (the game stores the best result through it). */
+const repo = vi.hoisted(() => ({ failSave: false, hangSave: false, missing: false }));
+vi.mock("@/lib/library/repository", () => ({
+  songRepository: {
+    get: async (id: string) => (repo.missing ? undefined : library.songs.find((s) => s.id === id)),
+    save: async (song: Song) => {
+      if (repo.failSave) throw new Error("Der Speicher ist voll.");
+      if (repo.hangSave) await new Promise(() => {});
+      library.songs = library.songs.map((s) => (s.id === song.id ? song : s));
+      return song;
+    },
+  },
 }));
 
 /** Fake audio: time runs (on the fake clock) only while playing. */
@@ -141,6 +155,7 @@ beforeEach(() => {
     opts: null,
   });
   scene.estimators = [];
+  Object.assign(repo, { failSave: false, hangSave: false, missing: false });
 });
 
 afterEach(() => {
@@ -211,6 +226,7 @@ describe("Spielscreen (Simulationsmodus)", () => {
   });
 
   it("Perfekter simulierter Spieler: alle Moves PERFECT, Ende führt zum Ergebnis", async () => {
+    library.songs = library.songs.map((s) => ({ ...s, stars: 0 }));
     await renderAt(`/play/${SONG_ID}?sim=1`);
     await advance(5000);
     for (let i = 0; i < 40; i++) await advance(100);
@@ -219,6 +235,51 @@ describe("Spielscreen (Simulationsmodus)", () => {
     expect(r.counts.PERFECT).toBe(4);
     expect(r.maxCombo).toBe(4);
     expect(screen.getByTestId("result-score")).toHaveTextContent("4.000");
+    // 4 × PERFECT = 4000 of 8000 reference points (ratio 0.5 → 3 stars), beats the stored 1234.
+    expect(r.stars).toBe(3);
+    expect(r.newHighscore).toBe(true);
+    expect(library.songs[0]).toMatchObject({ highscore: 4000, stars: 3 });
+    expect(screen.getByTestId("new-highscore")).toBeInTheDocument();
+  });
+
+  it("Speicherfehler beim Highscore: Ergebnis erscheint trotzdem", async () => {
+    repo.failSave = true;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5000);
+    for (let i = 0; i < 40; i++) await advance(100);
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    expect(getLastResult(SONG_ID)?.newHighscore).toBe(false);
+    expect(library.songs[0]?.highscore).toBe(1234);
+    expect(warn).toHaveBeenCalled();
+    expect(screen.getByTestId("result-score")).toHaveTextContent("4.000");
+    expect(screen.queryByTestId("new-highscore")).toBeNull();
+  });
+
+  it("Song nicht in der Bibliothek gespeichert: Ergebnis ohne Highscore", async () => {
+    repo.missing = true;
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5000);
+    for (let i = 0; i < 40; i++) await advance(100);
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    expect(getLastResult(SONG_ID)?.newHighscore).toBe(false);
+    expect(screen.getByTestId("result-score")).toHaveTextContent("4.000");
+    expect(library.songs[0]?.highscore).toBe(1234);
+  });
+
+  it("Speichern hängt: nach dem Timeout erscheint das Ergebnis trotzdem", async () => {
+    repo.hangSave = true;
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5000);
+    for (let i = 0; i < 40; i++) await advance(100);
+    expect(phase()).toBe("ended");
+    expect(path()).toBe(`/play/${SONG_ID}`);
+    await advance(RESULT_SAVE_TIMEOUT_MS);
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    expect(getLastResult(SONG_ID)?.newHighscore).toBe(false);
+    expect(screen.getByTestId("result-score")).toHaveTextContent("4.000");
+    expect(warn).toHaveBeenCalled();
   });
 
   it("öffnet keine Kamera: kein getUserMedia, kein Video, keine Pose-Erkennung", async () => {

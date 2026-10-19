@@ -41,5 +41,9 @@ Piktogramme. Alle Farben, Fonts und Animationskonstanten stehen in `src/theme.ts
 
 ## Ergebnis-Screen
 
-Score zählt hoch, Sterne poppen nacheinander auf, Rangtitel, Anzahl PERFECT/SUPER/GOOD/OK/X,
-längste Combo, Konfetti ab 5 Sternen, Buttons „Nochmal“ und „Anderer Song“.
+Score zählt hoch, Sterne poppen nacheinander auf (Megastar als großer goldener Stern), Rangtitel,
+Anzahl PERFECT/SUPER/GOOD/OK/X in `RATING_COLORS`, längste Combo, goldenes „Neuer Highscore!“
+nach dem Hochzählen, Konfetti ab 5 Sternen, Buttons „Nochmal“ und „Anderer Song“. Zeiten und
+Konfetti: `RESULT` und `CONFETTI` in `src/theme.ts`. Bei `prefers-reduced-motion` steht der
+Endstand sofort da, ohne Konfetti. Im Querformat zwei Spalten. Hintergrund in der Songfarbe (vom
+Spiel übernommen).

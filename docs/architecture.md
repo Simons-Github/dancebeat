@@ -152,8 +152,11 @@ Abbrechen im Countdown ──▶ /setup/$songId
   HTTP-Cache); der Vorlauf von 2 s deckt das ab. Die Aufstellhilfe wechselt nach dem Einrasten von
   selbst ins Spiel. Nach „Abbrechen“ ist der Auto-Start für diesen Song aus, bis „Los geht's“
   getippt wird (`src/lib/game/session.ts`).
-- Endstand für `/result/$songId` liegt im Speicher (`setLastResult`/`getLastResult`), nicht
-  persistent; Highscores folgen in Etappe 4.
+- Endstand für `/result/$songId` liegt im Speicher (`setLastResult`/`getLastResult`). Vorher
+  speichert `recordResult` (`src/lib/game/results.ts`) Highscore und Sterne über
+  `SongRepository` im Song-Eintrag; beide steigen nur. Schlägt das Speichern fehl, gibt es eine
+  Warnung und der Ergebnis-Screen öffnet trotzdem (ohne „Neuer Highscore!“). Nach einem Neuladen
+  ist der Endstand weg; der Ergebnis-Screen zeigt dann „Kein Ergebnis“.
 - Auf `/play/…` blendet `AppShell` Kopfzeile und Dekor-Hintergrund aus.
 - Piktogramme (`src/lib/game/pikto.ts`): reine Funktionen für Positionen (`piktoLayout`),
   Blitzplan (höchstens 3 pro Sekunde), Strichfiguren aus Landmarks (`stickFigure`) und die feste
@@ -296,7 +299,7 @@ erhalten). Keine `src/pages/` und kein `app/layout.tsx` anlegen.
 `src/routeTree.gen.ts` erzeugt das Vite-Plugin; nicht von Hand bearbeiten.
 
 Routen der App: `/` (Bibliothek), `/setup/$songId` (Aufstellhilfe), `/play/$songId` (Spiel,
-Vollbild), `/result/$songId` (Ergebnis, Platzhalter bis Etappe 4), `/settings`.
+Vollbild), `/result/$songId` (Ergebnis), `/settings`.
 
 ## Build und Werkzeuge
 

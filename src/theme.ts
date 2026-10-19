@@ -114,3 +114,32 @@ export const GAME = {
 
 /** Rating popups: rise distance (vh) and duration (s). */
 export const POPUP = { riseVh: 6, seconds: 0.9 } as const;
+
+/** Result screen: score count-up (s, ease), star pop-in delay and stagger (s), lit star color. */
+export const RESULT = {
+  countUpSeconds: 1.6,
+  countUpEase: "easeOut",
+  starDelaySeconds: 0.4,
+  starStaggerSeconds: 0.22,
+  starOn: "#FFFFFF",
+} as const;
+
+/**
+ * One-shot confetti for 5 stars / megastar. Pieces fall from `startVh` to `endVh`, drift sideways
+ * up to ±`driftVw`/2, spin 1..`maxTurns` turns. Fall time is `fallSeconds` × (1 ± `durationJitter`/2),
+ * start delays spread over `delaySpreadSeconds`, height is `sizePx` × (`minAspect` + 0..1).
+ */
+export const CONFETTI = {
+  count: 36,
+  fallSeconds: 2.8,
+  durationJitter: 0.5,
+  delaySpreadSeconds: 0.9,
+  sizePx: 10,
+  minAspect: 0.5,
+  startVh: -5,
+  endVh: 105,
+  driftVw: 20,
+  maxTurns: 3,
+  ease: "easeIn",
+  colors: [GOLD, GOLD_DEEP, "#FF2E93", "#00E5FF", "#7CFF4F", "#FFFFFF"],
+} as const;

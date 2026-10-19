@@ -12,7 +12,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                         | Sonnet                                                                |
 | 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
 | 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ⏳                         | Sonnet                                                                |
+| 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ⏳                         | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
@@ -164,12 +164,32 @@ Gerätetest 3b (Handy: `bun run dev:https`, `?devsong=youtube:<ID>` bzw.
 - Desktop: beide Quellen komplett durchspielen; Video mit gesperrtem Einbetten → verständliche
   Meldung; im Netzwerk-Tab kommt das Iframe von `youtube-nocookie.com`.
 
-### 4. Ergebnis-Screen und Highscores ⏳
+### 4. Ergebnis-Screen und Highscores ✅
 
 - Score zählt hoch, Sterne nacheinander, Rangtitel, Zähler je Urteil, längste Combo, Konfetti ab
   5 Sternen, „Nochmal“ und „Anderer Song“.
 - Highscore und Sterne pro Song im Song-Eintrag speichern (über `SongRepository`; die
   ursprüngliche Beschreibung nannte localStorage).
+
+Umgesetzt:
+
+- `recordResult` (`src/lib/game/results.ts`) speichert Highscore und Sterne beim Spielende über
+  `SongRepository`. Beide Werte steigen nur. Das Format bleibt unverändert.
+- Fehlt der Song (Dev-Song), schlägt das Speichern fehl oder hängt es länger als 2 s, öffnet der
+  Ergebnis-Screen trotzdem, ohne „Neuer Highscore!“.
+- Neuer `ResultScreen`:
+  - Score zählt per Motion-Value hoch, ohne `setState` pro Frame.
+  - Sterne poppen nacheinander, Megastar als großer goldener Stern.
+  - Rangtitel, Urteile mit Farbmarke, längste Combo, „Neuer Highscore!“.
+  - Konfetti ab 5 Sternen, ohne neue Abhängigkeit.
+  - `prefers-reduced-motion` zeigt den Endstand sofort.
+  - Im Querformat zwei Spalten. Fokus auf dem Titel.
+- Konstanten `RESULT` und `CONFETTI` in `src/theme.ts`.
+- Tests für Ergebnislogik (mit `fake-indexeddb`), Ergebnis-Screen und das Speichern im Spielscreen.
+- Playwright (Simulationsmodus, 390×844 und 844×390): Megastar-Lauf, Highscore erscheint in der
+  Bibliothek, Konsole sauber.
+- **Offen:** Gerätetest (Animationen, Konfetti-Leistung, Lesbarkeit). Nach einem Neuladen ist der
+  Endstand weg und der Screen zeigt „Kein Ergebnis“; das ist so gewollt.
 
 ### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ ⏳
 

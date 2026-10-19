@@ -25,8 +25,10 @@ import { beatPulse } from "@/lib/game/beat";
 import { GameController, type GameState } from "@/lib/game/controller";
 import { drawCoach, drawPiktos, drawSkeleton } from "@/lib/game/draw";
 import { coachPose, coachView, flashSchedule, moveFigures, piktoLayout } from "@/lib/game/pikto";
+import { recordResultSafely } from "@/lib/game/results";
 import { disarmAutoStart, setLastResult } from "@/lib/game/session";
 import { simulatedAngles, type SimOptions } from "@/lib/game/simulatedPlayer";
+import { songRepository } from "@/lib/library/repository";
 import { MOVE_WINDOW_MS } from "@/lib/scorer";
 import { computeAngles } from "@/lib/pose";
 import { getSettings, useSettings } from "@/lib/settings";
@@ -118,22 +120,40 @@ export function GameScreen({ song, sim }: { song: Song; sim: SimOptions | null }
   });
   const cameraReady = !!sim || camera.status === "ready";
 
-  // What the end of the game hands to the result screen.
+  // What the end of the game hands to the result screen. The best result is stored in the song
+  // first; a storage error or a slow save is logged and never keeps the player from the result.
+  // GameController.finish() runs onEnd only once, so no extra guard is needed here.
+  const mountedRef = useRef(true);
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
   const finishRef = useRef(() => {});
   finishRef.current = () => {
     const snap = scoring.getSnapshot();
-    if (snap) {
-      setLastResult({
-        songId: song.id,
-        score: snap.score,
-        stars: snap.stars,
-        mega: snap.mega,
-        counts: snap.counts,
-        maxCombo: snap.maxCombo,
-        newHighscore: snap.score > song.highscore,
-      });
+    const toResult = () => void navigate({ to: "/result/$songId", params: { songId: song.id } });
+    if (!snap) {
+      toResult();
+      return;
     }
-    void navigate({ to: "/result/$songId", params: { songId: song.id } });
+    void recordResultSafely(songRepository, song.id, snap.score, snap.stars).then(
+      ({ newHighscore }) => {
+        // Left the game while saving (e.g. back button): stay where the player went.
+        if (!mountedRef.current) return;
+        setLastResult({
+          songId: song.id,
+          score: snap.score,
+          stars: snap.stars,
+          mega: snap.mega,
+          counts: snap.counts,
+          maxCombo: snap.maxCombo,
+          newHighscore,
+        });
+        toResult();
+      },
+    );
   };
 
   const endMs = (choreo.moves.at(-1)?.timeMs ?? 0) + MOVE_WINDOW_MS + END_TAIL_MS;
