@@ -265,7 +265,10 @@ exakt auf `1.1.1` festgelegt und ein Test prüft, dass beides übereinstimmt.
 Alle Abrufe außer Spotify sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
 (`src/components/setup/PrivacyNote.tsx`; W12): die ersten beiden immer, bei YouTube-Songs
 zusätzlich YouTube (Skript von youtube.com, Video über youtube-nocookie.com), bei URL-Songs der
-Hostname der Adresse; beide mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Ziel (Etappe 7): WASM und Modell nach `public/`
+Hostname der Adresse; beide mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Der Sync-Test
+(`/sync/$songId`) startet keine Kamera; er nennt per `PrivacyNote camera={false}` nur den Abruf
+der Songquelle (YouTube bzw. Host der Audio-URL, bei lokalen Dateien nichts). Spotify-Songs
+lädt er nicht (folgt mit Etappe 10). Ziel (Etappe 7): WASM und Modell nach `public/`
 verlegen, dann entfallen sie und der Hinweis wird angepasst.
 
 **Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
@@ -341,7 +344,8 @@ erhalten). Keine `src/pages/` und kein `app/layout.tsx` anlegen.
 `src/routeTree.gen.ts` erzeugt das Vite-Plugin; nicht von Hand bearbeiten.
 
 Routen der App: `/` (Bibliothek), `/setup/$songId` (Aufstellhilfe), `/play/$songId` (Spiel,
-Vollbild), `/result/$songId` (Ergebnis), `/settings`.
+Vollbild), `/result/$songId` (Ergebnis), `/sync/$songId` (Sync-Test pro Song, siehe
+[scoring.md](scoring.md#sync-test-pro-song)), `/settings`.
 
 ## Build und Werkzeuge
 

@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { getStorageUsage, type StorageUsage } from "@/lib/library/storage";
 import { DIFFICULTIES, type Difficulty } from "@/lib/scoring";
 import { LATENCY_MAX, LATENCY_MIN, LATENCY_STEP, useSettings } from "@/lib/settings";
+import { formatOffsetMs } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 
 const CARD =
@@ -25,7 +26,6 @@ const DIFFICULTY_LABELS: Record<Difficulty, string> = {
 
 const formatMb = (bytes: number) =>
   `${(bytes / (1024 * 1024)).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MB`;
-const formatLatency = (ms: number) => `${ms > 0 ? "+" : ms < 0 ? "\u2212" : ""}${Math.abs(ms)} ms`;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -164,12 +164,12 @@ export function SettingsScreen() {
             <div className="flex items-baseline justify-between gap-3">
               <span className="text-base font-medium">Latenz-Ausgleich</span>
               <span aria-hidden className="text-base tabular-nums">
-                {formatLatency(shownLatency)}
+                {formatOffsetMs(shownLatency)}
               </span>
             </div>
             <Slider
               aria-label="Latenz-Ausgleich"
-              aria-valuetext={formatLatency(shownLatency)}
+              aria-valuetext={formatOffsetMs(shownLatency)}
               min={LATENCY_MIN}
               max={LATENCY_MAX}
               step={LATENCY_STEP}

@@ -1,5 +1,6 @@
 import { useId, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { Download, Pencil, Trash2 } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { AudioWaveform, Download, Pencil, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -25,6 +26,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StorageFullError } from "@/lib/library/storage";
+import { formatOffsetMs } from "@/lib/sync";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -183,7 +185,9 @@ export function EditSongDialog({
       >
         <DialogHeader>
           <DialogTitle>Song bearbeiten</DialogTitle>
-          <DialogDescription>Ändere Titel und Künstler oder lösche den Song.</DialogDescription>
+          <DialogDescription>
+            Ändere Titel und Künstler, prüfe den Takt im Sync-Test oder lösche den Song.
+          </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
@@ -224,6 +228,20 @@ export function EditSongDialog({
             <Download aria-hidden />
             Choreografie exportieren
           </Button>
+          {target && (
+            <div className="flex flex-wrap items-center gap-3">
+              <Button asChild variant="secondary" className={BTN}>
+                <Link to="/sync/$songId" params={{ songId: target.id }}>
+                  <AudioWaveform aria-hidden />
+                  Sync-Test
+                </Link>
+              </Button>
+              <p className="text-base">
+                Sync-Offset:{" "}
+                <span className="tabular-nums">{formatOffsetMs(target.syncOffsetMs)}</span>
+              </p>
+            </div>
+          )}
           {error && (
             <p role="alert" className={ERROR}>
               {error}

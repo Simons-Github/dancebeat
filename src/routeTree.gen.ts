@@ -14,6 +14,7 @@ import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as PlaySongIdRouteImport } from './routes/play/$songId'
 import { Route as ResultSongIdRouteImport } from './routes/result/$songId'
 import { Route as SetupSongIdRouteImport } from './routes/setup/$songId'
+import { Route as SyncSongIdRouteImport } from './routes/sync/$songId'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +41,11 @@ const SetupSongIdRoute = SetupSongIdRouteImport.update({
   path: '/setup/$songId',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SyncSongIdRoute = SyncSongIdRouteImport.update({
+  id: '/sync/$songId',
+  path: '/sync/$songId',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +53,7 @@ export interface FileRoutesByFullPath {
   '/play/$songId': typeof PlaySongIdRoute
   '/result/$songId': typeof ResultSongIdRoute
   '/setup/$songId': typeof SetupSongIdRoute
+  '/sync/$songId': typeof SyncSongIdRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +61,7 @@ export interface FileRoutesByTo {
   '/play/$songId': typeof PlaySongIdRoute
   '/result/$songId': typeof ResultSongIdRoute
   '/setup/$songId': typeof SetupSongIdRoute
+  '/sync/$songId': typeof SyncSongIdRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +70,25 @@ export interface FileRoutesById {
   '/play/$songId': typeof PlaySongIdRoute
   '/result/$songId': typeof ResultSongIdRoute
   '/setup/$songId': typeof SetupSongIdRoute
+  '/sync/$songId': typeof SyncSongIdRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
   fullPaths:
-    '/' | '/settings' | '/play/$songId' | '/result/$songId' | '/setup/$songId'
+    | '/'
+    | '/settings'
+    | '/play/$songId'
+    | '/result/$songId'
+    | '/setup/$songId'
+    | '/sync/$songId'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/settings' | '/play/$songId' | '/result/$songId' | '/setup/$songId'
+  to:
+    | '/'
+    | '/settings'
+    | '/play/$songId'
+    | '/result/$songId'
+    | '/setup/$songId'
+    | '/sync/$songId'
   id:
     | '__root__'
     | '/'
@@ -76,6 +96,7 @@ export interface FileRouteTypes {
     | '/play/$songId'
     | '/result/$songId'
     | '/setup/$songId'
+    | '/sync/$songId'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -84,6 +105,7 @@ export interface RootRouteChildren {
   PlaySongIdRoute: typeof PlaySongIdRoute
   ResultSongIdRoute: typeof ResultSongIdRoute
   SetupSongIdRoute: typeof SetupSongIdRoute
+  SyncSongIdRoute: typeof SyncSongIdRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -123,6 +145,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof SetupSongIdRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/sync/$songId': {
+      id: '/sync/$songId'
+      path: '/sync/$songId'
+      fullPath: '/sync/$songId'
+      preLoaderRoute: typeof SyncSongIdRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -132,6 +161,7 @@ const rootRouteChildren: RootRouteChildren = {
   PlaySongIdRoute: PlaySongIdRoute,
   ResultSongIdRoute: ResultSongIdRoute,
   SetupSongIdRoute: SetupSongIdRoute,
+  SyncSongIdRoute: SyncSongIdRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)

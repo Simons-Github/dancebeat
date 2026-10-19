@@ -13,7 +13,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
 | 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a, 5b, 5c)            | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a, 5b, 5c, 5d Teil 1) | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
@@ -194,7 +194,7 @@ Umgesetzt:
 - **Offen:** Gerätetest (Animationen, Konfetti-Leistung, Lesbarkeit). Nach einem Neuladen ist der
   Endstand weg und der Screen zeigt „Kein Ergebnis“; das ist so gewollt.
 
-### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a, 5b, 5c umgesetzt)
+### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a, 5b, 5c, 5d Teil 1 umgesetzt)
 
 **5a Einstellungen – umgesetzt, Gerätetest offen.**
 
@@ -245,10 +245,23 @@ Umgesetzt:
   der JSON-Datei in Safari und als installierte PWA, große Dateien und Speicherquote,
   `navigator.storage.persist()`.
 
+**5d Teil 1 Sync-Test – umgesetzt, Gerätetest offen.**
+
+- Route `/sync/$songId` (`SyncTestScreen`), erreichbar über „Sync-Test“ im Dialog „Song
+  bearbeiten“, der auch den aktuellen Sync-Offset zeigt. Start spielt ab `startOffsetMs`, Taps auf
+  die Fläche oder per Leertaste, Live-Abweichung je Tap, Vorschlag mit Streuung und Hinweis bei
+  ungleichmäßigen Taps; „Speichern“, „Nochmal“, „Auf 0 zurücksetzen“, „Abbrechen“.
+  Warnsymbol bei YouTube, Abruf der Songquelle (YouTube, Audio-URL) benannt. Spotify: Hinweis
+  „Sync-Test für Spotify folgt mit Etappe 10“, keine Quelle. Tap-Zeit ohne Event-Verzögerung
+  (`tapAudioMs`).
+- Berechnung `computeSyncOffset` in `src/lib/sync.ts` (zyklisch, Median, Ausreißer, MAD), Details
+  und Vorzeichen in [scoring.md](scoring.md#sync-test-pro-song). Kein Formatwechsel:
+  `syncOffsetMs` gab es schon.
+- **Offen:** Gerätetest (Tap-Latenz von Touch und Bildschirm, iOS-Start im Tipp, YouTube-Start
+  im Tipp, Bluetooth-Kopfhörer), Playwright-Durchlauf in Hoch- und Querformat.
+
 **Noch offen in Etappe 5 (5d):**
 
-- Sync-Test pro Song: zum Beat tippen, Offset berechnen und speichern. Warnsymbol bei Quellen mit
-  geringer Timing-Genauigkeit (YouTube, Spotify).
 - Im Dialog „Song hinzufügen“ bzw. „Song bearbeiten“: Sync-Offset mit Vorschau und optionaler
   Start-Offset.
 - N12 (Aufstellhilfe im Querformat).

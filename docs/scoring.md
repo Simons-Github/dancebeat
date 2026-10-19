@@ -41,6 +41,43 @@ React rendert nur, wenn ein Move bewertet wurde (etwa einmal pro Move), nie pro 
   Etappe 5).
 - Countdown und Pausen-Countdown laufen über `setTimeout`; das ist keine Bewertung.
 
+## Sync-Test pro Song
+
+Route `/sync/$songId` (`SyncTestScreen`, erreichbar über „Sync-Test“ im Dialog „Song
+bearbeiten“). Der Song läuft ab `startOffsetMs`; der Spieler tippt im Takt auf die Fläche oder
+drückt die Leertaste. Jeder Tipp speichert `AudioSource.getTimeMs()`, abzüglich des Alters des Eingabe-Events
+(`performance.now() − event.timeStamp`, mal `playbackRate`; Werte außerhalb 0–200 ms gelten als 0,
+`tapAudioMs`, wie `frameGameTimeMs`); nur Taps bei laufender Musik
+zählen. Die Berechnung steckt in `computeSyncOffset` (`src/lib/sync.ts`):
+
+1. Die ersten 2 Taps fallen weg (`SYNC_DISCARD_TAPS`, Einschwingen). Danach braucht es mindestens
+   8 Taps (`SYNC_MIN_TAPS`), sonst gibt es keinen Vorschlag.
+2. Je Tap: Rest `r = tap − Latenz − choreo.offsetMs` modulo Beatlänge `60000 / bpm`, gewickelt
+   nach (−Beat/2, +Beat/2].
+3. Die Reste sind zyklisch (ein Tipp knapp vor und einer knapp nach dem Beat liegen nah
+   beieinander). Deshalb: zyklischer Mittelwert als Zentrum, Reste um das Zentrum neu wickeln,
+   dann Median.
+4. Ausreißer weiter als max(60 ms, 3 × MAD) vom Median fallen weg (`SYNC_OUTLIER_FLOOR_MS`).
+5. Vorschlag = Zentrum + Median, gewickelt und auf ganze ms gerundet. Streuung = Median der absoluten Abweichung (MAD) der verbleibenden Taps. Über 45 ms (`SYNC_MAX_SPREAD_MS`) zeigt der Screen
+   „Ungleichmäßig, nochmal versuchen.“
+
+**Vorzeichen:** `Spielzeit = Audio − Latenz − syncOffsetMs − choreo.offsetMs`. Mit
+`syncOffsetMs = Vorschlag` liegt die Spielzeit im Moment, in dem der Spieler den Beat hört und
+tippt, auf dem Raster `k · Beatlänge`. Positiv heißt: der Spieler hört den Beat später, als die
+Audioposition sagt; die Choreografie rückt nach hinten. Der Wert ist nur bis auf einen ganzen
+Beat bestimmt (Bereich ±Beat/2). Die globale Latenz bleibt davon getrennt: der Sync-Offset misst
+nur, was nach Abzug der Latenz pro Song übrig bleibt.
+
+**Annahme:** Die Moves liegen auf dem Beatraster `k · 60000 / bpm + choreo.offsetMs` (so legt
+`autoChoreo` sie an). Importierte Choreografien, deren Moves neben diesem Raster liegen, deckt der
+Sync-Test nicht ab. **Nur am Gerät prüfbar:** Die Verzögerung vor dem Eingabe-Event
+(Touch-Hardware, Abtastrate des Displays) steckt weiter in den Taps und damit im Vorschlag.
+
+Die Live-Liste zeigt je Tap die Abweichung vom Raster mit dem **gespeicherten** Offset
+(`beatDeviationMs`). „Speichern“ schreibt den Vorschlag über `useSongLibrary().save`
+(`SongRepository`) und kehrt zur Bibliothek zurück; „Auf 0 zurücksetzen“ speichert 0. Bei YouTube
+und Spotify (`isLowPrecision`) warnt der Screen, dass die Zeitmessung ungenauer ist.
+
 ## Start-Offset und Seek
 
 - `seekTo(t)` setzt den Zeiger ohne Wertung auf den ersten Move, dessen Fenster bei `t` noch offen
