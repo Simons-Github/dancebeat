@@ -13,7 +13,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
 | 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a, 5b)                | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a, 5b, 5c)            | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
@@ -37,6 +37,8 @@ Choreo-Wechsel. N4: Soundeffekte nutzen den beim Tippen entsperrten gemeinsamen 
 W9 teilweise: `type` als Union, Lade-Race beim Songwechsel, `ended`/`error` zurückgesetzt,
 `visibilitychange` → Pause.
 ✅ N3 (Etappe 5b): Seed-Regel prüft die Bibliothek, gelöschte Demos bleiben weg.
+✅ W11 (Etappe 5a, 5c): Settings mit zod geprüft, Persistenz-Anfrage beim Anlegen, `StorageFullError`
+verständlich angezeigt.
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
@@ -192,7 +194,7 @@ Umgesetzt:
 - **Offen:** Gerätetest (Animationen, Konfetti-Leistung, Lesbarkeit). Nach einem Neuladen ist der
   Endstand weg und der Screen zeigt „Kein Ergebnis“; das ist so gewollt.
 
-### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a, 5b umgesetzt)
+### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a, 5b, 5c umgesetzt)
 
 **5a Einstellungen – umgesetzt, Gerätetest offen.**
 
@@ -224,19 +226,32 @@ Umgesetzt:
   Löschen ggf. ins Leere (harmlos, Auswahl fällt auf den ersten Song); bei leerer Bibliothek
   bleiben die Farben des letzten Songs.
 
-**Noch offen in Etappe 5:**
+**5c Song hinzufügen, Export und Import – umgesetzt, Gerätetest offen.**
+
+- „Song hinzufügen“ (`AddSongDialog`) mit Tabs Datei, URL, YouTube. Datei: BPM-Schätzung und
+  Länge per `analyzeAudio`, BPM korrigierbar; nicht dekodierbare Dateien → „Bitte MP3, M4A, WAV
+  oder OGG verwenden“. URL (nur https, Hinweis „nur eigene oder private Quellen“, Host wird
+  genannt) und YouTube (Link oder ID): BPM und Länge von Hand.
+- Choreografie automatisch (`autoChoreo`) oder aus einer Exportdatei importiert. Der neue Song
+  wird danach ausgewählt.
+- „Choreografie exportieren“ im Dialog „Song bearbeiten“ (JSON ohne Audio).
+- W11 Rest: `requestPersistentStorage()` vor dem Speichern, `StorageFullError` mit eigener
+  Meldung im Dialog. Logik in `src/lib/library/newSong.ts`, Details in
+  [architecture.md](architecture.md#song-hinzufügen-und-choreografie-exportieren).
+- Playwright (390×844 und 844×390): kaputte Datei → Meldung, WAV-Klicktrack → 120 BPM und 20 s
+  erkannt, Song angelegt, ausgewählt und im Simulationsmodus bis zum Ergebnis gespielt, Export,
+  Re-Import, Konsole sauber.
+- **Offen:** Gerätetest: echte MP3/M4A auf iOS (Dekodieren, BPM-Treffer), Dateiauswahl, Download
+  der JSON-Datei in Safari und als installierte PWA, große Dateien und Speicherquote,
+  `navigator.storage.persist()`.
+
+**Noch offen in Etappe 5 (5d):**
 
 - Sync-Test pro Song: zum Beat tippen, Offset berechnen und speichern. Warnsymbol bei Quellen mit
   geringer Timing-Genauigkeit (YouTube, Spotify).
-- Dialog „Song hinzufügen“ mit Tabs Datei, URL, YouTube (Spotify erst mit Etappe 10). Datei: BPM
-  per Analyse (`estimateBpm`) mit manueller Korrektur; Online-Quellen: BPM manuell. Pro Song
-  Sync-Offset mit Vorschau und optionaler Start-Offset. Hinweis bei URL: nur eigene oder private
-  Quellen.
-- Choreografie exportieren und importieren (JSON-Datei, ohne Audio).
-- W11 Rest: `requestPersistentStorage()` beim ersten Speichern, Anzeige des belegten Speichers
-  (`getStorageUsage`), `StorageFullError` verständlich anzeigen. Settings beim Lesen mit zod
-  prüfen.
-- Fehlermeldung bei nicht dekodierbarer Audiodatei („Bitte MP3, M4A, WAV oder OGG verwenden“).
+- Im Dialog „Song hinzufügen“ bzw. „Song bearbeiten“: Sync-Offset mit Vorschau und optionaler
+  Start-Offset.
+- N12 (Aufstellhilfe im Querformat).
 
 ### 6. Bewegungsmodus ⏳
 
@@ -295,7 +310,6 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                           | 10     |
 | W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                           | 3b     |
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                           | 3b     |
-| W11 | Teilweise: Settings-Validierung erledigt (5a); Persistenz-Anfrage und `StorageFullError`-Anzeige offen                           | 5      |
 | W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                         | 7      |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                         | 11     |
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                     | 11     |

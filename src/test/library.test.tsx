@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import type { Song } from "@/lib/types";
 import { StorageFullError } from "@/lib/library/storage";
@@ -16,6 +16,7 @@ const library = vi.hoisted(() => {
     loading: false,
     remove: vi.fn<(s: Song) => Promise<void>>(),
     rename: vi.fn<(s: Song, title: string, artist?: string) => Promise<void>>(),
+    exportChoreo: vi.fn<(s: Song) => Promise<string>>(),
     listeners,
     /** Replaces the songs and re-renders every mounted library, like a refresh would. */
     setSongs(songs: Song[]) {
@@ -37,6 +38,7 @@ vi.mock("@/hooks/useSongLibrary", async () => {
       save: vi.fn(),
       remove: library.remove,
       rename: library.rename,
+      exportChoreo: library.exportChoreo,
       refresh: vi.fn(),
     }),
   };
@@ -79,6 +81,7 @@ afterEach(() => {
   library.loading = false;
   library.remove.mockReset();
   library.rename.mockReset();
+  library.exportChoreo.mockReset();
 });
 
 describe("Song library", () => {
@@ -161,10 +164,10 @@ describe("Song library", () => {
     ).toBeInTheDocument();
   });
 
-  it("opens the add-song dialog with the stage hint", async () => {
+  it("opens the add-song dialog", async () => {
     await renderAt("/");
     fireEvent.click(await screen.findByRole("button", { name: "Song hinzufügen" }));
-    expect(await screen.findByText("Folgt in Etappe 5")).toBeInTheDocument();
+    expect(await screen.findByRole("dialog", { name: "Song hinzufügen" })).toBeInTheDocument();
   });
 });
 
@@ -305,5 +308,61 @@ describe("Other routes", () => {
     await renderAt("/gibt-es-nicht");
     expect(await screen.findByText("Seite nicht gefunden")).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Zur Startseite" })).toHaveAttribute("href", "/");
+  });
+
+  it("exports the choreography as a .dancebeat.json download", async () => {
+    const song = demoSong("Pink Pulse!", 112, 1, "#FF2E93", "#00E5FF");
+    library.songs = [song];
+    library.exportChoreo.mockResolvedValue('{"a":1}');
+    // Capture the deferred revoke instead of faking all timers (the router needs real ones).
+    const realSetTimeout = globalThis.setTimeout;
+    const deferred: (() => void)[] = [];
+    vi.spyOn(globalThis, "setTimeout").mockImplementation(((fn: () => void, ms?: number) => {
+      if (ms === 1000) {
+        deferred.push(fn);
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      }
+      return realSetTimeout(fn, ms);
+    }) as typeof setTimeout);
+    const createUrl = vi.fn(() => "blob:test");
+    const revokeUrl = vi.fn();
+    // jsdom has no object URLs: install stubs and restore the originals afterwards.
+    const originalCreate = URL.createObjectURL;
+    const originalRevoke = URL.revokeObjectURL;
+    URL.createObjectURL = createUrl;
+    URL.revokeObjectURL = revokeUrl;
+    onTestFinished(() => {
+      URL.createObjectURL = originalCreate;
+      URL.revokeObjectURL = originalRevoke;
+      vi.mocked(globalThis.setTimeout).mockRestore();
+    });
+    let downloadName = "";
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(function (
+      this: HTMLAnchorElement,
+    ) {
+      downloadName = this.download;
+    });
+    await renderAt("/");
+
+    fireEvent.click(await screen.findByRole("button", { name: "Song bearbeiten" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choreografie exportieren" }));
+
+    await vi.waitFor(() => expect(downloadName).toBe("pink-pulse.dancebeat.json"));
+    expect(library.exportChoreo).toHaveBeenCalledWith(song);
+    expect(revokeUrl).not.toHaveBeenCalled(); // deferred for Safari
+    deferred.forEach((fn) => fn()); // includes unrelated 1 s timers (e.g. waitFor)
+    expect(revokeUrl).toHaveBeenCalledWith("blob:test");
+    click.mockRestore();
+  });
+
+  it("shows an error when the export fails", async () => {
+    library.songs = [demoSong("Pink Pulse", 112, 1, "#FF2E93", "#00E5FF")];
+    library.exportChoreo.mockRejectedValue(new Error("x"));
+    await renderAt("/");
+    fireEvent.click(await screen.findByRole("button", { name: "Song bearbeiten" }));
+    fireEvent.click(await screen.findByRole("button", { name: "Choreografie exportieren" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Die Choreografie konnte nicht exportiert werden.",
+    );
   });
 });

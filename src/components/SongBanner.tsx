@@ -10,9 +10,19 @@ interface SongBannerProps {
   song: Song | undefined;
   onRename: (song: Song, title: string, artist: string) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
+  onExport: (song: Song) => Promise<string>;
+  onAdd: (song: Song, audio?: Blob) => Promise<void>;
+  onAdded: (song: Song) => void;
 }
 
-export function SongBanner({ song, onRename, onRemove }: SongBannerProps) {
+export function SongBanner({
+  song,
+  onRename,
+  onRemove,
+  onExport,
+  onAdd,
+  onAdded,
+}: SongBannerProps) {
   const sectionRef = useRef<HTMLElement>(null);
   const [refocus, setRefocus] = useState(0);
 
@@ -45,6 +55,7 @@ export function SongBanner({ song, onRename, onRemove }: SongBannerProps) {
           song={song}
           onRename={onRename}
           onRemove={onRemove}
+          onExport={onExport}
           onDeleted={() => setRefocus((n) => n + 1)}
         />
       </div>
@@ -63,7 +74,7 @@ export function SongBanner({ song, onRename, onRemove }: SongBannerProps) {
           Los geht's
         </Button>
       )}
-      <AddSongDialog />
+      <AddSongDialog onAdd={onAdd} onAdded={onAdded} />
     </section>
   );
 }

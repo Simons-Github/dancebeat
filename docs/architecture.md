@@ -209,6 +209,30 @@ die IndexedDB-Implementierung; eine Server-Variante kann dieselbe Schnittstelle 
 - `src/lib/library/storage.ts`: `requestPersistentStorage()` (Safari löscht sonst Daten nicht
   installierter Seiten nach 7 Tagen ohne Nutzung) und `getStorageUsage()` für die Anzeige.
 
+### Song hinzufügen und Choreografie exportieren
+
+- `AddSongDialog` (Tabs Datei, URL, YouTube) baut den Song über die reine Funktion
+  `buildNewSong` (`src/lib/library/newSong.ts`, endet mit `SongSchema.parse`) und speichert ihn
+  über `useSongLibrary.save`. Lokale Songs bekommen eine frische `blobId`; das Repository legt die
+  Datei in derselben Transaktion unter dieser ID ab.
+- Datei: `analyzeAudio` (`src/lib/beat.ts`) dekodiert einmal und liefert BPM-Schätzung und
+  Länge; nicht dekodierbare Dateien ergeben „Bitte MP3, M4A, WAV oder OGG verwenden“. URL und
+  YouTube: BPM und Länge von Hand (Standard 120 BPM, 180 s), weil ein automatisches Auslesen
+  schon beim Anlegen Netzabrufe auslösen würde. Länge 10–600 s; längere Dateien werden auf
+  600 s begrenzt, die Choreografie deckt dann nur den Anfang ab.
+- URL-Quellen nur `https:` (Ausnahme localhost), sonst blockiert der Browser sie auf der
+  HTTPS-Seite als Mixed Content. YouTube-Links: `watch?v=`, `youtu.be`, `shorts`, `embed`,
+  `youtube-nocookie.com` oder die blanke ID.
+- Choreografie: automatisch (`autoChoreo`, Farbpaar zufällig aus `SONG_PALETTES`) oder Import
+  einer Exportdatei (`parseChoreoFile`). Beim Import gelten BPM, Sync- und Start-Offset der Datei
+  (die Moves sind darauf getimt); Titel, Künstler und Schwierigkeit kommen aus dem Formular und
+  werden aus der Datei vorbelegt, solange der Nutzer sie nicht selbst geändert hat.
+- Vor dem Speichern läuft `requestPersistentStorage()` (Ergebnis wird nicht abgewartet).
+  `StorageFullError` erscheint mit eigener Meldung im Dialog.
+- Export: „Choreografie exportieren“ in „Song bearbeiten“ lädt `<titel>.dancebeat.json` (ohne
+  Audio, Quelle und Highscore) als Blob-URL herunter; die URL wird verzögert freigegeben
+  (Safari bricht den Download sonst ab).
+
 IndexedDB-Versionen:
 
 | DB-Version | Änderung                                                                    |
@@ -229,6 +253,9 @@ UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 | YouTube-Player, Video          | www.youtube-nocookie.com              | Aufstellhilfe benannt                     |
 | Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden                        |
 | Audio-URL                      | vom Nutzer eingegebene Adresse        | in der Aufstellhilfe mit Hostname benannt |
+
+Der Dialog „Song hinzufügen“ ruft selbst nichts ab, nennt aber schon beim Anlegen den Host der
+Audio-URL bzw. youtube-nocookie.com als spätere Gegenstelle.
 
 Die ersten beiden Abrufe gehen bei jedem Start der Kamera raus (kein Service Worker, mindestens
 zur Cache-Prüfung), nicht nur beim ersten Mal. Die WASM-URL entsteht aus der Konstante
@@ -293,7 +320,8 @@ mehr als 25 FPS. Werte trägt der Nutzer nach.
 `src/lib/beat.ts`: Onset-Hüllkurve (10-ms-Schritte, max. 90 s) plus Autokorrelation über 70–180
 BPM. Die Schleife summiert nur Terme, deren gerundete Indizes existieren;
 `src/test/beat.test.ts` vergleicht das mit der früheren Implementierung auf synthetischen
-Klick-Tracks. `quantize` rastet Zeiten auf Beats ein (für den Video-Import).
+Klick-Tracks. `analyzeAudio` dekodiert die Datei einmal (Decoder für Tests austauschbar) und
+liefert BPM (gerundet, 30–300) und Länge. `quantize` rastet Zeiten auf Beats ein (für den Video-Import).
 
 ## Routing-Konventionen
 

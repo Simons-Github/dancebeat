@@ -12,10 +12,19 @@ interface SongLibraryProps {
   loading: boolean;
   onRename: (song: Song, title: string, artist: string) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
+  onExport: (song: Song) => Promise<string>;
+  onAdd: (song: Song, audio?: Blob) => Promise<void>;
 }
 
 /** Song carousel with the selected-song banner. The tile list is the only scrolling area. */
-export function SongLibrary({ songs, loading, onRename, onRemove }: SongLibraryProps) {
+export function SongLibrary({
+  songs,
+  loading,
+  onRename,
+  onRemove,
+  onExport,
+  onAdd,
+}: SongLibraryProps) {
   const [selectedId, setSelectedId] = useState<string>(() => getSettings().lastSongId);
   const { setTheme } = useSongTheme();
   const tileRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -93,7 +102,14 @@ export function SongLibrary({ songs, loading, onRename, onRemove }: SongLibraryP
           </ul>
         )}
       </div>
-      <SongBanner song={selected} onRename={onRename} onRemove={onRemove} />
+      <SongBanner
+        song={selected}
+        onRename={onRename}
+        onRemove={onRemove}
+        onExport={onExport}
+        onAdd={onAdd}
+        onAdded={select}
+      />
     </main>
   );
 }

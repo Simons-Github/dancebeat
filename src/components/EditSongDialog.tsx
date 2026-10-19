@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type FormEvent, type MouseEvent } from "react";
-import { Pencil, Trash2 } from "lucide-react";
+import { Download, Pencil, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -38,6 +38,15 @@ const INPUT = "h-11 rounded-xl text-base md:text-base";
 const ERROR =
   "rounded-xl bg-destructive px-3 py-2 text-base font-medium text-destructive-foreground";
 
+/** File-name safe version of a title: lowercase ASCII words joined by dashes. */
+const slugify = (title: string) =>
+  title
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "") || "song";
+
 const errorText = (e: unknown, fallback: string) =>
   e instanceof StorageFullError ? e.message : fallback;
 
@@ -46,6 +55,8 @@ interface EditSongDialogProps {
   song: Song | undefined;
   onRename: (song: Song, title: string, artist: string) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
+  /** JSON text of the song's choreography export. */
+  onExport: (song: Song) => Promise<string>;
   /** Called once the dialogs are gone after a delete; the caller moves focus somewhere useful. */
   onDeleted: () => void;
 }
@@ -55,7 +66,13 @@ interface EditSongDialogProps {
  * while the selection changes, so a delete can close its dialogs cleanly. The dialog works on
  * a snapshot of the song taken when it opened.
  */
-export function EditSongDialog({ song, onRename, onRemove, onDeleted }: EditSongDialogProps) {
+export function EditSongDialog({
+  song,
+  onRename,
+  onRemove,
+  onExport,
+  onDeleted,
+}: EditSongDialogProps) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<Song | undefined>(undefined);
@@ -97,6 +114,28 @@ export function EditSongDialog({ song, onRename, onRemove, onDeleted }: EditSong
       setError(errorText(err, "Speichern hat nicht geklappt. Versuch es noch einmal."));
     } finally {
       setBusy(false);
+    }
+  };
+
+  const exportFile = async () => {
+    if (!target || busy) return;
+    setError(null);
+    try {
+      const json = await onExport(target);
+      const url = URL.createObjectURL(new Blob([json], { type: "application/json" }));
+      try {
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `${slugify(target.title)}.dancebeat.json`;
+        document.body.append(a);
+        a.click();
+        a.remove();
+      } finally {
+        // Safari/iOS starts the download asynchronously; revoking right away can cancel it.
+        setTimeout(() => URL.revokeObjectURL(url), 1000);
+      }
+    } catch {
+      setError("Die Choreografie konnte nicht exportiert werden.");
     }
   };
 
@@ -176,6 +215,15 @@ export function EditSongDialog({ song, onRename, onRemove, onDeleted }: EditSong
               className={INPUT}
             />
           </div>
+          <Button
+            type="button"
+            variant="secondary"
+            onClick={() => void exportFile()}
+            className={BTN}
+          >
+            <Download aria-hidden />
+            Choreografie exportieren
+          </Button>
           {error && (
             <p role="alert" className={ERROR}>
               {error}

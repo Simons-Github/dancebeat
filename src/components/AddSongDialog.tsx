@@ -1,3 +1,4 @@
+import { useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
@@ -5,15 +6,365 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { analyzeAudio } from "@/lib/beat";
+import { parseChoreoFile } from "@/lib/library/choreoFile";
+import {
+  ARTIST_MAX,
+  BPM_MAX,
+  BPM_MIN,
+  DURATION_MAX_S,
+  DURATION_MIN_S,
+  TITLE_MAX,
+  buildNewSong,
+  parseYouTubeId,
+  validateAudioUrl,
+  validateNewSongFields,
+  type NewSongSource,
+} from "@/lib/library/newSong";
+import { StorageFullError, requestPersistentStorage } from "@/lib/library/storage";
+import type { ChoreoFile, Song } from "@/lib/types";
+import { SONG_PALETTES } from "@/theme";
 
-/** Placeholder until stage 5: the button is visible, the dialog only announces what is coming. */
-export function AddSongDialog() {
+const BTN =
+  "btn-pill h-12 gap-2 rounded-full px-6 text-base focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
+const INPUT = "h-11 rounded-xl text-base md:text-base";
+const ERROR =
+  "rounded-xl bg-destructive px-3 py-2 text-base font-medium text-destructive-foreground";
+const HINT = "text-sm text-muted-foreground";
+const FIELD_ERROR = "text-sm font-medium text-destructive";
+const TAB = "h-11 flex-1 text-base";
+
+const AUDIO_ACCEPT = "audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/ogg,.mp3,.m4a,.wav,.ogg";
+
+type Kind = "file" | "url" | "youtube";
+type Difficulty = 1 | 2 | 3;
+type AnalysisState =
+  | { status: "idle" }
+  | { status: "busy" }
+  | { status: "done" }
+  | { status: "error"; message: string };
+
+interface AddSongDialogProps {
+  /** Stores the song (and the audio for local files); rejects with StorageFullError when full. */
+  onAdd: (song: Song, audio?: Blob) => Promise<void>;
+  /** Called after a successful add and after the dialog closed, e.g. to select the new song. */
+  onAdded?: (song: Song) => void;
+}
+
+const stripExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
+
+/** Add-song button plus dialog: audio file, direct URL or YouTube, auto or imported choreography. */
+export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
+  const id = useId();
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<Kind>("file");
+  const [file, setFile] = useState<File | null>(null);
+  const [analysis, setAnalysis] = useState<AnalysisState>({ status: "idle" });
+  const [urlLink, setUrlLink] = useState("");
+  const [youtubeLink, setYoutubeLink] = useState("");
+  const [durationClamped, setDurationClamped] = useState(false);
+  const [title, setTitle] = useState("");
+  const [artist, setArtist] = useState("");
+  const [bpm, setBpm] = useState("120");
+  const [bpmEstimated, setBpmEstimated] = useState(false);
+  const [durationS, setDurationS] = useState("180");
+  const [difficulty, setDifficulty] = useState<Difficulty>(2);
+  const [choreoMode, setChoreoMode] = useState<"auto" | "import">("auto");
+  const [imported, setImported] = useState<ChoreoFile | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+  const [titleTouched, setTitleTouched] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  /** Guards against a slow analysis of a previous file overwriting the current one. */
+  const analysisToken = useRef(0);
+  const choreoToken = useRef(0);
+  /** Fields the player typed in. Prefills (file name, analysis, imported choreography) skip these. */
+  const edited = useRef({
+    title: false,
+    artist: false,
+    difficulty: false,
+    bpm: false,
+    duration: false,
+  });
+
+  const reset = () => {
+    analysisToken.current++;
+    choreoToken.current++;
+    edited.current = {
+      title: false,
+      artist: false,
+      difficulty: false,
+      bpm: false,
+      duration: false,
+    };
+    setUrlLink("");
+    setYoutubeLink("");
+    setDurationClamped(false);
+    setKind("file");
+    setFile(null);
+    setAnalysis({ status: "idle" });
+    setTitle("");
+    setArtist("");
+    setBpm("120");
+    setBpmEstimated(false);
+    setDurationS("180");
+    setDifficulty(2);
+    setChoreoMode("auto");
+    setImported(null);
+    setImportError(null);
+    setTitleTouched(false);
+    setError(null);
+  };
+
+  const changeOpen = (next: boolean) => {
+    if (busy) return; // never close while a write is running
+    if (next) reset();
+    setOpen(next);
+  };
+
+  const link = kind === "youtube" ? youtubeLink : urlLink;
+  const setLink = kind === "youtube" ? setYoutubeLink : setUrlLink;
+  const useImport = choreoMode === "import";
+  const bpmNum = bpm.trim() === "" ? NaN : Number(bpm);
+  const durationNum = durationS.trim() === "" ? NaN : Number(durationS);
+  const errors = validateNewSongFields({
+    kind,
+    title,
+    link,
+    bpm: bpmNum,
+    durationS: durationNum,
+    imported: useImport && imported !== null,
+  });
+  const showTitleError = titleTouched && errors.title;
+  const showLinkError = link.trim() !== "" && errors.link;
+  const sourceReady =
+    kind === "file"
+      ? file !== null && analysis.status !== "busy"
+      : !errors.link && link.trim() !== "";
+  const choreoReady = !useImport || imported !== null;
+  const canSubmit =
+    !busy &&
+    sourceReady &&
+    choreoReady &&
+    !errors.title &&
+    !errors.bpm &&
+    !errors.duration &&
+    (kind !== "file" || analysis.status !== "error");
+
+  const chooseAudio = async (e: ChangeEvent<HTMLInputElement>) => {
+    const chosen = e.target.files?.[0] ?? null;
+    const token = ++analysisToken.current;
+    setFile(chosen);
+    setBpmEstimated(false);
+    if (!chosen) {
+      setAnalysis({ status: "idle" });
+      return;
+    }
+    if (!edited.current.title) setTitle(stripExtension(chosen.name).slice(0, TITLE_MAX));
+    setAnalysis({ status: "busy" });
+    try {
+      const result = await analyzeAudio(chosen);
+      if (token !== analysisToken.current) return;
+      if (!edited.current.bpm) setBpm(String(result.bpm));
+      if (!edited.current.duration) {
+        const seconds = Math.max(1, Math.round(result.durationMs / 1000));
+        setDurationS(String(Math.min(seconds, DURATION_MAX_S)));
+        setDurationClamped(seconds > DURATION_MAX_S);
+      }
+      setBpmEstimated(true);
+      setAnalysis({ status: "done" });
+    } catch (err) {
+      if (token !== analysisToken.current) return;
+      setAnalysis({
+        status: "error",
+        message: err instanceof Error ? err.message : "Die Datei konnte nicht analysiert werden.",
+      });
+    }
+  };
+
+  const chooseChoreo = async (e: ChangeEvent<HTMLInputElement>) => {
+    const chosen = e.target.files?.[0];
+    const token = ++choreoToken.current;
+    setImported(null);
+    setImportError(null);
+    if (!chosen) return;
+    try {
+      const parsed = parseChoreoFile(await chosen.text());
+      if (token !== choreoToken.current) return;
+      setImported(parsed);
+      if (!edited.current.title) setTitle(parsed.song.title);
+      if (!edited.current.artist) setArtist(parsed.song.artist);
+      if (!edited.current.difficulty) setDifficulty(parsed.song.difficulty);
+      if (!edited.current.bpm) setBpm(String(parsed.song.bpm));
+    } catch (err) {
+      if (token !== choreoToken.current) return;
+      setImportError(err instanceof Error ? err.message : "Die Datei konnte nicht gelesen werden.");
+    }
+  };
+
+  const submit = async (e: FormEvent) => {
+    e.preventDefault();
+    if (!canSubmit) return;
+    let source: NewSongSource;
+    if (kind === "file") source = { kind: "file" };
+    else if (kind === "url") {
+      const r = validateAudioUrl(link);
+      if (!r.ok) return;
+      source = { kind: "url", url: r.url };
+    } else {
+      const videoId = parseYouTubeId(link);
+      if (!videoId) return;
+      source = { kind: "youtube", videoId };
+    }
+    setBusy(true);
+    setError(null);
+    try {
+      const palette =
+        SONG_PALETTES[Math.floor(Math.random() * SONG_PALETTES.length)] ?? SONG_PALETTES[0];
+      const song = buildNewSong({
+        source,
+        title,
+        artist,
+        bpm: useImport && imported ? imported.song.bpm : bpmNum,
+        difficulty,
+        durationMs: Math.round(durationNum * 1000),
+        colors: [palette.accent, palette.secondary],
+        choreo: useImport && imported ? { type: "import", file: imported } : { type: "auto" },
+      });
+      void requestPersistentStorage().catch(() => {});
+      await onAdd(song, kind === "file" && file ? file : undefined);
+      setOpen(false);
+      reset();
+      onAdded?.(song);
+    } catch (err) {
+      setError(
+        err instanceof StorageFullError ? err.message : "Der Song konnte nicht gespeichert werden.",
+      );
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const urlHost = (() => {
+    const r = validateAudioUrl(link);
+    return r.ok ? new URL(r.url).host : "der angegebenen Adresse";
+  })();
+
+  const numberField = (
+    key: string,
+    label: string,
+    value: string,
+    set: (v: string) => void,
+    min: number,
+    max: number,
+    err: string | undefined,
+    hint?: string,
+  ) => (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={`${id}-${key}`} className="text-base">
+        {label}
+      </Label>
+      <Input
+        id={`${id}-${key}`}
+        type="number"
+        inputMode="numeric"
+        min={min}
+        max={max}
+        value={value}
+        aria-invalid={err ? true : undefined}
+        aria-describedby={err ? `${id}-${key}-err` : hint ? `${id}-${key}-hint` : undefined}
+        onChange={(e) => {
+          set(e.target.value);
+          if (key === "bpm") {
+            edited.current.bpm = true;
+            setBpmEstimated(false);
+          } else {
+            edited.current.duration = true;
+            setDurationClamped(false);
+          }
+        }}
+        className={INPUT}
+      />
+      {err ? (
+        <p id={`${id}-${key}-err`} className={FIELD_ERROR}>
+          {err}
+        </p>
+      ) : hint ? (
+        <p id={`${id}-${key}-hint`} className={HINT}>
+          {hint}
+        </p>
+      ) : null}
+    </div>
+  );
+
+  const timing = !(useImport && imported) && (
+    <>
+      {numberField(
+        "bpm",
+        "BPM",
+        bpm,
+        setBpm,
+        BPM_MIN,
+        BPM_MAX,
+        errors.bpm,
+        bpmEstimated ? "Geschätzt, bitte prüfen." : undefined,
+      )}
+      {numberField(
+        "duration",
+        "Länge in Sekunden",
+        durationS,
+        setDurationS,
+        DURATION_MIN_S,
+        DURATION_MAX_S,
+        errors.duration,
+        durationClamped
+          ? `Die Choreografie deckt die ersten ${DURATION_MAX_S / 60} Minuten ab.`
+          : undefined,
+      )}
+    </>
+  );
+
+  const linkField = (label: string, placeholder: string, inputType: string, hint: string) => (
+    <div className="flex flex-col gap-2">
+      <Label htmlFor={`${id}-link`} className="text-base">
+        {label}
+      </Label>
+      <Input
+        id={`${id}-link`}
+        type={inputType}
+        inputMode="url"
+        value={link}
+        placeholder={placeholder}
+        autoComplete="off"
+        autoCapitalize="off"
+        spellCheck={false}
+        aria-invalid={showLinkError ? true : undefined}
+        aria-describedby={showLinkError ? `${id}-link-err` : `${id}-link-hint`}
+        onChange={(e) => setLink(e.target.value)}
+        className={INPUT}
+      />
+      {showLinkError ? (
+        <p id={`${id}-link-err`} className={FIELD_ERROR}>
+          {errors.link}
+        </p>
+      ) : (
+        <p id={`${id}-link-hint`} className={HINT}>
+          {hint}
+        </p>
+      )}
+    </div>
+  );
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={changeOpen}>
       <DialogTrigger asChild>
         <Button
           variant="secondary"
@@ -23,11 +374,203 @@ export function AddSongDialog() {
           Song hinzufügen
         </Button>
       </DialogTrigger>
-      <DialogContent>
+      <DialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-3xl">
         <DialogHeader>
           <DialogTitle>Song hinzufügen</DialogTitle>
-          <DialogDescription>Folgt in Etappe 5</DialogDescription>
+          <DialogDescription>
+            Wähle die Musik und lass die Choreografie erzeugen oder importiere eine eigene.
+          </DialogDescription>
         </DialogHeader>
+        <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
+          <Tabs
+            value={kind}
+            onValueChange={(v) => {
+              if (!busy) setKind(v as Kind);
+            }}
+            className="flex flex-col gap-4"
+          >
+            <TabsList className="h-12 w-full">
+              <TabsTrigger value="file" className={TAB}>
+                Datei
+              </TabsTrigger>
+              <TabsTrigger value="url" className={TAB}>
+                URL
+              </TabsTrigger>
+              <TabsTrigger value="youtube" className={TAB}>
+                YouTube
+              </TabsTrigger>
+            </TabsList>
+            <TabsContent value="file" className="mt-0 flex flex-col gap-4">
+              <div className="flex flex-col gap-2">
+                <Label htmlFor={`${id}-audio`} className="text-base">
+                  Audiodatei
+                </Label>
+                <Input
+                  id={`${id}-audio`}
+                  type="file"
+                  accept={AUDIO_ACCEPT}
+                  aria-invalid={analysis.status === "error" ? true : undefined}
+                  aria-describedby={`${id}-audio-msg`}
+                  onChange={(e) => void chooseAudio(e)}
+                  className={`${INPUT} h-auto min-h-11 py-2`}
+                />
+                <div id={`${id}-audio-msg`} aria-live="polite">
+                  {analysis.status === "busy" && <p className={HINT}>Analysiere …</p>}
+                  {analysis.status === "error" && (
+                    <p role="alert" className={FIELD_ERROR}>
+                      {analysis.message}
+                    </p>
+                  )}
+                  {analysis.status === "idle" && (
+                    <p className={HINT}>
+                      MP3, M4A, WAV oder OGG. Die Datei bleibt auf diesem Gerät.
+                    </p>
+                  )}
+                </div>
+              </div>
+              {analysis.status === "done" && timing}
+            </TabsContent>
+            <TabsContent value="url" className="mt-0 flex flex-col gap-4">
+              {linkField(
+                "Adresse der Audiodatei",
+                "https://…",
+                "url",
+                `Nur eigene oder private Quellen verwenden. Die Musik wird beim Spielen von ${urlHost} geladen.`,
+              )}
+              {timing}
+            </TabsContent>
+            <TabsContent value="youtube" className="mt-0 flex flex-col gap-4">
+              {linkField(
+                "YouTube-Link oder Video-ID",
+                "https://youtu.be/…",
+                "text",
+                "Das Video wird beim Spielen über youtube-nocookie.com geladen.",
+              )}
+              {timing}
+            </TabsContent>
+          </Tabs>
+
+          <fieldset className="flex flex-col gap-2">
+            <legend className="mb-1 text-base font-medium">Choreografie</legend>
+            <div role="radiogroup" aria-label="Choreografie" className="flex flex-col gap-2">
+              {(
+                [
+                  ["auto", "Automatisch erzeugen"],
+                  ["import", "Aus Datei importieren"],
+                ] as const
+              ).map(([value, label]) => (
+                <label
+                  key={value}
+                  className="flex min-h-11 cursor-pointer items-center gap-3 text-base"
+                >
+                  <input
+                    type="radio"
+                    name={`${id}-choreo`}
+                    value={value}
+                    checked={choreoMode === value}
+                    onChange={() => setChoreoMode(value)}
+                    className="size-5 accent-current"
+                  />
+                  {label}
+                </label>
+              ))}
+            </div>
+            {useImport && (
+              <div className="flex flex-col gap-2">
+                <Label htmlFor={`${id}-choreo-file`} className="text-base">
+                  Choreografie-Datei
+                </Label>
+                <Input
+                  id={`${id}-choreo-file`}
+                  type="file"
+                  accept="application/json,.json"
+                  aria-invalid={importError ? true : undefined}
+                  aria-describedby={`${id}-choreo-msg`}
+                  onChange={(e) => void chooseChoreo(e)}
+                  className={`${INPUT} h-auto min-h-11 py-2`}
+                />
+                <div id={`${id}-choreo-msg`} aria-live="polite">
+                  {importError && (
+                    <p role="alert" className={FIELD_ERROR}>
+                      {importError}
+                    </p>
+                  )}
+                  {imported && <p className={HINT}>{imported.choreo.moves.length} Moves</p>}
+                </div>
+              </div>
+            )}
+          </fieldset>
+
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-title`} className="text-base">
+              Titel
+            </Label>
+            <Input
+              id={`${id}-title`}
+              value={title}
+              maxLength={TITLE_MAX}
+              required
+              autoComplete="off"
+              aria-invalid={showTitleError ? true : undefined}
+              aria-describedby={showTitleError ? `${id}-title-err` : undefined}
+              onChange={(e) => {
+                edited.current.title = true;
+                setTitle(e.target.value);
+              }}
+              onBlur={() => setTitleTouched(true)}
+              className={INPUT}
+            />
+            {showTitleError && (
+              <p id={`${id}-title-err`} className={FIELD_ERROR}>
+                {errors.title}
+              </p>
+            )}
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-artist`} className="text-base">
+              Künstler
+            </Label>
+            <Input
+              id={`${id}-artist`}
+              value={artist}
+              maxLength={ARTIST_MAX}
+              autoComplete="off"
+              onChange={(e) => {
+                edited.current.artist = true;
+                setArtist(e.target.value);
+              }}
+              className={INPUT}
+            />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-difficulty`} className="text-base">
+              Schwierigkeit
+            </Label>
+            <select
+              id={`${id}-difficulty`}
+              value={difficulty}
+              onChange={(e) => {
+                edited.current.difficulty = true;
+                setDifficulty(Number(e.target.value) as Difficulty);
+              }}
+              className="h-11 rounded-xl border border-input bg-transparent px-3 text-base"
+            >
+              <option value={1}>1 – Leicht</option>
+              <option value={2}>2 – Mittel</option>
+              <option value={3}>3 – Schwer</option>
+            </select>
+          </div>
+          {error && (
+            <p role="alert" className={ERROR}>
+              {error}
+            </p>
+          )}
+          <DialogFooter className="gap-3 sm:space-x-0">
+            <Button type="submit" disabled={!canSubmit} className={BTN}>
+              Hinzufügen
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

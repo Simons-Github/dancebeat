@@ -40,3 +40,23 @@ globalThis.ResizeObserver ??= class {
   unobserve() {}
   disconnect() {}
 };
+
+// jsdom's Blob lacks text() / arrayBuffer(); fall back to FileReader.
+const readBlob = (blob: Blob, mode: "text" | "buffer") =>
+  new Promise<never>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result as never);
+    reader.onerror = () => reject(reader.error);
+    if (mode === "text") reader.readAsText(blob);
+    else reader.readAsArrayBuffer(blob);
+  });
+if (!Blob.prototype.text) {
+  Blob.prototype.text = function (this: Blob) {
+    return readBlob(this, "text");
+  };
+}
+if (!Blob.prototype.arrayBuffer) {
+  Blob.prototype.arrayBuffer = function (this: Blob) {
+    return readBlob(this, "buffer");
+  };
+}

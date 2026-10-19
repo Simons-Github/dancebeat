@@ -50,5 +50,7 @@ export function useSongLibrary() {
     },
     [save],
   );
-  return { songs, loading, save, remove, rename, refresh };
+  /** JSON text of the song's choreography export (no audio). */
+  const exportChoreo = useCallback((s: Song) => songRepository.export(s.id), []);
+  return { songs, loading, save, remove, rename, exportChoreo, refresh };
 }
