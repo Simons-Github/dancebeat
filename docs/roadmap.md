@@ -13,7 +13,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
 | 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a)                    | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a, 5b)                | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
@@ -36,6 +36,7 @@ Combo-Regel (OK hält, X bricht).
 Choreo-Wechsel. N4: Soundeffekte nutzen den beim Tippen entsperrten gemeinsamen `AudioContext`.
 W9 teilweise: `type` als Union, Lade-Race beim Songwechsel, `ended`/`error` zurückgesetzt,
 `visibilitychange` → Pause.
+✅ N3 (Etappe 5b): Seed-Regel prüft die Bibliothek, gelöschte Demos bleiben weg.
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
@@ -191,7 +192,7 @@ Umgesetzt:
 - **Offen:** Gerätetest (Animationen, Konfetti-Leistung, Lesbarkeit). Nach einem Neuladen ist der
   Endstand weg und der Screen zeigt „Kein Ergebnis“; das ist so gewollt.
 
-### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a umgesetzt)
+### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a, 5b umgesetzt)
 
 **5a Einstellungen – umgesetzt, Gerätetest offen.**
 
@@ -206,12 +207,27 @@ Umgesetzt:
   fallen auf Standard zurück, Seite scrollt, Konsole sauber.
 - **Offen:** Gerätetest (Slider-Bedienung per Touch, Lesbarkeit, Safe Areas).
 
+**5b Songs bearbeiten und löschen – umgesetzt, Gerätetest offen.**
+
+- Stift-Knopf im Banner öffnet „Song bearbeiten“ (`EditSongDialog`): Titel und Künstler ändern
+  (`choreo.title` zieht mit), „Song löschen“ mit Bestätigung (Highscore und Audio werden
+  entfernt). Fehler wie `StorageFullError` stehen im Dialog; während des Schreibens lässt er sich
+  nicht schließen.
+- Seed-Regel (N3): `seedDemos` legt jede Demo nur an, wenn sie in der Bibliothek fehlt und nicht
+  in `dancebeat.deletedDemos` steht. Vorhandene Demos (mit Highscore) werden nie überschrieben;
+  nach gelöschter IndexedDB kommen sie zurück. Der Marker `dancebeat.seeded` entfällt.
+  Gelöschte Demos werden vor dem Löschen vermerkt und vor dem Speichern erneut geprüft.
+  Bekannte Grenze: wird localStorage geleert, kommen gelöschte Demos zurück.
+- Playwright (390×844 und 844×390): Umbenennen und Löschen bleiben nach Neuladen, ohne Vermerk
+  wird die fehlende Demo neu angelegt, Konsole sauber.
+- **Offen:** Gerätetest (Touch, Tastatur über dem Dialog auf iOS). `lastSongId` zeigt nach dem
+  Löschen ggf. ins Leere (harmlos, Auswahl fällt auf den ersten Song); bei leerer Bibliothek
+  bleiben die Farben des letzten Songs.
+
 **Noch offen in Etappe 5:**
 
 - Sync-Test pro Song: zum Beat tippen, Offset berechnen und speichern. Warnsymbol bei Quellen mit
   geringer Timing-Genauigkeit (YouTube, Spotify).
-- Löschen und Umbenennen von Songs (über `SongRepository`). Seed-Regel: gelöschte Demo-Songs
-  werden nicht neu angelegt (betrifft `seedDemos`, siehe N3).
 - Dialog „Song hinzufügen“ mit Tabs Datei, URL, YouTube (Spotify erst mit Etappe 10). Datei: BPM
   per Analyse (`estimateBpm`) mit manueller Korrektur; Online-Quellen: BPM manuell. Pro Song
   Sync-Offset mit Vorschau und optionaler Start-Offset. Hinweis bei URL: nur eigene oder private
@@ -283,7 +299,6 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | W12 | Externe Abrufe in der UI benennen (Aufstellhilfe erledigt, Hinweis in 7)                                                         | 7      |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                         | 11     |
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                     | 11     |
-| N3  | `seedDemos` vertraut nur dem localStorage-Marker                                                                                 | 11     |
 | N6  | `@tanstack/react-query` bisher ungenutzt                                                                                         | 11     |
 | N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                                             | 11     |
 | N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                               | 11     |

@@ -1,3 +1,5 @@
+import { z } from "zod";
+
 import { computeAngles, figure, type FigureParams } from "@/lib/pose";
 import type { Choreography, Frame, Move, Song } from "@/lib/types";
 import { CHOREO_VERSION } from "@/lib/schema";
@@ -188,13 +190,57 @@ const DEMOS = [
   },
 ];
 
-export async function seedDemos(repo: SongRepository) {
-  if (localStorage.getItem("dancebeat.seeded")) return;
+export const DEMO_IDS: readonly string[] = DEMOS.map((d) => d.id);
+
+export const isDemoId = (id: string) => DEMO_IDS.includes(id);
+
+const DELETED_KEY = "dancebeat.deletedDemos";
+/** Marker of the old "seed once" rule; no longer read, removed on the next seed. */
+const LEGACY_SEEDED_KEY = "dancebeat.seeded";
+
+const DeletedDemosSchema = z.array(z.string());
+
+/** Ids of demos the player deleted on purpose. Unreadable or invalid storage counts as empty. */
+export function getDeletedDemos(): string[] {
+  try {
+    const raw = localStorage.getItem(DELETED_KEY);
+    if (raw === null) return [];
+    const parsed = DeletedDemosSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : [];
+  } catch {
+    return [];
+  }
+}
+
+/** Remembers that a demo was deleted so it is not seeded again. No-op for other songs. */
+export function markDemoDeleted(id: string) {
+  if (!isDemoId(id)) return;
+  const deleted = getDeletedDemos();
+  if (deleted.includes(id)) return;
+  try {
+    localStorage.setItem(DELETED_KEY, JSON.stringify([...deleted, id]));
+  } catch (e) {
+    console.warn("Gelöschte Demos konnten nicht gespeichert werden:", e);
+  }
+}
+
+async function seedMissingDemos(repo: SongRepository, synth: typeof synthTrack) {
+  try {
+    localStorage.removeItem(LEGACY_SEEDED_KEY);
+  } catch {
+    // storage unavailable: nothing to clean up
+  }
+  const deleted = getDeletedDemos();
   for (const d of DEMOS) {
+    if (deleted.includes(d.id)) continue;
+    // Never overwrite an existing demo: it carries the player's highscore and stars.
+    if (await repo.get(d.id)) continue;
     const choreo = build(d.choreoId, d.title, d.bpm, d.seq, d.gold, d.colors);
     const lastMove = choreo.moves.at(-1);
     if (!lastMove) continue; // no moves: nothing to seed
-    const blob = await synthTrack(d.bpm, Math.ceil(lastMove.timeMs / 1000) + 4, d.root);
+    const blob = await synth(d.bpm, Math.ceil(lastMove.timeMs / 1000) + 4, d.root);
+    // Synthesis is slow: the demo may have been deleted or saved meanwhile (e.g. other tab).
+    if (getDeletedDemos().includes(d.id) || (await repo.get(d.id))) continue;
     const now = Date.now();
     const song: Song = {
       id: d.id,
@@ -213,7 +259,21 @@ export async function seedDemos(repo: SongRepository) {
     };
     await repo.save(song, blob);
   }
-  localStorage.setItem("dancebeat.seeded", "1");
+}
+
+// One run for all callers; there is only one repository in the app, so no per-repo keying.
+let seeding: Promise<void> | null = null;
+
+/**
+ * Adds every demo that is neither in the library nor deleted by the player. Concurrent calls
+ * (StrictMode runs effects twice) share one run, so no demo is synthesized twice.
+ * `synth` is replaceable for tests (jsdom has no OfflineAudioContext).
+ */
+export function seedDemos(repo: SongRepository, synth: typeof synthTrack = synthTrack) {
+  seeding ??= seedMissingDemos(repo, synth).finally(() => {
+    seeding = null;
+  });
+  return seeding;
 }
 
 /** Standard-Choreo für neu hinzugefügte Songs ohne eigene Choreografie. */

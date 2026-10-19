@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import { songRepository } from "@/lib/library/repository";
-import { seedDemos } from "@/data/demo";
+import { markDemoDeleted, seedDemos } from "@/data/demo";
 import type { Song } from "@/lib/types";
 
 export function useSongLibrary() {
@@ -16,22 +16,38 @@ export function useSongLibrary() {
       .finally(refresh);
   }, [refresh]);
 
+  /** Reload after a successful write; a failing reload must not look like a failed write. */
+  const refreshAfterWrite = useCallback(async () => {
+    try {
+      await refresh();
+    } catch (e) {
+      console.warn("Reloading the library failed:", e);
+    }
+  }, [refresh]);
+
   const save = useCallback(
     async (s: Song, audio?: Blob) => {
       await songRepository.save(s, audio);
-      await refresh();
+      await refreshAfterWrite();
     },
-    [refresh],
+    [refreshAfterWrite],
   );
   const remove = useCallback(
     async (s: Song) => {
+      // Mark first so a seed running in another tab cannot bring the demo back in between.
+      // A mark left behind by a failed delete is harmless: seeding only adds missing demos.
+      markDemoDeleted(s.id);
       await songRepository.delete(s.id);
-      await refresh();
+      await refreshAfterWrite();
     },
-    [refresh],
+    [refreshAfterWrite],
   );
   const rename = useCallback(
-    async (s: Song, title: string) => save({ ...s, title, choreo: { ...s.choreo, title } }),
+    async (s: Song, title: string, artist: string = s.artist) => {
+      // The repository validates lengths (title 1-120, artist 0-120) and rejects otherwise.
+      const t = title.trim();
+      await save({ ...s, title: t, artist: artist.trim(), choreo: { ...s.choreo, title: t } });
+    },
     [save],
   );
   return { songs, loading, save, remove, rename, refresh };

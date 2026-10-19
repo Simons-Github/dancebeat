@@ -10,10 +10,12 @@ import type { Song } from "@/lib/types";
 interface SongLibraryProps {
   songs: Song[];
   loading: boolean;
+  onRename: (song: Song, title: string, artist: string) => Promise<void>;
+  onRemove: (song: Song) => Promise<void>;
 }
 
 /** Song carousel with the selected-song banner. The tile list is the only scrolling area. */
-export function SongLibrary({ songs, loading }: SongLibraryProps) {
+export function SongLibrary({ songs, loading, onRename, onRemove }: SongLibraryProps) {
   const [selectedId, setSelectedId] = useState<string>(() => getSettings().lastSongId);
   const { setTheme } = useSongTheme();
   const tileRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -91,7 +93,7 @@ export function SongLibrary({ songs, loading }: SongLibraryProps) {
           </ul>
         )}
       </div>
-      <SongBanner song={selected} />
+      <SongBanner song={selected} onRename={onRename} onRemove={onRemove} />
     </main>
   );
 }

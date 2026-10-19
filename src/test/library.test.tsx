@@ -1,24 +1,46 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { cleanup, fireEvent, render, screen, within } from "@testing-library/react";
+import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import type { Song } from "@/lib/types";
+import { StorageFullError } from "@/lib/library/storage";
 import { resetSettingsCacheForTests } from "@/lib/settings";
 import { routeTree } from "@/routeTree.gen";
 import { makeChoreo, makeSong } from "./fixtures";
 
-const library = vi.hoisted(() => ({ songs: [] as Song[], loading: false }));
-vi.mock("@/hooks/useSongLibrary", () => ({
-  useSongLibrary: () => ({
-    songs: library.songs,
-    loading: library.loading,
-    save: vi.fn(),
-    remove: vi.fn(),
-    rename: vi.fn(),
-    refresh: vi.fn(),
-  }),
-}));
+const library = vi.hoisted(() => {
+  const listeners = new Set<() => void>();
+  return {
+    songs: [] as Song[],
+    loading: false,
+    remove: vi.fn<(s: Song) => Promise<void>>(),
+    rename: vi.fn<(s: Song, title: string, artist?: string) => Promise<void>>(),
+    listeners,
+    /** Replaces the songs and re-renders every mounted library, like a refresh would. */
+    setSongs(songs: Song[]) {
+      this.songs = songs;
+      listeners.forEach((l) => l());
+    },
+  };
+});
+vi.mock("@/hooks/useSongLibrary", async () => {
+  const { useSyncExternalStore } = await import("react");
+  const subscribe = (l: () => void) => {
+    library.listeners.add(l);
+    return () => library.listeners.delete(l);
+  };
+  return {
+    useSongLibrary: () => ({
+      songs: useSyncExternalStore(subscribe, () => library.songs),
+      loading: library.loading,
+      save: vi.fn(),
+      remove: library.remove,
+      rename: library.rename,
+      refresh: vi.fn(),
+    }),
+  };
+});
 
 function demoSong(
   title: string,
@@ -55,6 +77,8 @@ afterEach(() => {
   localStorage.clear();
   library.songs = [];
   library.loading = false;
+  library.remove.mockReset();
+  library.rename.mockReset();
 });
 
 describe("Song library", () => {
@@ -141,6 +165,128 @@ describe("Song library", () => {
     await renderAt("/");
     fireEvent.click(await screen.findByRole("button", { name: "Song hinzufügen" }));
     expect(await screen.findByText("Folgt in Etappe 5")).toBeInTheDocument();
+  });
+});
+
+describe("Edit song dialog", () => {
+  async function openEditor() {
+    const song = demoSong("Pink Pulse", 112, 1, "#FF2E93", "#00E5FF");
+    library.songs = [song, demoSong("Sunset Kick", 124, 2, "#FF8A00", "#7CFF4F")];
+    await renderAt("/");
+    fireEvent.click(await screen.findByRole("button", { name: "Song bearbeiten" }));
+    const dialog = await screen.findByRole("dialog", { name: "Song bearbeiten" });
+    return { song, dialog };
+  }
+
+  it("has no edit button without songs", async () => {
+    await renderAt("/");
+    await screen.findByText("Noch keine Songs");
+    expect(screen.queryByRole("button", { name: "Song bearbeiten" })).not.toBeInTheDocument();
+  });
+
+  it("renames the selected song", async () => {
+    library.rename.mockResolvedValue();
+    const { song, dialog } = await openEditor();
+    const title = within(dialog).getByLabelText("Titel");
+    const artist = within(dialog).getByLabelText("Künstler");
+    expect(title).toHaveValue("Pink Pulse");
+    expect(artist).toHaveValue("DanceBeat Demo");
+
+    fireEvent.change(title, { target: { value: "  Pinker Puls " } });
+    fireEvent.change(artist, { target: { value: "Ich" } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
+
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Song bearbeiten" })).not.toBeInTheDocument(),
+    );
+    expect(library.rename).toHaveBeenCalledWith(song, "Pinker Puls", "Ich");
+  });
+
+  it("disables Speichern for an empty title", async () => {
+    const { dialog } = await openEditor();
+    const save = within(dialog).getByRole("button", { name: "Speichern" });
+    expect(save).toBeEnabled();
+    fireEvent.change(within(dialog).getByLabelText("Titel"), { target: { value: "   " } });
+    expect(save).toBeDisabled();
+  });
+
+  it("shows a rename error and stays open", async () => {
+    library.rename.mockRejectedValueOnce(new StorageFullError());
+    const { dialog } = await openEditor();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent("Der Speicher ist voll");
+    expect(screen.getByRole("dialog", { name: "Song bearbeiten" })).toBeInTheDocument();
+
+    library.rename.mockRejectedValueOnce(new Error("boom"));
+    fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
+    expect(await within(dialog).findByRole("alert")).toHaveTextContent(
+      "Speichern hat nicht geklappt",
+    );
+  });
+
+  it("deletes only after confirmation", async () => {
+    library.remove.mockResolvedValue();
+    const { song, dialog } = await openEditor();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Song löschen" }));
+    const confirm = await screen.findByRole("alertdialog", { name: "„Pink Pulse“ löschen?" });
+    expect(confirm).toHaveTextContent("Highscore und Audio werden entfernt");
+
+    fireEvent.click(within(confirm).getByRole("button", { name: "Abbrechen" }));
+    await waitFor(() => expect(screen.queryByRole("alertdialog")).not.toBeInTheDocument());
+    expect(library.remove).not.toHaveBeenCalled();
+
+    fireEvent.click(within(dialog).getByRole("button", { name: "Song löschen" }));
+    fireEvent.click(
+      within(await screen.findByRole("alertdialog")).getByRole("button", { name: "Löschen" }),
+    );
+    await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    expect(library.remove).toHaveBeenCalledWith(song);
+  });
+
+  it("selects the next song after a delete and shows the empty state after the last", async () => {
+    library.remove.mockImplementation((s) => {
+      library.setSongs(library.songs.filter((x) => x.id !== s.id));
+      return Promise.resolve();
+    });
+    const deleteSelected = async () => {
+      fireEvent.click(await screen.findByRole("button", { name: "Song bearbeiten" }));
+      const dialog = await screen.findByRole("dialog", { name: "Song bearbeiten" });
+      fireEvent.click(within(dialog).getByRole("button", { name: "Song löschen" }));
+      const confirm = await screen.findByRole("alertdialog");
+      fireEvent.click(within(confirm).getByRole("button", { name: "Löschen" }));
+      await waitFor(() => expect(screen.queryByRole("dialog")).not.toBeInTheDocument());
+    };
+    const song = demoSong("Pink Pulse", 112, 1, "#FF2E93", "#00E5FF");
+    library.songs = [song, demoSong("Sunset Kick", 124, 2, "#FF8A00", "#7CFF4F")];
+    await renderAt("/");
+
+    await deleteSelected();
+    expect(library.remove).toHaveBeenLastCalledWith(song);
+    const banner = screen.getByRole("region", { name: "Ausgewählter Song" });
+    expect(within(banner).getByText("Sunset Kick")).toBeInTheDocument();
+    const start = screen.getByRole("link", { name: "Los geht's" });
+    expect(start).toHaveAttribute("href", `/setup/${library.songs[0]?.id ?? ""}`);
+    await waitFor(() => expect(start).toHaveFocus());
+
+    await deleteSelected();
+    expect(await screen.findByText("Noch keine Songs")).toBeInTheDocument();
+    expect(within(banner).getByText("Kein Song gewählt")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Song bearbeiten" })).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(screen.getByRole("button", { name: "Song hinzufügen" })).toHaveFocus(),
+    );
+  });
+
+  it("shows a delete error inside the confirmation", async () => {
+    library.remove.mockRejectedValueOnce(new Error("boom"));
+    const { dialog } = await openEditor();
+    fireEvent.click(within(dialog).getByRole("button", { name: "Song löschen" }));
+    const confirm = await screen.findByRole("alertdialog");
+    fireEvent.click(within(confirm).getByRole("button", { name: "Löschen" }));
+    expect(await within(confirm).findByRole("alert")).toHaveTextContent(
+      "Löschen hat nicht geklappt",
+    );
+    expect(screen.getByRole("alertdialog")).toBeInTheDocument();
   });
 });
 

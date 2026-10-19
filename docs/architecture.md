@@ -175,13 +175,13 @@ Abbrechen im Countdown ──▶ /setup/$songId
 
 ## Speicher
 
-| Was                             | Wo                                   | Zugriff                   |
-| ------------------------------- | ------------------------------------ | ------------------------- |
-| Songs inkl. Choreografie        | IndexedDB `dancebeat`, Store `songs` | `SongRepository`          |
-| Audiodateien                    | IndexedDB, Store `blobs`             | `SongRepository.getAudio` |
-| Einstellungen                   | `localStorage` `dancebeat.settings`  | `useSettings`             |
-| Demo-Seeding-Marker             | `localStorage` `dancebeat.seeded`    | `seedDemos`               |
-| Spotify-Token und PKCE-Verifier | `sessionStorage`                     | `lib/audio/sources.ts`    |
+| Was                             | Wo                                      | Zugriff                        |
+| ------------------------------- | --------------------------------------- | ------------------------------ |
+| Songs inkl. Choreografie        | IndexedDB `dancebeat`, Store `songs`    | `SongRepository`               |
+| Audiodateien                    | IndexedDB, Store `blobs`                | `SongRepository.getAudio`      |
+| Einstellungen                   | `localStorage` `dancebeat.settings`     | `useSettings`                  |
+| Gelöschte Demo-Songs (IDs)      | `localStorage` `dancebeat.deletedDemos` | `seedDemos`, `markDemoDeleted` |
+| Spotify-Token und PKCE-Verifier | `sessionStorage`                        | `lib/audio/sources.ts`         |
 
 **SongRepository** (`src/lib/library/repository.ts`) ist die einzige Schnittstelle zur
 Bibliothek: `list`, `get`, `save`, `delete`, `getAudio`, `export`, `import`. Vorerst gibt es nur
@@ -201,6 +201,11 @@ die IndexedDB-Implementierung; eine Server-Variante kann dieselbe Schnittstelle 
   `.catch` auf seinen Standard zurück, Formatänderungen ergänzen also nur Felder mit Standardwert.
   Das Schema liegt in `settings.ts` und nicht in `schema.ts`, weil es eine gerätelokale
   Vorliebe ist und keine Bibliotheksdaten.
+- Demo-Songs (`src/data/demo.ts`): `seedDemos` legt jede Demo nur an, wenn sie in der Bibliothek
+  fehlt und ihre ID nicht in `dancebeat.deletedDemos` steht. Vorhandene Einträge (Highscore,
+  Umbenennung) werden nie überschrieben. Die Liste liegt bewusst in `localStorage` statt in
+  einem eigenen IndexedDB-Store (keine neue DB-Version); geht sie verloren, kehren gelöschte
+  Demos zurück.
 - `src/lib/library/storage.ts`: `requestPersistentStorage()` (Safari löscht sonst Daten nicht
   installierter Seiten nach 7 Tagen ohne Nutzung) und `getStorageUsage()` für die Anzeige.
 
