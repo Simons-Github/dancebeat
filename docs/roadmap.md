@@ -16,7 +16,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a ✅)                 | Opus                                                                  |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a, 8b ✅)             | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ⏳                         | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
@@ -426,7 +426,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b umgesetzt)
 
 Aufteilung:
 
@@ -439,9 +439,17 @@ Aufteilung:
   - Details: [choreography-format.md](choreography-format.md#video-import).
   - Offen: Filterparameter und Schwellen an echten Videos prüfen (mit 8b).
   - Die Beat-Phase wird nicht geschätzt, sie kommt als Parameter (`beatOffsetMs`).
-- **8b Analyse:** `useVideoAnalysis` mit MediaPipe im Videomodus, Fortschritt, Abbruch.
-  Vorher klären, ob das Modell „heavy“ (~30 MB) wie „lite“ per Download-Skript lokal
-  ausgeliefert wird oder ob „full“ bzw. „lite“ reicht.
+- **8b Analyse – umgesetzt, Gerätetest offen.** `analyzeVideo` (`src/lib/videoAnalysis.ts`)
+  setzt das pausierte Video Schritt für Schritt (alle 50 ms) und erkennt nach jedem Seek die
+  Pose; `useVideoAnalysis` liefert Zustand, Fortschritt, Abbruch und räumt den Estimator auf.
+  Modell: vorerst „lite“, per Option wählbar; „full“ oder „heavy“ erst, wenn lite an echten
+  Videos nicht reicht. Details: [architecture.md](architecture.md#video-analyse-etappe-8b).
+  - Tests mit Fake-Video und Fake-Estimator (Raster, Bereich, Zeitstempel, Abbruch,
+    Seek-Timeout, Bild-Callback, Fortschritt, Hook-Zustände, Aufräumen) und ein Durchlauf bis
+    `choreoFromPoseTrack`.
+  - Keine Oberfläche: Playwright-Prüfung mit echtem Video kommt mit 8c.
+  - **Offen (Gerät):** liefert Safari/iOS nach einem Seek den Bild-Callback, reichen 120 ms
+    Rückfall, Dauer und Speicher bei langen Videos.
 - **8c Import-Dialog:** Datei wählen, Vorschau, Zeitbereich, Spiegeln, BPM und Beat-Phase.
 - **8d Editor:** Timeline, Keyframes, Offset, Tempo, Gold Moves.
 

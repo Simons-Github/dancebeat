@@ -354,7 +354,7 @@ Google Fonts oder ein anderes CDN.
 `src/lib/videoChoreo.ts` (Etappe 8a, reine Logik ohne React): `choreoFromPoseTrack` macht aus
 einer rohen Pose-Spur (`PoseTrack`: Seitenverhältnis plus Proben `{ timeMs, landmarks | null }`,
 Landmarks pro Achse normiert wie MediaPipe sie liefert) eine geprüfte `Choreography`. Die
-Pose-Spur selbst liefert ab 8b `useVideoAnalysis`. Ablauf und Konventionen:
+Pose-Spur selbst liefert `useVideoAnalysis` (siehe unten). Ablauf und Konventionen:
 [choreography-format.md](choreography-format.md#video-import).
 
 - Glättung: One-Euro-Filter je Koordinate, vorwärts und rückwärts gerechnet und gemittelt. Die
@@ -364,6 +364,33 @@ Pose-Spur selbst liefert ab 8b `useVideoAnalysis`. Ablauf und Konventionen:
 - `suggestGoldMoves` ist eigenständig exportiert, damit der Editor (8d) den Vorschlag
   wiederverwenden kann.
 - Fehlermeldungen sind deutsch, weil der Import-Dialog sie direkt zeigt.
+
+### Video-Analyse (Etappe 8b)
+
+`src/lib/videoAnalysis.ts` (`analyzeVideo`, ohne React) erzeugt die `PoseTrack` aus einem
+geladenen, pausierten `<video>`; `src/hooks/useVideoAnalysis.ts` kapselt Zustand und Aufräumen.
+
+- Schrittweise statt Abspielen: Das Video wird alle `intervalMs` (Standard 50 ms) per
+  `currentTime` gesetzt, nach `seeked` läuft `detect`. So hängt das Ergebnis nicht von der
+  Rechenleistung ab, und kein Bild wird übersprungen. Die Probenzeit ist die Videozeit; den
+  Zuschnitt auf den Zeitbereich übernimmt `choreoFromPoseTrack`.
+- Safari zeigt nach `seeked` mitunter noch das alte Bild. Gibt es `requestVideoFrameCallback`,
+  wird zusätzlich auf den Bild-Callback gewartet, höchstens 120 ms nach `seeked`
+  (`FRAME_FALLBACK_MS`). Ein verspätetes Bild des vorigen Seeks zählt nicht: `mediaTime` muss
+  höchstens `max(intervalMs/2, 40 ms)` vom Ziel abweichen. Jeder Seek hat ein Timeout (Standard
+  5 s); Listener, Timer und Callbacks werden auf jedem Weg entfernt.
+- Für versteckte oder nicht eingehängte Videos feuert der Bild-Callback nie; jeder Schritt kostet
+  dann 120 ms. Der Import-Dialog (8c) muss das Video sichtbar im DOM halten.
+- Zeitstempel für `detect` steigen streng, auch wenn ein Estimator mehrere Analysen nacheinander
+  macht (der nächste Lauf wird hinter den letzten Zeitstempel verschoben). Der Hook nimmt ohnehin
+  pro Lauf einen neuen Estimator.
+- Abbruch über `AbortSignal` (`AbortError`), Fehler als `VideoAnalysisError` mit `code`
+  (`no-metadata`, `seek-timeout`, `video-error`, `empty-range`). Fortschritt höchstens alle
+  250 ms; der Hook setzt nur dann State, nie pro Bild.
+- Modell: „lite“ (Entscheidung 8b, keine weiteren Downloads); wählbar über die Option `model`.
+  Reicht die Genauigkeit an echten Videos nicht, kommen „full“ oder „heavy“ ins Download-Skript.
+- Ein Lauf überschreibt nie den Zustand eines neueren; Abbruch, Neustart und Unmount schließen
+  den Estimator sofort.
 
 ## Messwerte
 
