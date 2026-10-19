@@ -202,23 +202,41 @@ describe("useSongLibrary", () => {
     warn.mockRestore();
   });
 
-  it("rename() updates title, artist and the choreo title", async () => {
+  it("updateDetails() saves title, artist, start offset and the choreo title in one write", async () => {
     const s = await repo.save(makeSong());
     const { result } = await renderLibrary();
-    await act(() => result.current.rename(s, "  Neuer Titel ", " Neue Band "));
+    const save = vi.spyOn(repo, "save");
+    await act(() =>
+      result.current.updateDetails(s, {
+        title: "  Neuer Titel ",
+        artist: " Neue Band ",
+        startOffsetMs: 12500,
+      }),
+    );
+    expect(save).toHaveBeenCalledTimes(1);
+    save.mockRestore();
     expect(result.current.songs[0]).toMatchObject({
       title: "Neuer Titel",
       artist: "Neue Band",
+      startOffsetMs: 12500,
       choreo: { title: "Neuer Titel" },
     });
-    expect(await repo.get(s.id)).toMatchObject({ title: "Neuer Titel", artist: "Neue Band" });
+    expect(await repo.get(s.id)).toMatchObject({
+      title: "Neuer Titel",
+      artist: "Neue Band",
+      startOffsetMs: 12500,
+    });
   });
 
-  it("rename() keeps the artist when none is given and rejects an empty title", async () => {
-    const s = await repo.save(makeSong());
+  it("updateDetails() keeps artist and start offset when left out and rejects an empty title", async () => {
+    const s = await repo.save({ ...makeSong(), startOffsetMs: 3000 });
     const { result } = await renderLibrary();
-    await act(() => result.current.rename(s, "Nur Titel"));
-    expect(result.current.songs[0]).toMatchObject({ title: "Nur Titel", artist: s.artist });
-    await expect(result.current.rename(s, "   ")).rejects.toThrow();
+    await act(() => result.current.updateDetails(s, { title: "Nur Titel" }));
+    expect(result.current.songs[0]).toMatchObject({
+      title: "Nur Titel",
+      artist: s.artist,
+      startOffsetMs: 3000,
+    });
+    await expect(result.current.updateDetails(s, { title: "   " })).rejects.toThrow();
   });
 });

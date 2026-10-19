@@ -26,7 +26,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { StorageFullError } from "@/lib/library/storage";
-import { formatOffsetMs } from "@/lib/sync";
+import type { SongDetailsPatch } from "@/hooks/useSongLibrary";
+import { formatOffsetMs, formatStartOffsetSeconds, parseStartOffsetSeconds } from "@/lib/sync";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -39,6 +40,8 @@ const BTN =
 const INPUT = "h-11 rounded-xl text-base md:text-base";
 const ERROR =
   "rounded-xl bg-destructive px-3 py-2 text-base font-medium text-destructive-foreground";
+const HINT = "text-sm text-muted-foreground";
+const FIELD_ERROR = "text-sm font-medium text-destructive";
 
 /** File-name safe version of a title: lowercase ASCII words joined by dashes. */
 const slugify = (title: string) =>
@@ -55,7 +58,8 @@ const errorText = (e: unknown, fallback: string) =>
 interface EditSongDialogProps {
   /** Selected song; the trigger is hidden without one. */
   song: Song | undefined;
-  onRename: (song: Song, title: string, artist: string) => Promise<void>;
+  /** Saves title, artist and start offset together in one write. */
+  onSave: (song: Song, patch: Required<SongDetailsPatch>) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
   /** JSON text of the song's choreography export. */
   onExport: (song: Song) => Promise<string>;
@@ -64,13 +68,14 @@ interface EditSongDialogProps {
 }
 
 /**
- * Edit button plus dialog to rename a song or delete it (with confirmation). Stays mounted
+ * Edit button plus dialog to change a song's title, artist and start offset, or delete it (with
+ * confirmation). Stays mounted
  * while the selection changes, so a delete can close its dialogs cleanly. The dialog works on
  * a snapshot of the song taken when it opened.
  */
 export function EditSongDialog({
   song,
-  onRename,
+  onSave,
   onRemove,
   onExport,
   onDeleted,
@@ -81,6 +86,7 @@ export function EditSongDialog({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
+  const [start, setStart] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -91,6 +97,8 @@ export function EditSongDialog({
   const trimmedArtist = artist.trim();
   const titleValid = trimmedTitle.length >= 1 && trimmedTitle.length <= TITLE_MAX;
   const artistValid = trimmedArtist.length <= ARTIST_MAX;
+  const startMs = parseStartOffsetSeconds(start);
+  const startValid = startMs !== null;
 
   const changeOpen = (next: boolean) => {
     if (busy) return; // never close while a write is running
@@ -99,6 +107,7 @@ export function EditSongDialog({
       setTarget(song);
       setTitle(song.title);
       setArtist(song.artist);
+      setStart(formatStartOffsetSeconds(song.startOffsetMs));
       setError(null);
     }
     setOpen(next);
@@ -106,11 +115,14 @@ export function EditSongDialog({
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!target || !titleValid || !artistValid || busy) return;
+    if (!target || !titleValid || !artistValid || startMs === null || busy) return;
+    // The field shows one decimal: an untouched field keeps the exact stored value.
+    const startOffsetMs =
+      start === formatStartOffsetSeconds(target.startOffsetMs) ? target.startOffsetMs : startMs;
     setBusy(true);
     setError(null);
     try {
-      await onRename(target, trimmedTitle, trimmedArtist);
+      await onSave(target, { title: trimmedTitle, artist: trimmedArtist, startOffsetMs });
       setOpen(false);
     } catch (err) {
       setError(errorText(err, "Speichern hat nicht geklappt. Versuch es noch einmal."));
@@ -186,7 +198,7 @@ export function EditSongDialog({
         <DialogHeader>
           <DialogTitle>Song bearbeiten</DialogTitle>
           <DialogDescription>
-            Ändere Titel und Künstler, prüfe den Takt im Sync-Test oder lösche den Song.
+            Ändere Titel, Künstler und Startpunkt, prüfe den Takt im Sync-Test oder lösche den Song.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
@@ -218,6 +230,31 @@ export function EditSongDialog({
               onChange={(e) => setArtist(e.target.value)}
               className={INPUT}
             />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor={`${id}-start`} className="text-base">
+              Start ab (Sekunden)
+            </Label>
+            <Input
+              id={`${id}-start`}
+              value={start}
+              inputMode="decimal"
+              autoComplete="off"
+              aria-invalid={!startValid}
+              aria-describedby={
+                startValid ? `${id}-start-hint` : `${id}-start-err ${id}-start-hint`
+              }
+              onChange={(e) => setStart(e.target.value)}
+              className={INPUT}
+            />
+            {!startValid && (
+              <p id={`${id}-start-err`} className={FIELD_ERROR}>
+                Bitte eine Zahl zwischen 0 und 600 Sekunden.
+              </p>
+            )}
+            <p id={`${id}-start-hint`} className={HINT}>
+              Überspringt ein Intro. Moves davor zählen nicht.
+            </p>
           </div>
           <Button
             type="button"
@@ -296,7 +333,11 @@ export function EditSongDialog({
                 </AlertDialogFooter>
               </AlertDialogContent>
             </AlertDialog>
-            <Button type="submit" disabled={busy || !titleValid || !artistValid} className={BTN}>
+            <Button
+              type="submit"
+              disabled={busy || !titleValid || !artistValid || !startValid}
+              className={BTN}
+            >
               Speichern
             </Button>
           </DialogFooter>

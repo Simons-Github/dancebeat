@@ -3,6 +3,15 @@ import { songRepository } from "@/lib/library/repository";
 import { markDemoDeleted, seedDemos } from "@/data/demo";
 import type { Song } from "@/lib/types";
 
+/** Fields the "Song bearbeiten" dialog changes; saved together in one write. */
+export interface SongDetailsPatch {
+  title: string;
+  /** Kept when left out. */
+  artist?: string;
+  /** Kept when left out. */
+  startOffsetMs?: number;
+}
+
 export function useSongLibrary() {
   const [songs, setSongs] = useState<Song[]>([]);
   const [loading, setLoading] = useState(true);
@@ -42,15 +51,22 @@ export function useSongLibrary() {
     },
     [refreshAfterWrite],
   );
-  const rename = useCallback(
-    async (s: Song, title: string, artist: string = s.artist) => {
-      // The repository validates lengths (title 1-120, artist 0-120) and rejects otherwise.
-      const t = title.trim();
-      await save({ ...s, title: t, artist: artist.trim(), choreo: { ...s.choreo, title: t } });
+  /** Title, artist and start offset in one write; `choreo.title` follows the title. */
+  const updateDetails = useCallback(
+    async (s: Song, patch: SongDetailsPatch) => {
+      // The repository validates (title 1-120, artist 0-120, start offset >= 0) and rejects otherwise.
+      const t = patch.title.trim();
+      await save({
+        ...s,
+        title: t,
+        artist: (patch.artist ?? s.artist).trim(),
+        startOffsetMs: patch.startOffsetMs ?? s.startOffsetMs,
+        choreo: { ...s.choreo, title: t },
+      });
     },
     [save],
   );
   /** JSON text of the song's choreography export (no audio). */
   const exportChoreo = useCallback((s: Song) => songRepository.export(s.id), []);
-  return { songs, loading, save, remove, rename, exportChoreo, refresh };
+  return { songs, loading, save, remove, updateDetails, exportChoreo, refresh };
 }

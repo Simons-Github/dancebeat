@@ -1,4 +1,5 @@
 import { gameTimeMs, type ClockOffsets } from "@/lib/audio/clock";
+import { MAX_PULSE_HZ } from "@/lib/game/beat";
 
 /**
  * Per-song sync test: the player taps along to the beat, the taps (audio positions from
@@ -125,3 +126,61 @@ export const isUneven = (r: SyncResult) => r.spreadMs > SYNC_MAX_SPREAD_MS;
 /** "+40 ms", "−15 ms", "0 ms" (typographic minus). */
 export const formatOffsetMs = (ms: number) =>
   `${ms > 0 ? "+" : ms < 0 ? "−" : ""}${Math.abs(Math.round(ms))} ms`;
+
+/** Largest manual sync offset (either direction) on the fine-tuning controls. */
+export const SYNC_MANUAL_MAX_MS = 1000;
+
+/** `current + deltaMs`, rounded to whole ms and clamped to ±SYNC_MANUAL_MAX_MS. */
+export function nudgeSyncOffset(current: number, deltaMs: number): number {
+  const next = Math.round((Number.isFinite(current) ? current : 0) + deltaMs);
+  if (!Number.isFinite(next)) return 0;
+  return Math.min(SYNC_MANUAL_MAX_MS, Math.max(-SYNC_MANUAL_MAX_MS, next)) || 0;
+}
+
+/**
+ * Beats per flash of the sync preview light: the smallest n ≥ 1 with `bpm / 60 / n` at or below
+ * MAX_PULSE_HZ (same photosensitivity limit as the gameplay beat pulse). 1 for an invalid tempo.
+ */
+export function beatFlashDivisor(bpm: number): number {
+  if (!Number.isFinite(bpm) || bpm <= 0) return 1;
+  return Math.max(1, Math.ceil(bpm / 60 / MAX_PULSE_HZ));
+}
+
+/**
+ * Brightness 0..1 of the preview light at game time `gameMs`: 1 exactly on a flash beat
+ * (`k · 60000 / bpm · divisor`, k any integer, also negative), then a linear fade to 0 over
+ * `decayMs`. 0 for an invalid tempo, divisor, decay or time.
+ */
+export function beatFlashLevel(
+  gameMs: number,
+  bpm: number,
+  divisor: number,
+  decayMs: number,
+): number {
+  if (!Number.isFinite(gameMs) || !Number.isFinite(bpm) || bpm <= 0) return 0;
+  if (!Number.isFinite(divisor) || divisor < 1 || !(decayMs > 0)) return 0;
+  const period = (60000 / bpm) * Math.round(divisor);
+  const since = ((gameMs % period) + period) % period;
+  return since < decayMs ? 1 - since / decayMs : 0;
+}
+
+/** Largest start offset (10 minutes). */
+export const START_OFFSET_MAX_MS = 600_000;
+
+/**
+ * Start offset typed in seconds ("12", "12.5", "12,5", surrounding spaces; empty = 0) to whole
+ * ms. Null for anything else, negative values and values above START_OFFSET_MAX_MS.
+ */
+export function parseStartOffsetSeconds(text: string): number | null {
+  const t = text.trim();
+  if (t === "") return 0;
+  if (!/^(\d+([.,]\d*)?|[.,]\d+)$/.test(t)) return null;
+  const ms = Math.round(Number(t.replace(",", ".")) * 1000);
+  return Number.isFinite(ms) && ms <= START_OFFSET_MAX_MS ? ms : null;
+}
+
+/** Start offset in seconds, German style: "12,5", "12", "0" (at most one decimal). */
+export function formatStartOffsetSeconds(ms: number): string {
+  if (!Number.isFinite(ms) || ms <= 0) return "0";
+  return String(Math.round(ms / 100) / 10).replace(".", ",");
+}

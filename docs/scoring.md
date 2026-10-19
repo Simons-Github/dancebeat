@@ -73,12 +73,35 @@ nur, was nach Abzug der Latenz pro Song übrig bleibt.
 Sync-Test nicht ab. **Nur am Gerät prüfbar:** Die Verzögerung vor dem Eingabe-Event
 (Touch-Hardware, Abtastrate des Displays) steckt weiter in den Taps und damit im Vorschlag.
 
-Die Live-Liste zeigt je Tap die Abweichung vom Raster mit dem **gespeicherten** Offset
-(`beatDeviationMs`). „Speichern“ schreibt den Vorschlag über `useSongLibrary().save`
-(`SongRepository`) und kehrt zur Bibliothek zurück; „Auf 0 zurücksetzen“ speichert 0. Bei YouTube
-und Spotify (`isLowPrecision`) warnt der Screen, dass die Zeitmessung ungenauer ist.
+**Feinjustierung:** Der Screen arbeitet mit einem Arbeitswert, der mit dem gespeicherten
+`syncOffsetMs` beginnt. „Vorschlag übernehmen“ setzt ihn auf den Vorschlag, die Knöpfe −10, −1, +1
+und +10 ms verschieben ihn (`nudgeSyncOffset`: ganze ms, begrenzt auf ±1000 ms,
+`SYNC_MANUAL_MAX_MS`). Die Live-Liste zeigt je Tap die Abweichung vom Raster mit dem
+**Arbeitswert** (`beatDeviationMs`).
+
+**Vorschau (Beat-Licht):** Solange die Musik läuft, blinkt ein runder Punkt in der Songfarbe. Die
+Zeit kommt aus `AudioSource.getTimeMs()`, umgerechnet mit `gameTimeMs` (Latenz, Arbeitswert,
+`choreo.offsetMs`); das Licht leuchtet also dann, wenn die Choreografie mit diesem Offset einen
+Beat sieht. Helligkeit `beatFlashLevel`: 1 genau auf dem Beat, linear aus über
+`SYNC_PREVIEW.decayMs` (`src/theme.ts`). Höchstens 3 Blitze pro Sekunde (`MAX_PULSE_HZ`, wie der
+Beat-Puls im Spiel): bei schnellen Songs blinkt nur jeder n-te Beat (`beatFlashDivisor`). Die
+Schleife läuft per `requestAnimationFrame` und schreibt `style` direkt, ohne React-Render pro
+Frame. Bei `prefers-reduced-motion` ändert sich nur die Deckkraft, ohne Skalierung.
+
+„Speichern“ schreibt den Arbeitswert über `useSongLibrary().save` (`SongRepository`) und kehrt zur
+Bibliothek zurück; ohne Änderung ist der Knopf gesperrt. „Auf 0 zurücksetzen“ setzt den
+Arbeitswert auf 0 und speichert sofort. Bei YouTube und Spotify (`isLowPrecision`) warnt der
+Screen, dass die Zeitmessung ungenauer ist. **Nur am Gerät prüfbar:** ob das Licht mit dem
+gehörten Beat übereinstimmt (Bluetooth-Kopfhörer, iOS).
 
 ## Start-Offset und Seek
+
+`startOffsetMs` stellt der Spieler im Dialog „Song bearbeiten“ ein: Feld „Start ab (Sekunden)“,
+Komma oder Punkt, höchstens eine Nachkommastelle in der Anzeige, 0–600 s
+(`parseStartOffsetSeconds`, `formatStartOffsetSeconds`, `START_OFFSET_MAX_MS`). Leer heißt 0.
+Ungültige Eingaben sperren „Speichern“. Titel, Künstler und Start-Offset gehen in einem Schreibvorgang
+über `useSongLibrary().updateDetails` an das `SongRepository`; ein unverändertes Feld behält den
+exakten gespeicherten Wert.
 
 - `seekTo(t)` setzt den Zeiger ohne Wertung auf den ersten Move, dessen Fenster bei `t` noch offen
   ist. Übersprungene Moves zählen nicht, auch nicht im Referenzmaximum der Sterne.

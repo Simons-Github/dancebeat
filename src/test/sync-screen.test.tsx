@@ -1,7 +1,7 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { SYNC_DISCARD_TAPS, SYNC_MIN_TAPS } from "@/lib/sync";
 import type { Song } from "@/lib/types";
@@ -136,7 +136,15 @@ describe("Sync-Test", () => {
     expect(screen.getByTestId("proposed-offset")).toHaveTextContent("+40 ms");
     expect(screen.queryByText(/Ungleichmäßig/)).not.toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole("button", { name: "Speichern" }));
+    // The proposal only becomes the working value; nothing is written yet.
+    const save = screen.getByRole("button", { name: "Speichern" });
+    expect(save).toBeDisabled();
+    fireEvent.click(screen.getByRole("button", { name: /Vorschlag übernehmen/ }));
+    expect(screen.getByTestId("candidate-offset")).toHaveTextContent("+40 ms");
+    expect(screen.getByRole("button", { name: /Vorschlag übernehmen/ })).toBeDisabled();
+    expect(repo.saved).toHaveLength(0);
+
+    fireEvent.click(save);
     await advance(10);
     expect(repo.saved).toHaveLength(1);
     expect(repo.saved[0]?.syncOffsetMs).toBe(40);
@@ -161,6 +169,84 @@ describe("Sync-Test", () => {
     await advance(10);
     expect(repo.saved.at(-1)?.syncOffsetMs).toBe(0);
     expect(screen.getByTestId("saved-offset")).toHaveTextContent("0 ms");
+  });
+
+  it("Auf 0 zurücksetzen schreibt nicht, wenn 0 schon gespeichert ist", async () => {
+    await renderAt(`/sync/${SONG_ID}`);
+    fireEvent.click(screen.getByRole("button", { name: "Offset um 10 ms erhöhen" }));
+    expect(screen.getByTestId("candidate-offset")).toHaveTextContent("+10 ms");
+    fireEvent.click(screen.getByRole("button", { name: "Auf 0 zurücksetzen" }));
+    await advance(10);
+    expect(screen.getByTestId("candidate-offset")).toHaveTextContent("0 ms");
+    expect(repo.saved).toHaveLength(0);
+  });
+
+  it("Feinjustierung ändert den Arbeitswert, Speichern schreibt ihn", async () => {
+    repo.songs = repo.songs.map((s) => ({ ...s, syncOffsetMs: 995 }));
+    await renderAt(`/sync/${SONG_ID}`);
+    expect(screen.getByTestId("candidate-offset")).toHaveTextContent("+995 ms");
+    const save = screen.getByRole("button", { name: "Speichern" });
+    expect(save).toBeDisabled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Offset um 10 ms verringern" }));
+    fireEvent.click(screen.getByRole("button", { name: "Offset um 1 ms verringern" }));
+    expect(screen.getByTestId("candidate-offset")).toHaveTextContent("+984 ms");
+    expect(save).toBeEnabled();
+    fireEvent.click(screen.getByRole("button", { name: "Offset um 1 ms erhöhen" }));
+    fireEvent.click(screen.getByRole("button", { name: "Offset um 10 ms erhöhen" }));
+    expect(screen.getByTestId("candidate-offset")).toHaveTextContent("+995 ms");
+    expect(save).toBeDisabled();
+    // Clamped at +1000 ms.
+    fireEvent.click(screen.getByRole("button", { name: "Offset um 10 ms erhöhen" }));
+    expect(screen.getByTestId("candidate-offset")).toHaveTextContent("+1000 ms");
+    expect(screen.getByTestId("saved-offset")).toHaveTextContent("+995 ms");
+    expect(repo.saved).toHaveLength(0);
+
+    fireEvent.click(save);
+    await advance(10);
+    expect(repo.saved).toHaveLength(1);
+    expect(repo.saved[0]?.syncOffsetMs).toBe(1000);
+    expect(router.state.location.pathname).toBe("/");
+  });
+
+  it("Beat-Licht folgt der Uhr mit dem Arbeitswert, ohne React-Render pro Frame", async () => {
+    const frames: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+    vi.stubGlobal("cancelAnimationFrame", () => {});
+    onTestFinished(() => void vi.unstubAllGlobals());
+    // 120 BPM, start offset 1000 ms: audio 1000 is on a beat; latency and offsets are 0.
+    await renderAt(`/sync/${SONG_ID}`);
+    const light = screen.getByTestId("beat-light");
+    const candidate = screen.getByTestId("candidate-offset");
+    expect(light.style.opacity).toBe("0");
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await advance(0);
+    const runFrame = () => {
+      const cb = frames.shift();
+      expect(cb).toBeDefined();
+      cb?.(performance.now());
+    };
+    runFrame();
+    expect(Number(light.style.opacity)).toBe(1);
+    expect(light.style.transform).toBe("scale(1.12)");
+
+    const before = candidate.textContent;
+    await advance(300); // well past the fade
+    runFrame();
+    expect(Number(light.style.opacity)).toBe(0);
+    // Frames do not re-render: the rendered value node is the same and the loop keeps going.
+    expect(screen.getByTestId("candidate-offset")).toBe(candidate);
+    expect(candidate.textContent).toBe(before);
+    expect(frames).toHaveLength(1);
+
+    // +10 ms candidate: audio 1300 → game 1290, still dark; at audio 1510 the light is on.
+    fireEvent.click(screen.getByRole("button", { name: "Offset um 10 ms erhöhen" }));
+    await advance(210);
+    runFrame();
+    expect(Number(light.style.opacity)).toBe(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Stopp" }));
+    expect(light.style.opacity).toBe("0");
   });
 
   it("warnt bei YouTube vor ungenauer Zeitmessung und nennt den Abruf", async () => {

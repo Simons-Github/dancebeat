@@ -13,7 +13,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
 | 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a, 5b, 5c, 5d Teil 1) | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | 🔜 (5a, 5b, 5c, 5d)        | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ⏳                         | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ⏳                         | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳                         | Opus                                                                  |
@@ -194,7 +194,7 @@ Umgesetzt:
 - **Offen:** Gerätetest (Animationen, Konfetti-Leistung, Lesbarkeit). Nach einem Neuladen ist der
   Endstand weg und der Screen zeigt „Kein Ergebnis“; das ist so gewollt.
 
-### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a, 5b, 5c, 5d Teil 1 umgesetzt)
+### 5. Einstellungen, Sync-Test, Kalibrierung, „Song hinzufügen“ 🔜 (5a, 5b, 5c, 5d umgesetzt)
 
 **5a Einstellungen – umgesetzt, Gerätetest offen.**
 
@@ -260,11 +260,27 @@ Umgesetzt:
 - **Offen:** Gerätetest (Tap-Latenz von Touch und Bildschirm, iOS-Start im Tipp, YouTube-Start
   im Tipp, Bluetooth-Kopfhörer), Playwright-Durchlauf in Hoch- und Querformat.
 
-**Noch offen in Etappe 5 (5d):**
+**5d Teil 2 Feinjustierung und Start-Offset – umgesetzt, Gerätetest offen.**
 
-- Im Dialog „Song hinzufügen“ bzw. „Song bearbeiten“: Sync-Offset mit Vorschau und optionaler
-  Start-Offset.
+- Sync-Test, Karte „Feinjustierung“: Arbeitswert (startet beim gespeicherten Offset), Knöpfe
+  −10, −1, +1, +10 ms (±1000 ms), „Vorschlag übernehmen“ in der Ergebnis-Karte setzt den
+  Arbeitswert. Ein Speichern-Knopf schreibt den Arbeitswert; „Auf 0 zurücksetzen“ bleibt.
+  Live-Abweichung rechnet mit dem Arbeitswert.
+- Vorschau: Beat-Licht in der Songfarbe, Zeit aus `getTimeMs()` mit dem Arbeitswert, eigene
+  rAF-Schleife ohne React-Render pro Frame, höchstens 3 Hz (`beatFlashDivisor`), bei reduzierter
+  Bewegung nur Deckkraft. Details in [scoring.md](scoring.md#sync-test-pro-song).
+- Dialog „Song bearbeiten“: Feld „Start ab (Sekunden)“ (0–600 s, Komma oder Punkt). Titel,
+  Künstler und Start-Offset werden zusammen gespeichert (`useSongLibrary().updateDetails`, ersetzt
+  `rename`). Kein Formatwechsel: `startOffsetMs` gab es schon.
+- **Offen:** Gerätetest: ob das Licht am Gerät mit dem gehörten Beat übereinstimmt (Bluetooth,
+  iOS), Bedienung der Knöpfe per Touch, Dezimaltastatur auf iOS; Playwright-Durchlauf in Hoch-
+  und Querformat.
+
+**Noch offen in Etappe 5:**
+
 - N12 (Aufstellhilfe im Querformat).
+
+Start-Offset im Dialog „Song hinzufügen“ entfällt: einstellbar über „Song bearbeiten“.
 
 ### 6. Bewegungsmodus ⏳
 
@@ -333,3 +349,4 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | N10 | YouTube ignoriert `song.playbackRate`                                                                                            | 11     |
 | N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                                  | 11     |
 | N12 | Aufstellhilfe im Querformat (844×390): Karte oben unter der Kopfzeile, Knöpfe unten abgeschnitten, kein Scrollen (seit Etappe 2) | 5      |
+| N13 | Beat-Puls im Spiel (`beatsPerPulse`) begrenzt nach Song-BPM, nicht nach `bpm × playbackRate`: bei Rate > 1 über 3 Hz möglich     | 11     |

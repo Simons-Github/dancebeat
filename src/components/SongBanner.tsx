@@ -4,11 +4,12 @@ import { Link } from "@tanstack/react-router";
 import { AddSongDialog } from "@/components/AddSongDialog";
 import { EditSongDialog } from "@/components/EditSongDialog";
 import { Button } from "@/components/ui/button";
+import type { SongDetailsPatch } from "@/hooks/useSongLibrary";
 import type { Song } from "@/lib/types";
 
 interface SongBannerProps {
   song: Song | undefined;
-  onRename: (song: Song, title: string, artist: string) => Promise<void>;
+  onSaveDetails: (song: Song, patch: SongDetailsPatch) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
   onExport: (song: Song) => Promise<string>;
   onAdd: (song: Song, audio?: Blob) => Promise<void>;
@@ -17,7 +18,7 @@ interface SongBannerProps {
 
 export function SongBanner({
   song,
-  onRename,
+  onSaveDetails,
   onRemove,
   onExport,
   onAdd,
@@ -53,7 +54,7 @@ export function SongBanner({
         </div>
         <EditSongDialog
           song={song}
-          onRename={onRename}
+          onSave={onSaveDetails}
           onRemove={onRemove}
           onExport={onExport}
           onDeleted={() => setRefocus((n) => n + 1)}

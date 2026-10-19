@@ -15,7 +15,13 @@ const library = vi.hoisted(() => {
     songs: [] as Song[],
     loading: false,
     remove: vi.fn<(s: Song) => Promise<void>>(),
-    rename: vi.fn<(s: Song, title: string, artist?: string) => Promise<void>>(),
+    updateDetails:
+      vi.fn<
+        (
+          s: Song,
+          patch: { title: string; artist?: string; startOffsetMs?: number },
+        ) => Promise<void>
+      >(),
     exportChoreo: vi.fn<(s: Song) => Promise<string>>(),
     listeners,
     /** Replaces the songs and re-renders every mounted library, like a refresh would. */
@@ -37,7 +43,7 @@ vi.mock("@/hooks/useSongLibrary", async () => {
       loading: library.loading,
       save: vi.fn(),
       remove: library.remove,
-      rename: library.rename,
+      updateDetails: library.updateDetails,
       exportChoreo: library.exportChoreo,
       refresh: vi.fn(),
     }),
@@ -80,7 +86,7 @@ afterEach(() => {
   library.songs = [];
   library.loading = false;
   library.remove.mockReset();
-  library.rename.mockReset();
+  library.updateDetails.mockReset();
   library.exportChoreo.mockReset();
 });
 
@@ -188,7 +194,7 @@ describe("Edit song dialog", () => {
   });
 
   it("renames the selected song", async () => {
-    library.rename.mockResolvedValue();
+    library.updateDetails.mockResolvedValue();
     const { song, dialog } = await openEditor();
     const title = within(dialog).getByLabelText("Titel");
     const artist = within(dialog).getByLabelText("Künstler");
@@ -202,7 +208,43 @@ describe("Edit song dialog", () => {
     await waitFor(() =>
       expect(screen.queryByRole("dialog", { name: "Song bearbeiten" })).not.toBeInTheDocument(),
     );
-    expect(library.rename).toHaveBeenCalledWith(song, "Pinker Puls", "Ich");
+    expect(library.updateDetails).toHaveBeenCalledWith(song, {
+      title: "Pinker Puls",
+      artist: "Ich",
+      startOffsetMs: 0,
+    });
+  });
+
+  it("saves the start offset together with title and artist", async () => {
+    library.updateDetails.mockResolvedValue();
+    const { song, dialog } = await openEditor();
+    const start = within(dialog).getByLabelText("Start ab (Sekunden)");
+    expect(start).toHaveValue("0");
+    expect(start).toHaveAttribute("inputmode", "decimal");
+    fireEvent.change(start, { target: { value: " 12,5 " } });
+    fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
+    await waitFor(() =>
+      expect(screen.queryByRole("dialog", { name: "Song bearbeiten" })).not.toBeInTheDocument(),
+    );
+    expect(library.updateDetails).toHaveBeenCalledWith(song, {
+      title: "Pink Pulse",
+      artist: "DanceBeat Demo",
+      startOffsetMs: 12500,
+    });
+  });
+
+  it("disables Speichern for an invalid start offset", async () => {
+    const { dialog } = await openEditor();
+    const start = within(dialog).getByLabelText("Start ab (Sekunden)");
+    const save = within(dialog).getByRole("button", { name: "Speichern" });
+    fireEvent.change(start, { target: { value: "abc" } });
+    expect(start).toHaveAttribute("aria-invalid", "true");
+    expect(save).toBeDisabled();
+    expect(within(dialog).getByText(/zwischen 0 und 600 Sekunden/)).toBeInTheDocument();
+    fireEvent.change(start, { target: { value: "601" } });
+    expect(save).toBeDisabled();
+    fireEvent.change(start, { target: { value: "600" } });
+    expect(save).toBeEnabled();
   });
 
   it("disables Speichern for an empty title", async () => {
@@ -214,13 +256,13 @@ describe("Edit song dialog", () => {
   });
 
   it("shows a rename error and stays open", async () => {
-    library.rename.mockRejectedValueOnce(new StorageFullError());
+    library.updateDetails.mockRejectedValueOnce(new StorageFullError());
     const { dialog } = await openEditor();
     fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent("Der Speicher ist voll");
     expect(screen.getByRole("dialog", { name: "Song bearbeiten" })).toBeInTheDocument();
 
-    library.rename.mockRejectedValueOnce(new Error("boom"));
+    library.updateDetails.mockRejectedValueOnce(new Error("boom"));
     fireEvent.click(within(dialog).getByRole("button", { name: "Speichern" }));
     expect(await within(dialog).findByRole("alert")).toHaveTextContent(
       "Speichern hat nicht geklappt",

@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Play, RotateCcw, Square } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Play, RotateCcw, Square } from "lucide-react";
 
 import { PrivacyNote } from "@/components/setup/PrivacyNote";
 import { Button } from "@/components/ui/button";
 import { useAudioClock } from "@/hooks/useAudioClock";
+import { gameTimeMs } from "@/lib/audio/clock";
 import { isLowPrecision } from "@/lib/audio/sources";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { StorageFullError } from "@/lib/library/storage";
@@ -13,11 +14,15 @@ import {
   SYNC_DISCARD_TAPS,
   SYNC_MIN_TAPS,
   beatDeviationMs,
+  beatFlashDivisor,
+  beatFlashLevel,
   computeSyncOffset,
   formatOffsetMs,
   isUneven,
+  nudgeSyncOffset,
   tapAudioMs,
 } from "@/lib/sync";
+import { SYNC_PREVIEW } from "@/theme";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -30,6 +35,13 @@ const ERROR =
   "rounded-xl bg-destructive px-3 py-2 text-base font-medium text-destructive-foreground";
 /** Deviations shown in the live list (newest first). */
 const SHOWN_TAPS = 8;
+/** Fine-tuning steps (ms) with their button labels. */
+const NUDGES = [
+  { delta: -10, label: "−10 ms", aria: "Offset um 10 ms verringern" },
+  { delta: -1, label: "−1 ms", aria: "Offset um 1 ms verringern" },
+  { delta: 1, label: "+1 ms", aria: "Offset um 1 ms erhöhen" },
+  { delta: 10, label: "+10 ms", aria: "Offset um 10 ms erhöhen" },
+] as const;
 
 type Phase = "idle" | "starting" | "playing" | "ended";
 
@@ -45,8 +57,13 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
 /**
  * Per-song sync test: the song plays from its start offset, the player taps along to the beat
  * (tap area or Space), and the taps' audio positions give a proposed `syncOffsetMs`
- * (`computeSyncOffset`, src/lib/sync.ts). Only taps while the music plays count. React renders
- * once per tap, never per frame.
+ * (`computeSyncOffset`, src/lib/sync.ts). Only taps while the music plays count.
+ *
+ * Fine-tuning works on a candidate value (starts at the saved offset; "Vorschlag übernehmen" or
+ * the ±1/±10 ms buttons change it). While the music plays a beat light flashes on the game clock
+ * computed with the candidate, so the player can compare it with the beat they hear; "Speichern"
+ * writes the candidate. The light runs in its own rAF loop that writes `style` directly; React
+ * renders once per tap or button press, never per frame.
  *
  * Playback starts with `play()` synchronously inside the "Start" tap, which is the gesture iOS
  * needs for the (shared) audio element and YouTube.
@@ -66,6 +83,11 @@ export function SyncTestScreen({
   const [busy, setBusy] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [candidate, setCandidate] = useState(song.syncOffsetMs);
+  /** Candidate for the rAF loop (no effect restart per nudge). */
+  const candidateRef = useRef(candidate);
+  candidateRef.current = candidate;
+  const lightRef = useRef<HTMLDivElement>(null);
   const playingRef = useRef(false);
   const mountedRef = useRef(true);
   const ytHostRef = useRef<HTMLDivElement>(null);
@@ -159,9 +181,56 @@ export function SyncTestScreen({
     return () => window.removeEventListener("keydown", onKey);
   }, [tap]);
 
+  const playing = phase === "playing";
+  const { bpm } = song;
+  const latencyMs = settings.latencyMs;
+  const choreoOffsetMs = song.choreo.offsetMs;
+
+  // Beat light: brightness from the game clock with the candidate offset, written straight to
+  // the element once per frame (no React state). Reduced motion: opacity only, no scale.
+  useEffect(() => {
+    const el = lightRef.current;
+    if (!el) return;
+    const idle = () => {
+      el.style.opacity = "0";
+      el.style.transform = "";
+    };
+    if (!playing) {
+      idle();
+      return;
+    }
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // The limit is about real time: at playbackRate r the beats come r times as fast.
+    const divisor = beatFlashDivisor(bpm * rate);
+    let raf = 0;
+    const frame = () => {
+      const s = source.current;
+      const level = s
+        ? beatFlashLevel(
+            gameTimeMs(s.getTimeMs(), {
+              latencyMs,
+              syncOffsetMs: candidateRef.current,
+              choreoOffsetMs,
+            }),
+            bpm,
+            divisor,
+            SYNC_PREVIEW.decayMs,
+          )
+        : 0;
+      el.style.opacity = String(level);
+      if (!still) el.style.transform = `scale(${1 + (SYNC_PREVIEW.scale - 1) * level})`;
+      raf = requestAnimationFrame(frame);
+    };
+    raf = requestAnimationFrame(frame);
+    return () => {
+      cancelAnimationFrame(raf);
+      idle();
+    };
+  }, [playing, source, bpm, rate, latencyMs, choreoOffsetMs]);
+
   const offsets = {
     latencyMs: settings.latencyMs,
-    syncOffsetMs: song.syncOffsetMs,
+    syncOffsetMs: candidate,
     choreoOffsetMs: song.choreo.offsetMs,
   };
   const deviations = taps
@@ -193,16 +262,17 @@ export function SyncTestScreen({
       if (mountedRef.current) setBusy(false);
     }
   };
-  const saveProposal = async () => {
-    if (!proposal || busy) return;
-    if (await write(proposal.offsetMs)) void navigate({ to: "/" });
+  const saveCandidate = async () => {
+    if (busy || candidate === song.syncOffsetMs) return;
+    if (await write(candidate)) void navigate({ to: "/" });
   };
   const resetToZero = async () => {
     if (busy) return;
+    setCandidate(0);
+    if (song.syncOffsetMs === 0) return; // already saved, only the working value changes
     if ((await write(0)) && mountedRef.current) setNotice("Sync-Offset auf 0 ms gesetzt.");
   };
 
-  const playing = phase === "playing";
   const audioError = audio.state === "error";
 
   return (
@@ -311,7 +381,7 @@ export function SyncTestScreen({
               {deviations.length > 0 && (
                 <div className="flex flex-col gap-1">
                   <p className={HINT}>
-                    Abweichung deiner letzten Taps vom Beat (mit gespeichertem Offset):
+                    Abweichung deiner letzten Taps vom Beat (mit eingestelltem Offset):
                   </p>
                   <ul aria-label="Abweichung pro Tap" className="flex flex-wrap gap-1.5">
                     {deviations.map((d, i) => (
@@ -350,6 +420,67 @@ export function SyncTestScreen({
                     : `Noch ${remaining} Taps bis zum Vorschlag.`}
                 </p>
               )}
+              <div className="flex flex-wrap gap-3">
+                <Button
+                  size="lg"
+                  disabled={!proposal || proposal.offsetMs === candidate}
+                  onClick={() => proposal && setCandidate(proposal.offsetMs)}
+                  className={BTN}
+                >
+                  <Check aria-hidden />
+                  Vorschlag übernehmen
+                </Button>
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  disabled={taps.length === 0}
+                  onClick={() => setTaps([])}
+                  className={BTN}
+                >
+                  <RotateCcw aria-hidden />
+                  Nochmal
+                </Button>
+              </div>
+            </Card>
+
+            <Card title="Feinjustierung">
+              <div className="flex items-center gap-4">
+                <div
+                  aria-hidden
+                  className="flex size-16 shrink-0 items-center justify-center rounded-full border-4 border-song"
+                >
+                  <div
+                    ref={lightRef}
+                    data-testid="beat-light"
+                    className="size-10 rounded-full bg-song"
+                    style={{ opacity: 0 }}
+                  />
+                </div>
+                <p className="text-lg">
+                  Offset:{" "}
+                  <strong data-testid="candidate-offset" className="tabular-nums">
+                    {formatOffsetMs(candidate)}
+                  </strong>
+                </p>
+              </div>
+              <p className={HINT}>
+                Das Licht blinkt im Takt mit dem eingestellten Offset. Passt es zum Beat, den du
+                hörst, speichere.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {NUDGES.map((n) => (
+                  <Button
+                    key={n.delta}
+                    size="lg"
+                    variant="secondary"
+                    aria-label={n.aria}
+                    onClick={() => setCandidate((c) => nudgeSyncOffset(c, n.delta))}
+                    className={cn(BTN, "px-4 tabular-nums")}
+                  >
+                    {n.label}
+                  </Button>
+                ))}
+              </div>
               {saveError && (
                 <p role="alert" className={ERROR}>
                   {saveError}
@@ -363,8 +494,8 @@ export function SyncTestScreen({
               <div className="flex flex-wrap gap-3">
                 <Button
                   size="lg"
-                  disabled={!proposal || busy}
-                  onClick={() => void saveProposal()}
+                  disabled={busy || candidate === song.syncOffsetMs}
+                  onClick={() => void saveCandidate()}
                   className={BTN}
                 >
                   Speichern
@@ -372,17 +503,7 @@ export function SyncTestScreen({
                 <Button
                   size="lg"
                   variant="secondary"
-                  disabled={taps.length === 0}
-                  onClick={() => setTaps([])}
-                  className={BTN}
-                >
-                  <RotateCcw aria-hidden />
-                  Nochmal
-                </Button>
-                <Button
-                  size="lg"
-                  variant="secondary"
-                  disabled={busy || song.syncOffsetMs === 0}
+                  disabled={busy || (song.syncOffsetMs === 0 && candidate === 0)}
                   onClick={() => void resetToZero()}
                   className={BTN}
                 >

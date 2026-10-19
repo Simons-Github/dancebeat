@@ -10,9 +10,17 @@ import {
   formatOffsetMs,
   isUneven,
   MAX_TAP_AGE_MS,
+  SYNC_MANUAL_MAX_MS,
+  START_OFFSET_MAX_MS,
+  beatFlashDivisor,
+  beatFlashLevel,
+  formatStartOffsetSeconds,
+  nudgeSyncOffset,
+  parseStartOffsetSeconds,
   tapAudioMs,
   wrapToBeat,
 } from "@/lib/sync";
+import { MAX_PULSE_HZ } from "@/lib/game/beat";
 
 const BPM = 120; // period 500 ms
 const PERIOD = 500;
@@ -207,5 +215,110 @@ describe("beatDeviationMs / formatOffsetMs", () => {
     expect(formatOffsetMs(40)).toBe("+40 ms");
     expect(formatOffsetMs(-15)).toBe("−15 ms");
     expect(formatOffsetMs(0)).toBe("0 ms");
+  });
+});
+
+describe("nudgeSyncOffset", () => {
+  it("adds, rounds to whole ms and clamps to ±SYNC_MANUAL_MAX_MS", () => {
+    expect(nudgeSyncOffset(40, 10)).toBe(50);
+    expect(nudgeSyncOffset(40, -1)).toBe(39);
+    expect(nudgeSyncOffset(12.4, 1)).toBe(13);
+    expect(nudgeSyncOffset(SYNC_MANUAL_MAX_MS - 3, 10)).toBe(SYNC_MANUAL_MAX_MS);
+    expect(nudgeSyncOffset(-SYNC_MANUAL_MAX_MS + 3, -10)).toBe(-SYNC_MANUAL_MAX_MS);
+    expect(nudgeSyncOffset(5000, -1)).toBe(SYNC_MANUAL_MAX_MS);
+  });
+
+  it("returns 0, not -0", () => {
+    expect(Object.is(nudgeSyncOffset(1, -1), 0)).toBe(true);
+    expect(Object.is(nudgeSyncOffset(-0.4, 0), 0)).toBe(true);
+    expect(nudgeSyncOffset(Number.NaN, 10)).toBe(10);
+  });
+});
+
+describe("beatFlashDivisor", () => {
+  it("keeps the flash rate at or below MAX_PULSE_HZ", () => {
+    expect(MAX_PULSE_HZ).toBe(3);
+    expect(beatFlashDivisor(60)).toBe(1);
+    expect(beatFlashDivisor(180)).toBe(1); // exactly 3 Hz
+    expect(beatFlashDivisor(181)).toBe(2);
+    expect(beatFlashDivisor(360)).toBe(2);
+    expect(beatFlashDivisor(361)).toBe(3);
+    for (let bpm = 30; bpm <= 600; bpm++) {
+      const n = beatFlashDivisor(bpm);
+      expect(bpm / 60 / n).toBeLessThanOrEqual(MAX_PULSE_HZ);
+      if (n > 1) expect(bpm / 60 / (n - 1)).toBeGreaterThan(MAX_PULSE_HZ);
+    }
+  });
+
+  it("is 1 for an invalid tempo", () => {
+    expect(beatFlashDivisor(0)).toBe(1);
+    expect(beatFlashDivisor(-120)).toBe(1);
+    expect(beatFlashDivisor(Number.NaN)).toBe(1);
+  });
+});
+
+describe("beatFlashLevel", () => {
+  // 120 BPM, every beat flashes: period 500 ms.
+  it("is 1 on a flash beat and fades linearly over decayMs", () => {
+    expect(beatFlashLevel(0, 120, 1, 200)).toBe(1);
+    expect(beatFlashLevel(1000, 120, 1, 200)).toBe(1);
+    expect(beatFlashLevel(1050, 120, 1, 200)).toBeCloseTo(0.75);
+    expect(beatFlashLevel(1100, 120, 1, 200)).toBeCloseTo(0.5);
+    expect(beatFlashLevel(1200, 120, 1, 200)).toBe(0);
+    expect(beatFlashLevel(1499, 120, 1, 200)).toBe(0);
+  });
+
+  it("flashes only every divisor-th beat", () => {
+    expect(beatFlashLevel(500, 120, 2, 200)).toBe(0);
+    expect(beatFlashLevel(1000, 120, 2, 200)).toBe(1);
+  });
+
+  it("handles negative game times with a proper modulo", () => {
+    expect(beatFlashLevel(-500, 120, 1, 200)).toBe(1);
+    expect(beatFlashLevel(-450, 120, 1, 200)).toBeCloseTo(0.75);
+    expect(beatFlashLevel(-520, 120, 1, 200)).toBe(0);
+    expect(beatFlashLevel(-1000, 120, 2, 200)).toBe(1);
+    expect(beatFlashLevel(-500, 120, 2, 200)).toBe(0);
+  });
+
+  it("is 0 for invalid input", () => {
+    expect(beatFlashLevel(Number.NaN, 120, 1, 200)).toBe(0);
+    expect(beatFlashLevel(0, 0, 1, 200)).toBe(0);
+    expect(beatFlashLevel(0, Number.NaN, 1, 200)).toBe(0);
+    expect(beatFlashLevel(0, 120, 0, 200)).toBe(0);
+    expect(beatFlashLevel(0, 120, 1, 0)).toBe(0);
+  });
+});
+
+describe("start offset in seconds", () => {
+  it("parses dot, comma, whitespace and empty text to whole ms", () => {
+    expect(parseStartOffsetSeconds("12")).toBe(12000);
+    expect(parseStartOffsetSeconds("12.5")).toBe(12500);
+    expect(parseStartOffsetSeconds("12,5")).toBe(12500);
+    expect(parseStartOffsetSeconds("  12,5 ")).toBe(12500);
+    expect(parseStartOffsetSeconds("0,0004")).toBe(0);
+    expect(parseStartOffsetSeconds("1,2345")).toBe(1235);
+    expect(parseStartOffsetSeconds("")).toBe(0);
+    expect(parseStartOffsetSeconds("   ")).toBe(0);
+    expect(parseStartOffsetSeconds("600")).toBe(START_OFFSET_MAX_MS);
+  });
+
+  it("rejects negative, non-numeric and too large values", () => {
+    expect(parseStartOffsetSeconds("-1")).toBeNull();
+    expect(parseStartOffsetSeconds("abc")).toBeNull();
+    expect(parseStartOffsetSeconds("12s")).toBeNull();
+    expect(parseStartOffsetSeconds("1,2,3")).toBeNull();
+    expect(parseStartOffsetSeconds("1e3")).toBeNull();
+    expect(parseStartOffsetSeconds("600,1")).toBeNull();
+    expect(parseStartOffsetSeconds("Infinity")).toBeNull();
+  });
+
+  it("formats German style with at most one decimal", () => {
+    expect(formatStartOffsetSeconds(12500)).toBe("12,5");
+    expect(formatStartOffsetSeconds(12000)).toBe("12");
+    expect(formatStartOffsetSeconds(0)).toBe("0");
+    expect(formatStartOffsetSeconds(1234)).toBe("1,2");
+    expect(formatStartOffsetSeconds(Number.NaN)).toBe("0");
+    expect(parseStartOffsetSeconds(formatStartOffsetSeconds(45300))).toBe(45300);
   });
 });

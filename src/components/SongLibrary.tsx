@@ -5,12 +5,13 @@ import { getSettings, saveSettings } from "@/lib/settings";
 import { SongBanner } from "@/components/SongBanner";
 import { SongTile } from "@/components/SongTile";
 import { useSongTheme } from "@/hooks/useSongTheme";
+import type { SongDetailsPatch } from "@/hooks/useSongLibrary";
 import type { Song } from "@/lib/types";
 
 interface SongLibraryProps {
   songs: Song[];
   loading: boolean;
-  onRename: (song: Song, title: string, artist: string) => Promise<void>;
+  onSaveDetails: (song: Song, patch: SongDetailsPatch) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
   onExport: (song: Song) => Promise<string>;
   onAdd: (song: Song, audio?: Blob) => Promise<void>;
@@ -20,7 +21,7 @@ interface SongLibraryProps {
 export function SongLibrary({
   songs,
   loading,
-  onRename,
+  onSaveDetails,
   onRemove,
   onExport,
   onAdd,
@@ -104,7 +105,7 @@ export function SongLibrary({
       </div>
       <SongBanner
         song={selected}
-        onRename={onRename}
+        onSaveDetails={onSaveDetails}
         onRemove={onRemove}
         onExport={onExport}
         onAdd={onAdd}

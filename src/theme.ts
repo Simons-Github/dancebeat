@@ -143,3 +143,10 @@ export const CONFETTI = {
   ease: "easeIn",
   colors: [GOLD, GOLD_DEEP, "#FF2E93", "#00E5FF", "#7CFF4F", "#FFFFFF"],
 } as const;
+
+/**
+ * Beat light in the sync test's fine-tuning card: fade-out after each flash (ms) and the scale at
+ * full brightness (not used with reduced motion). The flash rate limit is MAX_PULSE_HZ. Shorter
+ * than the gameplay pulse (PULSE_DECAY_MS) so the flash onset is easier to compare with the beat.
+ */
+export const SYNC_PREVIEW = { decayMs: 180, scale: 1.12 } as const;
