@@ -1,6 +1,7 @@
 import { useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 
+import { VideoChoreoPanel } from "@/components/add-song/VideoChoreoPanel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -27,9 +28,13 @@ import {
   parseYouTubeId,
   validateAudioUrl,
   validateNewSongFields,
+  type NewSongChoreo,
   type NewSongSource,
 } from "@/lib/library/newSong";
 import { StorageFullError, requestPersistentStorage } from "@/lib/library/storage";
+import type { VideoImportResult } from "@/lib/library/videoImport";
+import type { PoseModel } from "@/lib/mediapipe";
+import type { PoseEstimator } from "@/lib/poseEstimator";
 import type { ChoreoFile, Song } from "@/lib/types";
 import { SONG_PALETTES } from "@/theme";
 
@@ -57,12 +62,17 @@ interface AddSongDialogProps {
   onAdd: (song: Song, audio?: Blob) => Promise<void>;
   /** Called after a successful add and after the dialog closed, e.g. to select the new song. */
   onAdded?: (song: Song) => void;
+  /** Pose estimator for the video import; injected in tests. Default: MediaPipe. */
+  createEstimator?: (model: PoseModel) => PoseEstimator;
 }
 
 const stripExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
 
-/** Add-song button plus dialog: audio file, direct URL or YouTube, auto or imported choreography. */
-export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
+/**
+ * Add-song button plus dialog: audio file, direct URL or YouTube; choreography generated,
+ * imported from a file or built from a dance video.
+ */
+export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialogProps) {
   const id = useId();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("file");
@@ -77,9 +87,10 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
   const [bpmEstimated, setBpmEstimated] = useState(false);
   const [durationS, setDurationS] = useState("180");
   const [difficulty, setDifficulty] = useState<Difficulty>(2);
-  const [choreoMode, setChoreoMode] = useState<"auto" | "import">("auto");
+  const [choreoMode, setChoreoMode] = useState<"auto" | "import" | "video">("auto");
   const [imported, setImported] = useState<ChoreoFile | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
+  const [videoResult, setVideoResult] = useState<VideoImportResult | null>(null);
   const [titleTouched, setTitleTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -120,6 +131,7 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
     setChoreoMode("auto");
     setImported(null);
     setImportError(null);
+    setVideoResult(null);
     setTitleTouched(false);
     setError(null);
   };
@@ -133,6 +145,7 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
   const link = kind === "youtube" ? youtubeLink : urlLink;
   const setLink = kind === "youtube" ? setYoutubeLink : setUrlLink;
   const useImport = choreoMode === "import";
+  const useVideo = choreoMode === "video";
   const bpmNum = bpm.trim() === "" ? NaN : Number(bpm);
   const durationNum = durationS.trim() === "" ? NaN : Number(durationS);
   const errors = validateNewSongFields({
@@ -142,6 +155,7 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
     bpm: bpmNum,
     durationS: durationNum,
     imported: useImport && imported !== null,
+    video: useVideo,
   });
   const showTitleError = titleTouched && errors.title;
   const showLinkError = link.trim() !== "" && errors.link;
@@ -149,7 +163,7 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
     kind === "file"
       ? file !== null && analysis.status !== "busy"
       : !errors.link && link.trim() !== "";
-  const choreoReady = !useImport || imported !== null;
+  const choreoReady = useImport ? imported !== null : useVideo ? videoResult !== null : true;
   const canSubmit =
     !busy &&
     sourceReady &&
@@ -229,6 +243,16 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
     try {
       const palette =
         SONG_PALETTES[Math.floor(Math.random() * SONG_PALETTES.length)] ?? SONG_PALETTES[0];
+      const choreo: NewSongChoreo =
+        useImport && imported
+          ? { type: "import", file: imported }
+          : useVideo && videoResult
+            ? {
+                type: "video",
+                choreo: videoResult.choreo,
+                startOffsetMs: videoResult.startOffsetMs,
+              }
+            : { type: "auto" };
       const song = buildNewSong({
         source,
         title,
@@ -237,7 +261,7 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
         difficulty,
         durationMs: Math.round(durationNum * 1000),
         colors: [palette.accent, palette.secondary],
-        choreo: useImport && imported ? { type: "import", file: imported } : { type: "auto" },
+        choreo,
       });
       void requestPersistentStorage().catch(() => {});
       await onAdd(song, kind === "file" && file ? file : undefined);
@@ -317,18 +341,19 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
         errors.bpm,
         bpmEstimated ? "Geschätzt, bitte prüfen." : undefined,
       )}
-      {numberField(
-        "duration",
-        "Länge in Sekunden",
-        durationS,
-        setDurationS,
-        DURATION_MIN_S,
-        DURATION_MAX_S,
-        errors.duration,
-        durationClamped
-          ? `Die Choreografie deckt die ersten ${DURATION_MAX_S / 60} Minuten ab.`
-          : undefined,
-      )}
+      {!useVideo &&
+        numberField(
+          "duration",
+          "Länge in Sekunden",
+          durationS,
+          setDurationS,
+          DURATION_MIN_S,
+          DURATION_MAX_S,
+          errors.duration,
+          durationClamped
+            ? `Die Choreografie deckt die ersten ${DURATION_MAX_S / 60} Minuten ab.`
+            : undefined,
+        )}
     </>
   );
 
@@ -378,7 +403,8 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
         <DialogHeader>
           <DialogTitle>Song hinzufügen</DialogTitle>
           <DialogDescription>
-            Wähle die Musik und lass die Choreografie erzeugen oder importiere eine eigene.
+            Wähle die Musik und lass die Choreografie erzeugen, importiere eine eigene oder erstelle
+            sie aus einem Tanzvideo.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
@@ -457,6 +483,7 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
                 [
                   ["auto", "Automatisch erzeugen"],
                   ["import", "Aus Datei importieren"],
+                  ["video", "Aus Video"],
                 ] as const
               ).map(([value, label]) => (
                 <label
@@ -475,6 +502,13 @@ export function AddSongDialog({ onAdd, onAdded }: AddSongDialogProps) {
                 </label>
               ))}
             </div>
+            {useVideo && (
+              <VideoChoreoPanel
+                bpm={bpmNum}
+                onChange={setVideoResult}
+                {...(createEstimator && { createEstimator })}
+              />
+            )}
             {useImport && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`${id}-choreo-file`} className="text-base">

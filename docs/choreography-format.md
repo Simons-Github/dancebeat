@@ -113,6 +113,17 @@ Choreografie im Format v1:
 
 Bleiben weniger als 2 Frames oder 2 Moves übrig, bricht der Import mit einer Meldung ab.
 
+Im Dialog „Song hinzufügen“ (Etappe 8c, `buildVideoChoreo` in `src/lib/library/videoImport.ts`)
+gilt Videozeit = Audiozeit. Für den Bereich `[start, ende]` und eine Beat-Phase `P` in Videozeit
+(Zeitpunkt irgendeines Beats, Standard 0):
+
+- `choreoFromPoseTrack` bekommt den Bereich und `beatOffsetMs = P − start` (darf negativ sein).
+- `choreo.offsetMs = start + ((P − start) mod Beatlänge)`. Ein Move bei Choreo-Zeit `t` liegt
+  damit bei Audiozeit `t + offsetMs`, also genau dort, wo er im Video getanzt wird, und auf
+  `P + k · Beatlänge`.
+- `song.startOffsetMs = start`: Die Musik beginnt am Bereichsanfang. `syncOffsetMs` ist 0.
+- BPM kommt aus dem Formular. Kein Formatwechsel, keine neue Version.
+
 ## Export-Datei
 
 Choreografien werden ohne Audio als JSON exportiert:

@@ -1,7 +1,7 @@
 /** Pure logic for adding a song: link parsing, field validation and building the Song record. */
 import { autoChoreo } from "../../data/demo";
 import { SongSchema } from "../schema";
-import type { ChoreoFile, Song, SourceSpec } from "../types";
+import type { ChoreoFile, Choreography, Song, SourceSpec } from "../types";
 import { songFromChoreoFile } from "./choreoFile";
 
 export const BPM_MIN = 30;
@@ -68,7 +68,11 @@ export function validateAudioUrl(
 export type NewSongSource =
   { kind: "file" } | { kind: "url"; url: string } | { kind: "youtube"; videoId: string };
 
-export type NewSongChoreo = { type: "auto" } | { type: "import"; file: ChoreoFile };
+export type NewSongChoreo =
+  | { type: "auto" }
+  | { type: "import"; file: ChoreoFile }
+  /** From the video import (videoImport.ts); `startOffsetMs` = start of the video section. */
+  | { type: "video"; choreo: Choreography; startOffsetMs: number };
 
 export interface NewSongInput {
   source: NewSongSource;
@@ -85,7 +89,9 @@ export interface NewSongInput {
 /**
  * Builds a validated Song. Auto: generated moves from bpm and duration. Import: the file's moves
  * and timing (its bpm, sync and start offsets) are kept, title/artist/difficulty come from the
- * form. IDs are always fresh. Local sources get a new blobId. Throws if the result is invalid.
+ * form. Video: the choreography's bpm and offset are kept, the song starts its audio at
+ * `startOffsetMs`; colors come from the form like for auto choreographies. IDs are always fresh.
+ * Local sources get a new blobId. Throws if the result is invalid.
  */
 export function buildNewSong(input: NewSongInput, now = Date.now()): Song {
   const title = input.title.trim();
@@ -106,6 +112,32 @@ export function buildNewSong(input: NewSongInput, now = Date.now()): Song {
       artist,
       difficulty: input.difficulty,
       choreo: { ...imported.choreo, title },
+    };
+  } else if (input.choreo.type === "video") {
+    const { choreo, startOffsetMs } = input.choreo;
+    const [accentColor, secondaryColor] = input.colors;
+    song = {
+      id: crypto.randomUUID(),
+      title,
+      artist,
+      bpm: choreo.bpm,
+      difficulty: input.difficulty,
+      source,
+      syncOffsetMs: 0,
+      startOffsetMs,
+      choreo: {
+        ...choreo,
+        id: crypto.randomUUID(),
+        title,
+        accentColor,
+        secondaryColor,
+        createdAt: now,
+        updatedAt: now,
+      },
+      highscore: 0,
+      stars: 0,
+      createdAt: now,
+      updatedAt: now,
     };
   } else {
     const choreo = autoChoreo(title, input.bpm, input.durationMs, input.colors);
@@ -137,6 +169,8 @@ export interface NewSongFields {
   durationS: number;
   /** Imported choreographies carry their own timing, so no length is needed. */
   imported: boolean;
+  /** Video choreographies take their length from the video section (bpm is still needed). */
+  video?: boolean;
 }
 
 export type FieldErrors = Partial<Record<"title" | "link" | "bpm" | "duration", string>>;
@@ -161,9 +195,10 @@ export function validateNewSongFields(f: NewSongFields): FieldErrors {
       errors.bpm = `BPM muss zwischen ${BPM_MIN} und ${BPM_MAX} liegen.`;
     }
     if (
-      !Number.isFinite(f.durationS) ||
-      f.durationS < DURATION_MIN_S ||
-      f.durationS > DURATION_MAX_S
+      !f.video &&
+      (!Number.isFinite(f.durationS) ||
+        f.durationS < DURATION_MIN_S ||
+        f.durationS > DURATION_MAX_S)
     ) {
       errors.duration = `Die Länge muss zwischen ${DURATION_MIN_S} und ${DURATION_MAX_S} Sekunden liegen.`;
     }

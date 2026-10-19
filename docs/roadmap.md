@@ -16,7 +16,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a, 8b ✅)             | Opus                                                                  |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a, 8b, 8c ✅)         | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ⏳                         | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
@@ -426,7 +426,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c umgesetzt)
 
 Aufteilung:
 
@@ -450,7 +450,26 @@ Aufteilung:
   - Keine Oberfläche: Playwright-Prüfung mit echtem Video kommt mit 8c.
   - **Offen (Gerät):** liefert Safari/iOS nach einem Seek den Bild-Callback, reichen 120 ms
     Rückfall, Dauer und Speicher bei langen Videos.
-- **8c Import-Dialog:** Datei wählen, Vorschau, Zeitbereich, Spiegeln, BPM und Beat-Phase.
+- **8c Import-Dialog – umgesetzt, Gerätetest offen.** Option „Aus Video“ in „Song
+  hinzufügen“ (`VideoChoreoPanel`, Logik in `src/lib/library/videoImport.ts`): Datei,
+  Vorschau, Start/Ende mit „Ab hier“/„Bis hier“, Selfie-Schalter, Beat-Phase, Analyse mit
+  Fortschritt und Abbruch, Zusammenfassung (Moves, Gold Moves, Erkennungsquote). Annahme
+  Videozeit = Audiozeit; Bereichsstart wird `startOffsetMs` und geht in `offsetMs` ein. Details:
+  [architecture.md](architecture.md#video-import-im-dialog-etappe-8c).
+  - Tests: Offset- und Phasenrechnung, Bereichsprüfung, `buildNewSong` mit Video, Dialogablauf
+    mit Fake-Estimator (Speichern, veraltete Analyse, Abbruch, Fehler, Freigabe der Objekt-URL).
+  - Playwright (390×844 und 844×390, erzeugtes Testvideo ohne Person, echtes MediaPipe von
+    localhost): Vorschau, Bereich vorbelegt, Analyse läuft durch und meldet „Im Video wurde zu
+    selten eine Person erkannt.“, Abbrechen zeigt „Analyse abgebrochen.“, Dialog scrollt im
+    Querformat, Konsole nur mit den erwarteten CSP-/MediaPipe-Meldungen. Erfolgspfad mit echtem
+    Tanzvideo offen (Gerätetest).
+  - Nicht enthalten: Zielperson wählen, „Video behalten“, Editor (8d).
+  - **Gerätetest 8c (offen):**
+    - [ ] Echtes MP4 und MOV auf iPhone (Safari) und Android (Chrome) wählen, Vorschau läuft
+    - [ ] Dauer der Analyse für einen Abschnitt von 1–3 Minuten notieren
+    - [ ] Vorschau bleibt während der Analyse sichtbar (Hoch- und Querformat, auch beim Scrollen)
+    - [ ] Nach dem Import spielt der Song synchron: Moves treffen die Musik, Sync-Test plausibel
+    - [ ] Bildschirm bleibt während der Analyse an (Wake Lock)
 - **8d Editor:** Timeline, Keyframes, Offset, Tempo, Gold Moves.
 
 Ursprüngliche Schritte:

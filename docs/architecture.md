@@ -245,8 +245,9 @@ die IndexedDB-Implementierung; eine Server-Variante kann dieselbe Schnittstelle 
 - URL-Quellen nur `https:` (Ausnahme localhost), sonst blockiert der Browser sie auf der
   HTTPS-Seite als Mixed Content. YouTube-Links: `watch?v=`, `youtu.be`, `shorts`, `embed`,
   `youtube-nocookie.com` oder die blanke ID.
-- Choreografie: automatisch (`autoChoreo`, Farbpaar zufällig aus `SONG_PALETTES`) oder Import
-  einer Exportdatei (`parseChoreoFile`). Beim Import gelten BPM, Sync- und Start-Offset der Datei
+- Choreografie: automatisch (`autoChoreo`, Farbpaar zufällig aus `SONG_PALETTES`), Import
+  einer Exportdatei (`parseChoreoFile`) oder aus einem Tanzvideo (siehe
+  [Video-Import im Dialog](#video-import-im-dialog-etappe-8c)). Beim Import gelten BPM, Sync- und Start-Offset der Datei
   (die Moves sind darauf getimt); Titel, Künstler und Schwierigkeit kommen aus dem Formular und
   werden aus der Datei vorbelegt, solange der Nutzer sie nicht selbst geändert hat.
 - Vor dem Speichern läuft `requestPersistentStorage()` (Ergebnis wird nicht abgewartet).
@@ -391,6 +392,47 @@ geladenen, pausierten `<video>`; `src/hooks/useVideoAnalysis.ts` kapselt Zustand
   Reicht die Genauigkeit an echten Videos nicht, kommen „full“ oder „heavy“ ins Download-Skript.
 - Ein Lauf überschreibt nie den Zustand eines neueren; Abbruch, Neustart und Unmount schließen
   den Estimator sofort.
+
+### Video-Import im Dialog (Etappe 8c)
+
+„Song hinzufügen“ hat als dritte Choreografie-Option „Aus Video“. Die Musik kommt weiter aus
+den Quell-Tabs (Datei, URL, YouTube); das Video liefert nur die Bewegungen.
+
+- **Zeitannahme:** Videozeit = Audiozeit. Video und Musik sind dieselbe Aufnahme bzw. derselbe
+  Song ab Sekunde 0. Der Sync-Test gleicht nur Abweichungen bis zu einem halben Beat aus
+  (`wrapToBeat` rechnet modulo Beatlänge); ist das Video um einen ganzen Beat oder mehr
+  verschoben, passt der Takt, aber die Moves liegen trotzdem falsch.
+- Der erste Move kann weniger als einen Beat nach dem Musikstart liegen (Bereichsstart plus
+  Phase). Das ist vorerst so akzeptiert; der Editor (8d) kann ihn entfernen.
+- `VideoChoreoPanel` (`src/components/add-song/`) hält Datei, Vorschau, Zeitbereich, Spiegeln,
+  Beat-Phase und die Analyse (`useVideoAnalysis`) selbst und meldet nur das fertige Ergebnis
+  (`VideoImportResult` oder `null`) an den Dialog. Speichern geht erst mit Ergebnis.
+- Reine Logik in `src/lib/library/videoImport.ts`: `validateVideoRange` (Start < Ende,
+  mindestens 2 s, höchstens 10 min, nicht hinter dem Videoende), `parseBeatPhaseMs` und
+  `buildVideoChoreo` (ruft `choreoFromPoseTrack`, verschiebt `offsetMs` um den Bereichsstart,
+  liefert `startOffsetMs` und Statistik: Moves, Gold Moves, Anteil der Proben mit Person).
+  `buildNewSong` übernimmt BPM und Offsets der Choreografie, vergibt neue IDs, setzt Titel und
+  das Farbpaar aus dem Formular.
+- Vorschau: `<video playsInline muted controls>` aus einer Objekt-URL; sie wird bei neuer Datei,
+  beim Wechsel der Option und beim Schließen des Dialogs freigegeben. Das Video wird nicht
+  gespeichert. Die Vorschau muss während der Analyse sichtbar bleiben (Bild-Callback, siehe 8b):
+  Beim Start wird sie ins Bild gescrollt, solange die Analyse läuft, klebt sie (`sticky`) oben im
+  scrollenden Dialog, auf höchstens 35 dvh verkleinert (Querformat), mit Fortschritt und
+  „Abbrechen“ direkt darunter. Ihre Bedienelemente sind dann ausgeblendet. Grenze: `sticky` wirkt
+  nur innerhalb des Panels; scrollt man ganz nach unten zu Titel und Künstler, kann die Vorschau
+  oben herauslaufen.
+- Start und Ende in Sekunden (Komma oder Punkt, `parseVideoSeconds`, geprüft gegen die
+  Videolänge), „Ab hier“ / „Bis hier“ übernehmen die Vorschauzeit. Standard ist das ganze Video,
+  bei längeren Videos die ersten 10 Minuten; der Abschnitt selbst darf höchstens 10 Minuten
+  lang sein, auch weiter hinten im Video. Eine Bereichsänderung nach der
+  Analyse macht das Ergebnis ungültig (Hinweis, neu analysieren). BPM, Beat-Phase und Spiegeln
+  rechnen dagegen nur aus der vorhandenen Pose-Spur neu.
+- Die Länge des Songs entfällt im Video-Modus (sie ergibt sich aus dem Bereich), BPM bleibt
+  Pflicht.
+- Während Laden und Analyse hält `useWakeLock` den Bildschirm an. Schließen des Dialogs hängt
+  das Panel aus; der Hook bricht die Analyse dabei ab und schließt das Modell.
+- Datenschutz: Das Panel nennt, dass das Video auf dem Gerät bleibt und die Erkennung ohne
+  externe Abrufe läuft (Modell von der eigenen Adresse, siehe [Externe Abrufe](#externe-abrufe)).
 
 ## Messwerte
 

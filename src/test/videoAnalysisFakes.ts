@@ -1,5 +1,6 @@
 import { vi } from "vitest";
 
+import { figure } from "@/lib/pose";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import type { Landmark } from "@/lib/types";
 
@@ -143,4 +144,47 @@ export function fakeEstimator(
   };
   if (autoInit) resolve();
   return est;
+}
+
+/** A waving stick figure at video time `t`, per-axis normalized for a `aspect` video. */
+export function figureLandmarks(t: number, aspect = 16 / 9): Landmark[] {
+  const s = Math.max(aspect, 1);
+  const lm = figure({
+    la: 90 + 60 * Math.sin((2 * Math.PI * t) / 2000),
+    ra: 90 - 50 * Math.sin((2 * Math.PI * t) / 3000),
+    le: 30,
+    re: 20,
+    ll: 10,
+    rl: 10,
+  });
+  return lm.map((p) => [0.5 + ((p[0] - 0.5) * s) / aspect, 0.5 + (p[1] - 0.5) * s, p[2] ?? 1]);
+}
+
+/**
+ * Gives a jsdom <video> what analyzeVideo needs: size, duration and a currentTime setter that
+ * answers with `seeked` (and sets `shownMs` for fakeEstimator), like FakeVideo.
+ */
+export function patchVideoElement(
+  el: HTMLVideoElement,
+  { durationMs = 6000, width = 1280, height = 720 } = {},
+) {
+  let time = 0;
+  const target = el as HTMLVideoElement & { shownMs: number };
+  target.shownMs = -1;
+  Object.defineProperties(el, {
+    videoWidth: { configurable: true, get: () => width },
+    videoHeight: { configurable: true, get: () => height },
+    duration: { configurable: true, get: () => durationMs / 1000 },
+    currentTime: {
+      configurable: true,
+      get: () => time,
+      set: (s: number) => {
+        time = s;
+        setTimeout(() => {
+          target.shownMs = s * 1000;
+          el.dispatchEvent(new Event("seeked"));
+        }, 1);
+      },
+    },
+  });
 }
