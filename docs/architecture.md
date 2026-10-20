@@ -413,13 +413,28 @@ kommen von der eigenen Adresse der App (`<base>mediapipe/wasm/…`,
 - **Telemetrie gesperrt:** `@mediapipe/tasks-vision` 1.1.1 hat einen fest eingebauten Logger
   (kein Schalter in der API), der Nutzungsdaten (Task-Typ, Modus, OS-Klasse, Latenzen, Version;
   keine Bilder) alle 60 s und beim `close()` an `odml.pa.googleapis.com/v1/log` schickt.
-  `vite-plugins/csp.ts` setzt deshalb in `index.html` eine CSP, die nur `connect-src`
-  beschränkt: `'self' blob: data:` (Dev zusätzlich `ws: wss:` für HMR). Andere Direktiven bleiben
-  bewusst offen (Audio-URLs über `<audio>`, YouTube-Skript und -Iframe). Der Logger scheitert
-  und stoppt sich; Chrome meldet das als zwei Konsolenfehler („violates the following Content
-  Security Policy directive“). Diese Fehler sind erwartet und gelten nicht als Fehler aus eigenem
-  Code. Seit Etappe 10a erlaubt die Policy zusätzlich `https://accounts.spotify.com`
-  (Token-Tausch) und `https://api.spotify.com` (Play-Aufruf), sonst keine fremden Hosts. Gilt nur für von Vite ausgelieferte `index.html` (dev, build, preview).
+  `vite-plugins/csp.ts` setzt deshalb in `index.html` eine CSP; `connect-src` erlaubt nur
+  `'self' blob: data:`, `https://accounts.spotify.com` (Token-Tausch, Etappe 10a) und
+  `https://api.spotify.com` (Play-Aufruf), Dev zusätzlich `ws: wss:` für HMR. Der Logger
+  scheitert und stoppt sich; Chrome meldet das als zwei Konsolenfehler („violates the following
+  Content Security Policy directive“). Diese Fehler sind erwartet und gelten nicht als Fehler aus
+  eigenem Code. Gilt nur für von Vite ausgelieferte `index.html` (dev, build, preview).
+- **Vollständige CSP (Security-Audit, Oktober 2026):** Die Skripte von YouTube und Spotify laufen
+  im Origin der App, also neben Kamera, IndexedDB und Spotify-Token. Die Policy begrenzt deshalb
+  alle Kanäle, über die sie oder ein eingeschleustes Skript etwas laden oder senden könnten:
+  `default-src 'self'`; `script-src 'self' 'wasm-unsafe-eval'` (MediaPipe-WASM) plus
+  `www.youtube.com` und `sdk.scdn.co` (Dev zusätzlich `'unsafe-inline'` für die
+  React-Refresh-Präambel); `frame-src` nur `www.youtube-nocookie.com` und `sdk.scdn.co`;
+  `img-src 'self' blob: data:`; `font-src 'self' data:`; `style-src 'self' 'unsafe-inline'`
+  (Inline-Styles von Framer Motion und Radix); `media-src 'self' blob: data: https:` plus
+  `http://localhost:*` und `http://127.0.0.1:*` (wie `validateAudioUrl`; `[::1]` lässt sich in
+  CSP nicht ausdrücken); `worker-src 'self' blob:`; `object-src 'none'`; `base-uri 'self'`;
+  `form-action 'self'`.
+  Grenzen: `media-src` bleibt für https offen (Audio-URLs), Navigationen lassen sich per CSP
+  nicht sperren, und ein erlaubtes Skript kann immer mit seinem eigenen Host sprechen. Die CSP
+  schützt also vor Abflüssen an Dritte, nicht vor YouTube oder Spotify selbst. Als Meta-Tag
+  wirken `frame-ancestors` und Reporting nicht; die müsste beim Hosting ein HTTP-Header setzen.
+  Jeder neue fremde Host braucht einen Eintrag dort und in `src/test/csp.test.ts`.
 
 ### Spotify-Anmeldung (Etappe 10a)
 

@@ -24,7 +24,7 @@ export default defineConfig({
     tailwindcss(),
     // MediaPipe WASM runtime from our own origin (dev middleware + copy into dist/).
     mediapipeWasm(),
-    // connect-src only: blocks MediaPipe telemetry (see vite-plugins/csp.ts).
+    // CSP meta tag: own origin plus the named YouTube/Spotify hosts (see vite-plugins/csp.ts).
     csp(),
     // Offline: own service worker as dist/sw.js with injected precache list (build only).
     serviceWorker(),
