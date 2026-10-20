@@ -56,9 +56,9 @@ der Landmarker geschlossen, auch wenn ein asynchroner Schritt erst nach dem Aufr
 `AudioSource` (`type` als Union der Quellarten, `load`, `play`, `pause`, `seek`, `getTimeMs`,
 `setVolume`, `onEnded`, `onError`, `destroy`, optional `onExternalStart` und `onExternalPause`).
 `onError` meldet Fehler, die nach erfolgreichem `load()` auftreten (Verbindung weg,
-Dekodierfehler, YouTube-Fehlercode). `onExternalStart` und `onExternalPause` implementiert nur
-YouTube: Die Wiedergabe startete ohne ausstehendes `play()` bzw. wurde direkt im Player angehalten
-(Tipp aufs Video); die Uhr läuft bzw. steht dann schon. `SourceOptions.element`
+Dekodierfehler, YouTube-Fehlercode). `onExternalStart` und `onExternalPause` implementieren YouTube
+und Spotify: Die Wiedergabe startete ohne ausstehendes `play()` bzw. wurde direkt im Player
+angehalten (Tipp aufs Video, andere Spotify-App); die Uhr läuft bzw. steht dann schon. `SourceOptions.element`
 ist das gemeinsame, per Geste entsperrte Audioelement (Datei/URL), `SourceOptions.container` das
 Element, in dem der YouTube-Player angezeigt wird (ohne: unsichtbarer 2×2-px-Player außerhalb des
 Bildschirms):
@@ -126,6 +126,44 @@ umgesetzt). Ein Fehler des Elements nach dem Laden hält die Uhr an und löst `o
   nächster Versuch lädt neu), danach `onReady` mit Timeout 15 s (`YT_LOAD_TIMEOUT_MS`). Fehlercodes vor `onReady` lehnen `load()` ab, danach lösen sie
   `onError` aus („Dieses Video darf nicht eingebettet werden.“ bzw. „YouTube-Video nicht
   verfügbar.“).
+
+**Spotify** (`SpotifySource`, Web Playback SDK; Anmeldung siehe
+[Spotify-Anmeldung](#spotify-anmeldung-etappe-10a); Etappe 10b-1, im Spiel erst ab 10b-2):
+
+- Laden: Token prüfen (`getSpotifyToken`), SDK-Skript `sdk.scdn.co` mit Timeout 15 s
+  (`SPOTIFY_SCRIPT_TIMEOUT_MS`) und `onerror`, Fehlschlag nicht zwischengespeichert. Danach
+  `ready` mit Timeout 15 s (`SPOTIFY_READY_TIMEOUT_MS`); `connect()` mit `false`, `account_error`,
+  `authentication_error`, `initialization_error` oder `playback_error` vor `ready` lehnen `load()`
+  ab, danach lösen sie `onError` aus, ebenso `not_ready` („Die Verbindung zu Spotify ist
+  abgebrochen.“). `destroy()` während des Ladens beendet `load()` still.
+- Erster Start: `PUT /v1/me/player/play?device_id=…` mit `uris` und `position_ms`; ein `seek` vor
+  dem Start (Start-Offset) wird gemerkt und so mitgeschickt. Spätere Starts nach einer Pause
+  setzen per `seek` und `resume()` fort, statt den Song neu zu starten. Ein `seek`, das während
+  eines Starts kommt, wird nach der Bestätigung nachgeholt. Ein abgelehnter Start behält den
+  gemerkten Seek für den nächsten Versuch.
+- `play()` ruft im Tipp `activateElement()` auf (iOS) und löst erst beim ersten Player-Zustand mit
+  `paused: false` auf; bis dahin steht die Uhr. `autoplay_failed` oder keine Wiedergabe nach 8 s
+  (`SPOTIFY_PLAY_TIMEOUT_MS`, Annahme, am Gerät abstimmen) ergeben `PlayRefusedError`.
+  Antwortet die Web API mit einem Fehler: „Spotify konnte den Song nicht starten.“, ohne Netz:
+  „Spotify ist nicht erreichbar. Bist du online?“. Kommt die Antwort eines abgebrochenen Starts
+  später doch noch, wird nur angehalten, wenn kein neuerer Start offen ist oder läuft.
+- Uhr: jeder Player-Zustand gleicht hart ab (`position` plus Wandzeit seit `timestamp`, deshalb
+  dort `Date.now()`), beim Spielen alle 500 ms zusätzlich über `getCurrentState()`.
+- Ende: Zustand pausiert bei Position 0 mit dem Song in `previous_tracks` (Annahme, am Gerät
+  prüfen) löst `onEnded` einmal aus; danach startet `play()` wieder per Web API.
+- Pause und Start von außen (andere Spotify-App, Wiedergabe auf ein anderes Gerät verschoben:
+  Zustand `null`, `autoplay_failed` mitten in der Wiedergabe): `onExternalPause` bzw.
+  `onExternalStart`, wie bei YouTube. Nach Zustand `null` oder einer Wiederverbindung
+  (`not_ready`, dann erneut `ready`, evtl. mit neuer `device_id`) startet das nächste `play()` den
+  Song wieder per Web API ab der aktuellen Position, weil `resume()` dort ins Leere liefe.
+- Ungewollte Wiedergabe wird sofort wieder angehalten, die Uhr bleibt stehen: ein Start, den die
+  Web API angenommen hat, der aber vor dem ersten Zustand abgebrochen wurde (Pause, Neustart),
+  und stumme Wiedergabe nach `autoplay_failed` bis zum nächsten `play()` im Tipp.
+- `play()` ohne laufendes oder erfolgreiches `load()` bzw. nach `not_ready`: echter Fehler
+  („Spotify-Player ist nicht bereit.“), kein `PlayRefusedError`, damit das Spiel nicht in einer
+  Tipp-Schleife hängt. Nur während `load()` läuft, gilt es als verweigert.
+- Die Lautstärke aus `setVolume` vor `load()` wird als Startlautstärke des Players übernommen.
+- Tests: `src/test/spotifySource.test.ts` (Fake-SDK, Fake-`fetch`).
 
 **Laufzeitfehler im Spiel:** `useAudioClock` setzt bei `onError` den Zustand `error`; der
 Spielscreen zeigt dann, wenn das Spiel schon gestartet war, das Overlay „Die Musik ist

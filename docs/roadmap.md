@@ -18,7 +18,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d, 8e, 8f ✅)  | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
-| 10. Spotify                                  | ⏳ (10a ✅)                | Opus                                                                  |
+| 10. Spotify                                  | ⏳ (10a, 10b-1 ✅)         | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
@@ -642,7 +642,7 @@ Ursprüngliche Schritte:
 
 Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 
-### 10. Spotify (zuletzt) ⏳ (10a umgesetzt)
+### 10. Spotify (zuletzt) ⏳ (10a, 10b-1 umgesetzt)
 
 - Vorher am Handy prüfen, ob das Web Playback SDK mobil überhaupt läuft (offen, Gerätetest; vor
   10b klären, sonst Spotify auf Desktop-Browser beschränken).
@@ -658,10 +658,27 @@ Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 - CSP `connect-src` um `accounts.spotify.com` und `api.spotify.com` erweitert.
 - Details: [architecture.md](architecture.md#spotify-anmeldung-etappe-10a).
 
-**10b Spotify im Spiel ⏳**
+**10b-1 SpotifySource gehärtet ✅** (W6-Rest; Gerätetest mit echtem Konto offen, im Spiel erst
+mit 10b-2 erreichbar)
 
-- W6 (Rest): `startOffsetMs` über `position_ms` im play-Aufruf; Timeout und `onerror` beim Laden
-  des SDK; Fehler nach dem Laden (`autoplay_failed`, `account_error`) über `onError` melden.
+- `startOffsetMs` über `position_ms` im play-Aufruf; Fortsetzen nach Pause per `resume()` statt
+  Neustart; `play()` löst erst bei Wiedergabe auf, Ablehnung (`autoplay_failed`, 8 s ohne
+  Wiedergabe) als `PlayRefusedError`.
+- SDK-Laden mit Timeout und `onerror` (nicht zwischengespeichert), `ready` mit Timeout, `connect()`
+  mit `false`; Fehler nach dem Laden (`account_error`, `playback_error`, `not_ready` …) über
+  `onError`; `destroy()` während des Ladens still; Pause/Start von außen; Lautstärke vor `load()`.
+- Tests `src/test/spotifySource.test.ts`. Details:
+  [architecture.md](architecture.md#audiosource--spielzeit).
+- **Gerätetest 10b-1 (offen, mit 10b-2):**
+  - [ ] Start mit Intro-Sprung beginnt an der richtigen Stelle, Pause/Weiter setzt fort
+  - [ ] Ende-Erkennung (`previous_tracks`) greift; 8-s-Ablehnung passt zur echten Startdauer
+  - [ ] Pause in der Spotify-App am Handy öffnet das Pausemenü
+  - [ ] Erster Start direkt nach `ready`: kommt von der Web API ein 404 „Device not found“
+        (bekanntes SDK-Rennen)? Falls ja, einmal verzögert wiederholen
+  - [ ] Reihenfolge `autoplay_failed` und Player-Zustand auf iOS (stumme Wiedergabe)
+
+**10b-2 Spotify im Spiel ⏳**
+
 - Player-Initialisierung (`load()`) im Klick-Handler (iOS/Safari); `useAudioClock` lädt Spotify
   bisher gar nicht.
 - Spotify-Song im Dialog „Song hinzufügen“ (`parseSpotifyUri`), Datenschutzhinweis in der
@@ -680,7 +697,7 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
 | ID  | Befund                                                                          | Etappe |
 | --- | ------------------------------------------------------------------------------- | ------ |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden (Token-Ablauf: 10a ✅) | 10b    |
+| W6  | Spotify: Code erledigt (10a, 10b-1), Gerätetest mit echtem Konto offen          | 10b-2  |
 | W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                          | 3b     |
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)          | 3b     |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                        | 11     |

@@ -1,6 +1,6 @@
 import { songRepository } from "../library/repository";
 import { PlayRefusedError } from "./errors";
-import { getSpotifyToken } from "./spotifyAuth";
+import { getSpotifyToken, SpotifyAuthError } from "./spotifyAuth";
 import { effectivePlaybackRate } from "./rate";
 import { musicGainFor, sharedAudioContext } from "./unlock";
 import type { Song } from "../types";
@@ -22,13 +22,14 @@ export interface AudioSource {
   /** Called when playback breaks after a successful `load()` (connection lost, decode error). */
   onError(cb: (message: string) => void): void;
   /**
-   * Optional (YouTube only): playback started without a pending `play()`, e.g. a direct tap on
-   * the video after the start was refused. The clock already runs.
+   * Optional (YouTube, Spotify): playback started without a pending `play()`, e.g. a direct tap
+   * on the video after the start was refused, or a resume in another Spotify app. The clock
+   * already runs.
    */
   onExternalStart?(cb: () => void): void;
   /**
-   * Optional (YouTube only): playback was paused directly in the player (tap on the video), not
-   * by `pause()`. The clock already holds.
+   * Optional (YouTube, Spotify): playback was paused directly in the player (tap on the video,
+   * another Spotify app), not by `pause()`. The clock already holds.
    */
   onExternalPause?(cb: () => void): void;
   destroy(): void;
@@ -674,6 +675,62 @@ export function parseSpotifyUri(input: string) {
   return m ? `spotify:track:${m[1]}` : null;
 }
 
+export const SPOTIFY_SDK_URL = "https://sdk.scdn.co/spotify-player.js";
+/** SDK script or `onSpotifyWebPlaybackSDKReady` not within this time: give up, the next try reloads. */
+export const SPOTIFY_SCRIPT_TIMEOUT_MS = 15000;
+/** Player not `ready` within this time after the SDK loaded: `load()` rejects. */
+export const SPOTIFY_READY_TIMEOUT_MS = 15000;
+/**
+ * `play()` waits until the player reports playback (state not paused). Not within this time: the
+ * start counts as refused, a tap retries it inside the gesture. Longer than YouTube's 4 s because
+ * the start goes through the Web API first (assumption, tune on the device).
+ */
+export const SPOTIFY_PLAY_TIMEOUT_MS = 8000;
+/** Resync of the clock with `getCurrentState()` while playing. */
+export const SPOTIFY_POLL_MS = 500;
+
+let spotifyReady: Promise<void> | null = null;
+function loadSpotifySdk() {
+  if (window.Spotify?.Player) return Promise.resolve();
+  spotifyReady ??= new Promise((res, rej) => {
+    const s = document.createElement("script");
+    let timeout = 0;
+    const fail = () => {
+      clearTimeout(timeout);
+      // Do not cache the failure: the next attempt starts with a fresh script tag.
+      spotifyReady = null;
+      s.remove();
+      rej(new Error("Spotify konnte nicht geladen werden. Bist du online?"));
+    };
+    window.onSpotifyWebPlaybackSDKReady = () => {
+      clearTimeout(timeout);
+      res();
+    };
+    timeout = window.setTimeout(fail, SPOTIFY_SCRIPT_TIMEOUT_MS);
+    s.src = SPOTIFY_SDK_URL;
+    s.onerror = fail;
+    document.head.appendChild(s);
+  });
+  return spotifyReady;
+}
+
+const SPOTIFY_ERRORS: Record<Spotify.ErrorTypes, string> = {
+  account_error: "Spotify Premium wird benötigt, um im Browser abzuspielen.",
+  authentication_error: "Spotify-Anmeldung abgelaufen. Bitte in den Einstellungen neu verbinden.",
+  initialization_error: "Dein Browser unterstützt Spotify-Wiedergabe nicht.",
+  playback_error: "Spotify konnte den Song nicht abspielen.",
+};
+
+const SPOTIFY_REFUSED = "Spotify hat den Start blockiert. Tippe zum Starten.";
+
+/**
+ * Position of a player state now: `timestamp` is the wall-clock time (epoch ms) of `position`,
+ * so Date.now() is needed here; it never feeds game time directly.
+ */
+function statePositionMs(s: Spotify.PlaybackState) {
+  return s.position + (s.paused ? 0 : Math.max(0, Date.now() - s.timestamp));
+}
+
 class SpotifySource implements AudioSource {
   type = "spotify" as const;
   lowPrecision = true;
@@ -681,83 +738,345 @@ class SpotifySource implements AudioSource {
   private deviceId = "";
   private clock = new SmoothClock();
   private poll = 0;
+  private destroyed = false;
+  /** `load()` is under way: play() meanwhile counts as refused (a later tap may start it). */
+  private loading = false;
+  /** First `ready` arrived; errors after that are runtime errors (`onError` callback). */
+  private loaded = false;
+  /** The device is usable: false again after `not_ready` until the SDK reconnects. */
+  private ready = false;
+  /** The track was started on this device (start confirmed); later starts use `resume()`. */
+  private started = false;
+  /** The Web API accepted a start that was not confirmed yet; the track may play any moment. */
+  private trackSent = false;
+  /**
+   * After `autoplay_failed`: the browser plays muted, if at all. Playing states are not taken as
+   * a start until the next play() (inside a gesture).
+   */
+  private silent = false;
+  /** Seek before the first start: sent as `position_ms` with the start (the SDK cannot seek yet). */
+  private pendingSeekMs: number | null = null;
+  /**
+   * `pendingSeekMs` as sent with the running start. It stays pending until the start is
+   * confirmed, so a refused start retries from the same position.
+   */
+  private sentSeekMs: number | null = null;
+  /** Shared by concurrent `play()` calls; rejected by `pause()`/`destroy()`. */
+  private pending: PendingPlay | null = null;
+  /** Playback was started (by play() or externally) and not paused since. */
+  private active = false;
+  private endedSent = false;
+  private volume = 1;
+  private loadTimer = 0;
+  private settleLoad: (() => void) | null = null;
   private endedCb = () => {};
   private errorCb: (message: string) => void = () => {};
+  private externalStartCb = () => {};
+  private externalPauseCb = () => {};
   constructor(private uri: string) {}
   async load() {
+    this.loading = true;
+    try {
+      await this.connectPlayer();
+    } finally {
+      this.loading = false;
+    }
+  }
+  private async connectPlayer() {
     // Throws a message for the UI when not connected or the session cannot be renewed.
     await getSpotifyToken();
-    if (!window.Spotify) {
-      await new Promise<void>((res) => {
-        window.onSpotifyWebPlaybackSDKReady = () => res();
-        const s = document.createElement("script");
-        s.src = "https://sdk.scdn.co/spotify-player.js";
-        document.head.appendChild(s);
-      });
-    }
-    const player = new window.Spotify.Player({
+    await loadSpotifySdk();
+    // Destroyed while the SDK loaded (song switch, route left): no player.
+    if (this.destroyed) return;
+    const sdk = window.Spotify;
+    if (!sdk?.Player) throw new Error("Spotify konnte nicht geladen werden.");
+    const player = new sdk.Player({
       name: "DanceBeat",
       // The SDK asks again before the token expires; a failed refresh surfaces as
       // authentication_error.
       getOAuthToken: (cb) => {
         getSpotifyToken().then(cb, () => {});
       },
-      volume: 0.8,
+      volume: this.volume,
     });
     this.player = player;
     await new Promise<void>((res, rej) => {
+      const settle = () => {
+        clearTimeout(this.loadTimer);
+        this.settleLoad = null;
+      };
+      // destroy() during the wait ends load() quietly, like the other sources.
+      this.settleLoad = () => {
+        settle();
+        res();
+      };
+      const reject = (message: string) => {
+        settle();
+        rej(new Error(message));
+      };
+      this.loadTimer = window.setTimeout(
+        () => reject("Spotify-Player lädt nicht. Prüfe deine Verbindung."),
+        SPOTIFY_READY_TIMEOUT_MS,
+      );
       player.addListener("ready", ({ device_id }: Spotify.WebPlaybackInstance) => {
+        if (this.destroyed || this.ready) return;
         this.deviceId = device_id;
+        this.ready = true;
+        if (this.loaded) {
+          // Reconnected after not_ready, possibly as a new device: the next play() starts the
+          // track again via the Web API from the current position.
+          this.unstart();
+          return;
+        }
+        this.loaded = true;
+        settle();
         res();
       });
-      player.addListener("account_error", () =>
-        rej(new Error("Spotify Premium wird benötigt, um im Browser abzuspielen.")),
-      );
-      player.addListener("authentication_error", () =>
-        rej(new Error("Spotify-Anmeldung abgelaufen. Bitte neu verbinden.")),
-      );
-      player.addListener("initialization_error", () =>
-        rej(new Error("Dein Browser unterstützt Spotify-Wiedergabe nicht.")),
-      );
-      player.addListener("autoplay_failed", () =>
-        rej(new Error("Wiedergabe blockiert. Tippe erneut auf Start.")),
-      );
-      player.addListener("player_state_changed", (s: Spotify.PlaybackState | null) => {
-        if (!s) return;
-        const pos = s.position + (s.paused ? 0 : Date.now() - s.timestamp);
-        this.clock.sync(pos, !s.paused);
-        if (s.paused && s.position === 0 && s.track_window?.previous_tracks?.length) this.endedCb();
+      player.addListener("not_ready", () => {
+        if (this.destroyed || !this.ready) return;
+        this.ready = false;
+        this.fail("Die Verbindung zu Spotify ist abgebrochen.");
       });
-      void player.connect();
+      (Object.keys(SPOTIFY_ERRORS) as Spotify.ErrorTypes[]).forEach((type) => {
+        player.addListener(type, () => {
+          if (this.destroyed) return;
+          if (!this.loaded) reject(SPOTIFY_ERRORS[type]);
+          else this.fail(SPOTIFY_ERRORS[type]);
+        });
+      });
+      // The browser refused to start audio without a gesture: a tap can retry it.
+      // Without a pending play() but while playing, it is silent playback: held like a pause.
+      player.addListener("autoplay_failed", () => {
+        if (this.destroyed) return;
+        const wasActive = this.active && !this.pending;
+        this.silent = true;
+        this.active = false;
+        clearInterval(this.poll);
+        this.clock.sync(this.clock.get(), false, true);
+        this.settlePlay(new PlayRefusedError(SPOTIFY_REFUSED));
+        if (wasActive) this.externalPauseCb();
+      });
+      player.addListener("player_state_changed", (s: Spotify.PlaybackState | null) =>
+        this.stateChanged(s),
+      );
+      const notConnected = () => {
+        if (!this.destroyed && !this.loaded) reject("Spotify-Player konnte sich nicht verbinden.");
+      };
+      player.connect().then((ok) => {
+        if (!ok) notConnected();
+      }, notConnected);
     });
-    void player.activateElement();
   }
-  async play() {
-    const r = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
-      method: "PUT",
-      headers: { Authorization: `Bearer ${await getSpotifyToken()}` },
-      body: JSON.stringify({ uris: [this.uri] }),
+  /**
+   * The track no longer plays on this device (moved away, reconnected): the next play() starts it
+   * again via the Web API, from the current position unless a seek is pending.
+   */
+  private unstart() {
+    if (this.started || this.trackSent) this.pendingSeekMs ??= this.clock.get();
+    this.started = false;
+    this.trackSent = false;
+  }
+  private stateChanged(s: Spotify.PlaybackState | null) {
+    if (this.destroyed || !this.loaded) return;
+    if (!s) {
+      // Playback moved to another device (Spotify Connect): the clock holds like a pause.
+      this.clock.sync(this.clock.get(), false, true);
+      this.unstart();
+      if (this.active && !this.pending) this.externalPause();
+      return;
+    }
+    const playing = !s.paused;
+    if (playing && !this.pending && !this.active && (this.silent || !this.started)) {
+      // Unwanted playback: a start that was cancelled after the Web API accepted it, or muted
+      // playback after autoplay_failed. Stopped again; the clock keeps its position.
+      void this.player?.pause().catch(() => {});
+      return;
+    }
+    this.clock.sync(statePositionMs(s), playing, true);
+    if (playing) {
+      this.endedSent = false;
+      if (this.pending) {
+        this.settlePlay();
+        const seekMs = this.pendingSeekMs;
+        const sent = this.sentSeekMs;
+        this.pendingSeekMs = null;
+        this.sentSeekMs = null;
+        if (seekMs !== null && seekMs !== sent) {
+          // seek() while the start was under way: the PUT carried an older position.
+          void this.player?.seek(seekMs).catch(() => {});
+          this.clock.sync(seekMs, true, true);
+        }
+      } else if (!this.active && this.started) {
+        // Resumed elsewhere (another Spotify app): count it as a start, the clock already runs.
+        this.active = true;
+        this.startPoll();
+        this.externalStartCb();
+      }
+      return;
+    }
+    // Spotify reports the end of a single-track queue as paused at 0 with the track moved to
+    // previous_tracks (assumption, check on the device).
+    const ended = s.position === 0 && s.track_window.previous_tracks.length > 0;
+    if (ended && this.started && !this.endedSent) {
+      this.endedSent = true;
+      this.started = false;
+      this.trackSent = false;
+      this.active = false;
+      clearInterval(this.poll);
+      this.endedCb();
+    } else if (this.active && !this.pending) this.externalPause();
+  }
+  private externalPause() {
+    this.active = false;
+    clearInterval(this.poll);
+    this.externalPauseCb();
+  }
+  private takePending() {
+    const p = this.pending;
+    if (!p) return null;
+    p.timers.forEach((t) => clearTimeout(t));
+    this.pending = null;
+    return p;
+  }
+  private settlePlay(error?: Error) {
+    const p = this.takePending();
+    if (!p) return;
+    if (error) p.reject(error);
+    else {
+      this.started = true;
+      this.active = true;
+      this.startPoll();
+      p.resolve();
+    }
+  }
+  /** Runtime error after `ready`: stop the clock and report it. */
+  private fail(message: string) {
+    this.active = false;
+    clearInterval(this.poll);
+    this.clock.sync(this.clock.get(), false, true);
+    this.settlePlay(new Error(message));
+    this.errorCb(message);
+  }
+  private startPoll() {
+    clearInterval(this.poll);
+    // Advanced locally per frame (SmoothClock), aligned with the player state every 500 ms.
+    this.poll = window.setInterval(() => {
+      this.player?.getCurrentState().then(
+        (s) => {
+          if (s && this.active && !this.destroyed) this.clock.sync(statePositionMs(s), !s.paused);
+        },
+        () => {},
+      );
+    }, SPOTIFY_POLL_MS);
+  }
+  play(): Promise<void> {
+    const player = this.player;
+    if (this.destroyed || !player || !this.ready)
+      // Transient while loading: a later tap may start it, so it counts as refused. Otherwise
+      // (never loaded, load failed, connection lost) tapping cannot help: a real error.
+      return Promise.reject(
+        this.loading
+          ? new PlayRefusedError("Spotify-Player ist noch nicht geladen.")
+          : new Error("Spotify-Player ist nicht bereit."),
+      );
+    if (this.pending) return this.pending.promise;
+    this.silent = false;
+    // Must run inside the gesture on iOS/Safari; harmless elsewhere.
+    void player.activateElement().catch(() => {});
+    let resolve = () => {};
+    let reject: (e: Error) => void = () => {};
+    const promise = new Promise<void>((res, rej) => {
+      resolve = res;
+      reject = rej;
     });
-    if (!r.ok) throw new Error("Spotify konnte den Song nicht starten.");
-    this.clock.sync(0, true, true);
-    this.poll = window.setInterval(async () => {
-      const s = await this.player?.getCurrentState();
-      if (s) this.clock.sync(s.position, !s.paused);
-    }, 500);
+    const pending: PendingPlay = { promise, resolve, reject, timers: [] };
+    this.pending = pending;
+    pending.timers.push(
+      window.setTimeout(() => {
+        if (this.pending !== pending) return;
+        this.active = false;
+        void this.player?.pause().catch(() => {});
+        this.settlePlay(new PlayRefusedError(SPOTIFY_REFUSED));
+      }, SPOTIFY_PLAY_TIMEOUT_MS),
+    );
+    if (this.started) {
+      // Like the first start: the seek stays pending until playback is confirmed.
+      const seekMs = this.pendingSeekMs;
+      this.sentSeekMs = seekMs;
+      const resume = async () => {
+        if (seekMs !== null) await player.seek(seekMs);
+        await player.resume();
+      };
+      resume().catch(() => {
+        if (this.pending === pending)
+          this.settlePlay(new Error("Spotify konnte nicht weiterspielen."));
+      });
+    } else void this.startTrack(pending);
+    // Resolves on the first state that is not paused (stateChanged).
+    return promise;
+  }
+  /** First start on this device: the Web API plays the track from the remembered position. */
+  private async startTrack(pending: PendingPlay) {
+    this.sentSeekMs = this.pendingSeekMs;
+    const positionMs = Math.max(0, Math.round(this.pendingSeekMs ?? 0));
+    let ok = false;
+    try {
+      const token = await getSpotifyToken();
+      if (this.pending !== pending) return;
+      const r = await fetch(
+        `https://api.spotify.com/v1/me/player/play?device_id=${encodeURIComponent(this.deviceId)}`,
+        {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ uris: [this.uri], position_ms: positionMs }),
+        },
+      );
+      ok = r.ok;
+      if (ok && !this.destroyed) this.trackSent = true;
+    } catch (e: unknown) {
+      if (this.pending !== pending) return;
+      this.settlePlay(
+        e instanceof SpotifyAuthError
+          ? e
+          : new Error("Spotify ist nicht erreichbar. Bist du online?"),
+      );
+      return;
+    }
+    if (this.pending !== pending) {
+      // Paused or destroyed while the request was under way: the track may start anyway. Not
+      // when a newer play() is pending or already playing; it must keep running.
+      if (ok && !this.destroyed && !this.pending && !this.active)
+        void this.player?.pause().catch(() => {});
+      return;
+    }
+    if (!ok) this.settlePlay(new Error("Spotify konnte den Song nicht starten."));
   }
   pause() {
-    this.player?.pause();
+    this.active = false;
+    clearInterval(this.poll);
+    this.settlePlay(new Error("Wiedergabe angehalten."));
+    if (!this.player || !this.ready) return;
+    // Also when the Web API accepted a start whose first playing state is still on its way.
+    if (this.started || this.trackSent) void this.player.pause().catch(() => {});
     this.clock.sync(this.clock.get(), false, true);
   }
   seek(ms: number) {
-    this.player?.seek(ms);
-    this.clock.sync(ms, true, true);
+    if (!this.started || !this.player || !this.ready) {
+      // Not started yet: the start sends it as position_ms (or applies it once playing).
+      this.pendingSeekMs = ms;
+      this.clock.sync(ms, false, true);
+      return;
+    }
+    this.pendingSeekMs = null;
+    void this.player.seek(ms).catch(() => {});
+    this.clock.sync(ms, this.active, true);
   }
   getTimeMs() {
     return this.clock.get();
   }
   setVolume(v: number) {
-    this.player?.setVolume(v);
+    this.volume = v;
+    void this.player?.setVolume(v).catch(() => {});
   }
   onEnded(cb: () => void) {
     this.endedCb = cb;
@@ -765,9 +1084,24 @@ class SpotifySource implements AudioSource {
   onError(cb: (message: string) => void) {
     this.errorCb = cb;
   }
+  onExternalStart(cb: () => void) {
+    this.externalStartCb = cb;
+  }
+  onExternalPause(cb: () => void) {
+    this.externalPauseCb = cb;
+  }
   destroy() {
+    this.destroyed = true;
+    this.active = false;
     clearInterval(this.poll);
-    this.player?.disconnect();
+    this.settlePlay(new Error("Wiedergabe beendet."));
+    this.settleLoad?.();
+    try {
+      this.player?.disconnect();
+    } catch {
+      /* */
+    }
+    this.player = null;
   }
 }
 
