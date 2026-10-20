@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useAudioClock } from "@/hooks/useAudioClock";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { PlayRefusedError } from "@/lib/audio/errors";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { formatMoveTime } from "@/lib/choreoEditor";
 import {
@@ -87,6 +88,11 @@ export function EditorPreview({
       setStartError(null);
       setEnded(false);
       setPhase("playing");
+    },
+    // Paused in the YouTube player itself: stop like the stop button.
+    onExternalPause: () => {
+      runRef.current++;
+      setPhase("idle");
     },
   });
   const { source, timeMs } = audio;
@@ -192,13 +198,16 @@ export function EditorPreview({
         setStartError(null);
         setPhase("playing");
       })
-      .catch(() => {
+      .catch((e: unknown) => {
         if (!mountedRef.current || run !== runRef.current) return;
         setPhase("idle");
+        // Only a refused start is fixed by tapping again; other errors are shown as they are.
         setStartError(
-          isYouTube
-            ? "Der Start wurde blockiert. Tippe direkt auf das Video."
-            : "Die Musik ließ sich nicht starten. Tippe noch einmal auf „Abspielen“.",
+          !(e instanceof PlayRefusedError) && e instanceof Error
+            ? e.message
+            : isYouTube
+              ? "Der Start wurde blockiert. Tippe direkt auf das Video."
+              : "Die Musik ließ sich nicht starten. Tippe noch einmal auf „Abspielen“.",
         );
       });
   };

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useAudioClock, type AudioClockOptions } from "@/hooks/useAudioClock";
 import { audioTimeMs, frameGameTimeMs, gameTimeMs, MAX_FRAME_AGE_MS } from "@/lib/audio/clock";
-import { createSource, type AudioSource } from "@/lib/audio/sources";
+import { createSource, PlayRefusedError, type AudioSource } from "@/lib/audio/sources";
 import {
   claimSharedElement,
   resetAudioUnlockForTests,
@@ -239,6 +239,25 @@ describe("URL-Quelle: Puffern und Laufzeitfehler", () => {
     src.destroy();
   });
 
+  it("play(): NotAllowedError und AbortError → PlayRefusedError", async () => {
+    const { el, src } = await loadedUrlSource();
+    for (const name of ["NotAllowedError", "AbortError"]) {
+      vi.spyOn(el, "play").mockRejectedValueOnce(new DOMException("x", name));
+      await expect(src.play()).rejects.toBeInstanceOf(PlayRefusedError);
+    }
+    src.destroy();
+  });
+
+  it("play(): andere Ablehnung (NotSupportedError) → normaler Fehler mit Meldung", async () => {
+    const { el, src } = await loadedUrlSource();
+    vi.spyOn(el, "play").mockRejectedValueOnce(new DOMException("x", "NotSupportedError"));
+    const e: unknown = await src.play().catch((err: unknown) => err);
+    expect(e).toBeInstanceOf(Error);
+    expect(e).not.toBeInstanceOf(PlayRefusedError);
+    expect((e as Error).message).toMatch(/Audio-URL konnte nicht geladen werden/);
+    src.destroy();
+  });
+
   it("destroy entfernt die Handler", async () => {
     const { el, src } = await loadedUrlSource();
     const cb = vi.fn();
@@ -363,6 +382,41 @@ describe("useAudioClock: Start von außen", () => {
     expect(onExternalStart).not.toHaveBeenCalled();
     act(() => starts[1]!());
     expect(onExternalStart).toHaveBeenCalledTimes(1);
+  });
+
+  it("reicht onExternalPause der Quelle an die Option durch (aus dem Ref)", async () => {
+    let paused = () => {};
+    const src = fakeSource({ onExternalPause: (cb) => (paused = cb) });
+    const first = vi.fn();
+    const second = vi.fn();
+    const { rerender } = render(
+      <Probe
+        song={makeSong()}
+        opts={{ latencyMs: 0, volume: 1, create: () => src, onExternalPause: first }}
+      />,
+    );
+    await flush();
+    rerender(
+      <Probe
+        song={makeSong()}
+        opts={{ latencyMs: 0, volume: 1, create: () => src, onExternalPause: second }}
+      />,
+    );
+    act(() => paused());
+    expect(first).not.toHaveBeenCalled();
+    expect(second).toHaveBeenCalledTimes(1);
+  });
+
+  it("reportError setzt denselben Fehlerzustand wie ein Laufzeitfehler", async () => {
+    const src = fakeSource();
+    render(<Probe song={makeSong()} opts={{ latencyMs: 0, volume: 1, create: () => src }} />);
+    await flush();
+    expect(api!.state).toBe("ready");
+    const report = api!.reportError;
+    act(() => report("Startfehler"));
+    expect(api!.state).toBe("error");
+    expect(api!.error).toBe("Startfehler");
+    expect(api!.reportError).toBe(report);
   });
 
   it("Quellen ohne onExternalStart funktionieren unverändert", async () => {

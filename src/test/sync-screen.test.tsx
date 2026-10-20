@@ -34,6 +34,7 @@ const audio = vi.hoisted(() => ({
   loadFails: false,
   created: 0,
   calls: [] as string[],
+  externalPause: null as null | (() => void),
 }));
 vi.mock("@/lib/audio/sources", () => ({
   isLowPrecision: (song: Song) => song.source.type === "youtube" || song.source.type === "spotify",
@@ -68,6 +69,7 @@ vi.mock("@/lib/audio/sources", () => ({
       onEnded: () => {},
       onError: () => {},
       onExternalStart: () => {},
+      onExternalPause: (cb: () => void) => (audio.externalPause = cb),
       destroy: () => void audio.calls.push("destroy"),
     };
   },
@@ -100,7 +102,15 @@ beforeEach(() => {
   });
   repo.songs = [{ ...makeSong(), id: SONG_ID, title: "Pink Pulse", startOffsetMs: 1000 }];
   repo.saved = [];
-  Object.assign(audio, { playing: false, base: 0, at: 0, loadFails: false, created: 0, calls: [] });
+  Object.assign(audio, {
+    playing: false,
+    base: 0,
+    at: 0,
+    loadFails: false,
+    created: 0,
+    calls: [],
+    externalPause: null,
+  });
 });
 
 afterEach(() => {
@@ -275,6 +285,19 @@ describe("Sync-Test", () => {
     expect(audio.playing).toBe(false);
     fireEvent.pointerDown(pad);
     fireEvent.keyDown(window, { key: " ", code: "Space" });
+    expect(screen.getByTestId("tap-count")).toHaveTextContent("1 Taps");
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+  });
+
+  it("Pause direkt im YouTube-Player stoppt wie Stopp; danach zählen Taps nicht mehr", async () => {
+    await renderAt(`/sync/${SONG_ID}`);
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await advance(0);
+    const pad = screen.getByRole("button", { name: "Im Takt tippen" });
+    fireEvent.pointerDown(pad);
+    audio.playing = false;
+    act(() => audio.externalPause?.());
+    fireEvent.pointerDown(pad);
     expect(screen.getByTestId("tap-count")).toHaveTextContent("1 Taps");
     expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
   });

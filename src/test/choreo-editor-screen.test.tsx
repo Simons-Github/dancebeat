@@ -42,50 +42,59 @@ const audio = vi.hoisted(() => ({
   base: 0,
   at: 0,
   playFails: false,
+  /** Set: play() rejects with this real error (not a refusal). */
+  playError: null as string | null,
+  externalPause: null as null | (() => void),
   playGate: null as Promise<void> | null,
   rates: [] as number[],
   calls: [] as string[],
 }));
-vi.mock("@/lib/audio/sources", () => ({
-  isLowPrecision: (song: Song) => song.source.type === "youtube" || song.source.type === "spotify",
-  createSource: (song: Song) => {
-    audio.rates.push(song.playbackRate ?? 1);
-    const now = () => performance.now();
-    const time = () => (audio.playing ? audio.base + (now() - audio.at) : audio.base);
-    return {
-      type: song.source.type,
-      lowPrecision: false,
-      load: async () => void audio.calls.push("load"),
-      play: async () => {
-        audio.calls.push("play");
-        if (audio.playFails) throw new Error("blocked");
-        if (audio.playGate) await audio.playGate;
-        audio.base = time();
-        audio.at = now();
-        audio.playing = true;
-      },
-      pause: () => {
-        audio.calls.push("pause");
-        audio.base = time();
-        audio.playing = false;
-      },
-      seek: (ms: number) => {
-        audio.calls.push(`seek:${ms}`);
-        audio.base = ms;
-        audio.at = now();
-      },
-      getTimeMs: time,
-      setVolume: () => {},
-      onEnded: () => {},
-      onError: () => {},
-      onExternalStart: () => {},
-      destroy: () => {
-        audio.calls.push("destroy");
-        audio.playing = false;
-      },
-    };
-  },
-}));
+vi.mock("@/lib/audio/sources", async () => {
+  const { PlayRefusedError } = await import("@/lib/audio/errors");
+  return {
+    isLowPrecision: (song: Song) =>
+      song.source.type === "youtube" || song.source.type === "spotify",
+    createSource: (song: Song) => {
+      audio.rates.push(song.playbackRate ?? 1);
+      const now = () => performance.now();
+      const time = () => (audio.playing ? audio.base + (now() - audio.at) : audio.base);
+      return {
+        type: song.source.type,
+        lowPrecision: false,
+        load: async () => void audio.calls.push("load"),
+        play: async () => {
+          audio.calls.push("play");
+          if (audio.playFails) throw new PlayRefusedError();
+          if (audio.playError) throw new Error(audio.playError);
+          if (audio.playGate) await audio.playGate;
+          audio.base = time();
+          audio.at = now();
+          audio.playing = true;
+        },
+        pause: () => {
+          audio.calls.push("pause");
+          audio.base = time();
+          audio.playing = false;
+        },
+        seek: (ms: number) => {
+          audio.calls.push(`seek:${ms}`);
+          audio.base = ms;
+          audio.at = now();
+        },
+        getTimeMs: time,
+        setVolume: () => {},
+        onEnded: () => {},
+        onError: () => {},
+        onExternalStart: () => {},
+        onExternalPause: (cb: () => void) => (audio.externalPause = cb),
+        destroy: () => {
+          audio.calls.push("destroy");
+          audio.playing = false;
+        },
+      };
+    },
+  };
+});
 const ticks = vi.hoisted(() => ({ click: 0, gold: 0 }));
 vi.mock("@/lib/sfx", () => ({
   sfx: {
@@ -144,6 +153,8 @@ beforeEach(() => {
     base: 0,
     at: 0,
     playFails: false,
+    playError: null,
+    externalPause: null,
     playGate: null,
     rates: [],
     calls: [],
@@ -649,6 +660,28 @@ describe("Vorschau im Editor", () => {
     act(() => void document.dispatchEvent(new Event("visibilitychange")));
     expect(audio.playing).toBe(false);
     expect(btn("Abspielen")).toBeInTheDocument();
+  });
+
+  it("Pause direkt im YouTube-Player stoppt die Vorschau", async () => {
+    setSong(3, { source: { type: "youtube", videoId: "dQw4w9WgXcQ" } });
+    await loaded();
+    fireEvent.click(btn("Abspielen"));
+    await flush();
+    expect(btn("Stopp")).toBeInTheDocument();
+    // Tap on the video pauses YouTube itself; the source reports it.
+    audio.playing = false;
+    act(() => audio.externalPause?.());
+    expect(btn("Abspielen")).toBeEnabled();
+    expect(current()).toBe(-1);
+  });
+
+  it("echter Startfehler zeigt die Meldung statt „Tippe noch einmal“", async () => {
+    audio.playError = "Die Audiodatei konnte nicht dekodiert werden.";
+    await loaded();
+    fireEvent.click(btn("Abspielen"));
+    const alert = await within(preview()).findByRole("alert");
+    expect(alert).toHaveTextContent("Die Audiodatei konnte nicht dekodiert werden.");
+    expect(alert).not.toHaveTextContent("Tippe");
   });
 
   it("Verlassen zerstört die Quelle", async () => {

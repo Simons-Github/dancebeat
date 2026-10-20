@@ -1,6 +1,9 @@
 import { songRepository } from "../library/repository";
+import { PlayRefusedError } from "./errors";
 import { effectivePlaybackRate } from "./rate";
 import type { Song } from "../types";
+
+export { PlayRefusedError };
 
 export type SourceType = Song["source"]["type"];
 
@@ -21,7 +24,19 @@ export interface AudioSource {
    * the video after the start was refused. The clock already runs.
    */
   onExternalStart?(cb: () => void): void;
+  /**
+   * Optional (YouTube only): playback was paused directly in the player (tap on the video), not
+   * by `pause()`. The clock already holds.
+   */
+  onExternalPause?(cb: () => void): void;
   destroy(): void;
+}
+
+/** `name` of a DOMException-like rejection value ("" when there is none). */
+function errorName(e: unknown) {
+  return typeof e === "object" && e !== null && "name" in e && typeof e.name === "string"
+    ? e.name
+    : "";
 }
 
 export interface SourceOptions {
@@ -154,7 +169,15 @@ class ElementSource implements AudioSource {
     };
   }
   async play() {
-    await this.el.play();
+    try {
+      await this.el.play();
+    } catch (e: unknown) {
+      const name = errorName(e);
+      // NotAllowedError: no gesture. AbortError: the start was interrupted (pause, new source).
+      if (name === "NotAllowedError" || name === "AbortError") throw new PlayRefusedError();
+      // Anything else (NotSupportedError: on iOS loading may only happen here) is a real error.
+      throw new Error(this.errorMessage());
+    }
     if (this.destroyed) return;
     this.clock.sync(this.el.currentTime * 1000, true, true);
     clearInterval(this.timer);
@@ -262,6 +285,9 @@ export function parseYouTubeId(input: string) {
  */
 export const YT_PLAY_TIMEOUT_MS = 4000;
 
+/** Player not ready (`onReady`) within this time after the API loaded: `load()` rejects. */
+export const YT_LOAD_TIMEOUT_MS = 15000;
+
 const YT_STATE_UNSTARTED = -1;
 
 interface PendingPlay {
@@ -296,6 +322,7 @@ class YouTubeSource implements AudioSource {
   private endedCb = () => {};
   private errorCb: (message: string) => void = () => {};
   private externalStartCb = () => {};
+  private externalPauseCb = () => {};
   private host: HTMLDivElement;
   private visible: boolean;
   constructor(
@@ -339,7 +366,7 @@ class YouTubeSource implements AudioSource {
       this.loadTimer = window.setTimeout(() => {
         settle();
         rej(new Error("YouTube-Video lädt nicht. Prüfe Link und Verbindung."));
-      }, 15000);
+      }, YT_LOAD_TIMEOUT_MS);
       this.player = new api.Player(el, {
         videoId: this.videoId,
         width: this.visible ? "100%" : 2,
@@ -372,11 +399,21 @@ class YouTubeSource implements AudioSource {
   private stateChanged(api: typeof YT, state: YT.PlayerState) {
     if (this.destroyed) return;
     this.ytState = state;
-    // Started some other way (direct tap on the video): the remembered seek no longer applies.
-    if (state === api.PlayerState.PLAYING) this.pendingSeekMs = null;
     // Game time runs only while YouTube reports PLAYING; buffering and pausing hold it.
     const playing = state === api.PlayerState.PLAYING;
-    this.clock.sync(this.currentMs(), playing, true);
+    const seekMs = this.pendingSeekMs;
+    if (playing && seekMs !== null && !this.pending && !this.active && this.player) {
+      // Started some other way (direct tap on the video, e.g. during the countdown): apply the
+      // remembered seek now, so the intro skip (start offset) is not lost. The clock takes the
+      // target directly; getCurrentTime() may still report the old position right after seekTo.
+      this.pendingSeekMs = null;
+      this.player.seekTo(seekMs / 1000, true);
+      this.clock.sync(seekMs, true, true);
+    } else {
+      // Started some other way: a remembered seek no longer applies.
+      if (playing) this.pendingSeekMs = null;
+      this.clock.sync(this.currentMs(), playing, true);
+    }
     if (playing && !this.pending && !this.active) {
       // Started without play() (direct tap on the video): count it as a successful start.
       this.active = true;
@@ -384,6 +421,12 @@ class YouTubeSource implements AudioSource {
       this.startResync(api);
       this.externalStartCb();
     } else if (playing) this.settlePlay();
+    else if (state === api.PlayerState.PAUSED && this.active && !this.pending) {
+      // Paused in the player itself (own pause() clears `active` first): report it once.
+      this.active = false;
+      clearInterval(this.resync);
+      this.externalPauseCb();
+    }
     if (state === api.PlayerState.ENDED) this.endedCb();
   }
   private takePending() {
@@ -423,7 +466,8 @@ class YouTubeSource implements AudioSource {
     const player = this.player;
     const api = this.api;
     if (this.destroyed || !player || !api || !this.ready)
-      return Promise.reject(new Error("YouTube-Player ist noch nicht geladen."));
+      // Transient (not ready yet): a later tap may start it, so it counts as refused.
+      return Promise.reject(new PlayRefusedError("YouTube-Player ist noch nicht geladen."));
     if (this.pending) return this.pending.promise;
     if (this.ytState === api.PlayerState.PLAYING) {
       this.active = true;
@@ -454,7 +498,9 @@ class YouTubeSource implements AudioSource {
           // Buffering keeps going: should it start after all, stateChanged reports an external
           // start and the game leaves "blocked" by itself.
           if (s !== api.PlayerState.BUFFERING) player.pauseVideo();
-          this.settlePlay(new Error("YouTube hat den Start blockiert. Tippe zum Starten."));
+          this.settlePlay(
+            new PlayRefusedError("YouTube hat den Start blockiert. Tippe zum Starten."),
+          );
         }, YT_PLAY_TIMEOUT_MS),
       );
     }
@@ -505,6 +551,9 @@ class YouTubeSource implements AudioSource {
   }
   onExternalStart(cb: () => void) {
     this.externalStartCb = cb;
+  }
+  onExternalPause(cb: () => void) {
+    this.externalPauseCb = cb;
   }
   destroy() {
     this.destroyed = true;

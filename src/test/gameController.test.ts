@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import { PlayRefusedError } from "@/lib/audio/errors";
 import { GameController, type GameDeps, type GameState } from "@/lib/game/controller";
 import { MotionMeter, motionScoring } from "@/lib/motion";
 import { Scorer } from "@/lib/scorer";
@@ -12,7 +13,7 @@ function fakeAudio() {
     playing: false,
     refuse: false,
     play: vi.fn(async () => {
-      if (a.refuse) throw new DOMException("no gesture", "NotAllowedError");
+      if (a.refuse) throw new PlayRefusedError();
       a.playing = true;
     }),
     pause: vi.fn(() => {
@@ -111,6 +112,21 @@ describe("Countdown und Start", () => {
     ctl.tap();
     await advance(16);
     expect(ctl.state.phase).toBe("playing");
+  });
+
+  it("anderer Fehler beim Start: kein „blocked“, onPlayError mit der Meldung, zurück zu preparing", async () => {
+    const onPlayError = vi.fn();
+    const { ctl, audio, advance } = setup({ onPlayError });
+    audio.play.mockImplementationOnce(async () => {
+      throw new Error("Die Audiodatei konnte nicht dekodiert werden.");
+    });
+    ctl.start();
+    await advance(5100);
+    expect(ctl.state).toMatchObject({ phase: "preparing", count: null });
+    expect(onPlayError).toHaveBeenCalledWith("Die Audiodatei konnte nicht dekodiert werden.");
+    expect(vi.getTimerCount()).toBe(0);
+    ctl.tap();
+    expect(audio.play).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -331,7 +347,7 @@ describe("Blocked: doppelter Tipp und Start von außen", () => {
   it("nach einem abgelehnten tap()-play() darf der nächste Tipp wieder starten", async () => {
     const { ctl, audio, advance } = await blocked();
     audio.play.mockImplementationOnce(async () => {
-      throw new DOMException("no gesture", "NotAllowedError");
+      throw new PlayRefusedError();
     });
     ctl.tap();
     await advance(16);
@@ -367,24 +383,50 @@ describe("Blocked: doppelter Tipp und Start von außen", () => {
     expect(audio.pause).not.toHaveBeenCalled();
   });
 
-  it("externalStart in anderen Phasen wird ignoriert", async () => {
+  it("externalStart in preparing, countdown, paused hält die Musik wieder an, die Phase bleibt", async () => {
     const env = setup();
+    env.audio.playing = true; // started behind the game's back
     env.ctl.externalStart();
     expect(env.ctl.state.phase).toBe("preparing");
+    expect(env.audio.pause).toHaveBeenCalledTimes(1);
+    expect(env.audio.playing).toBe(false);
+
     env.ctl.start();
+    env.audio.pause.mockClear();
+    env.audio.playing = true;
     env.ctl.externalStart();
     expect(env.ctl.state.phase).toBe("countdown");
+    expect(env.audio.pause).toHaveBeenCalledTimes(1);
+    expect(env.audio.playing).toBe(false);
+    // The countdown's own play() still starts the music.
     await env.advance(5100);
     expect(env.ctl.state.phase).toBe("playing");
+    expect(env.audio.playing).toBe(true);
+
     env.ctl.pause("user");
+    env.audio.pause.mockClear();
+    env.audio.playing = true;
     env.ctl.externalStart();
-    expect(env.ctl.state.phase).toBe("paused");
-    env.ctl.restart();
+    expect(env.ctl.state).toMatchObject({ phase: "paused", pauseReason: "user" });
+    expect(env.audio.pause).toHaveBeenCalledTimes(1);
+    expect(env.audio.playing).toBe(false);
+  });
+
+  it("externalStart in playing und ended wird ignoriert", async () => {
+    const env = setup();
+    env.ctl.start();
     await env.advance(5100);
+    expect(env.ctl.state.phase).toBe("playing");
+    env.audio.pause.mockClear();
+    env.ctl.externalStart();
+    expect(env.ctl.state.phase).toBe("playing");
+    expect(env.audio.pause).not.toHaveBeenCalled();
     env.ctl.finish();
+    env.audio.pause.mockClear();
     env.ctl.externalStart();
     expect(env.ctl.state.phase).toBe("ended");
-    expect(env.audio.play).toHaveBeenCalledTimes(2);
+    expect(env.audio.pause).not.toHaveBeenCalled();
+    expect(env.audio.play).toHaveBeenCalledTimes(1);
   });
 
   it("externalStart während ein tap()-play() aussteht, das danach auflöst → bleibt playing, kein pause()", async () => {

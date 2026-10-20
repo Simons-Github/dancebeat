@@ -39,48 +39,56 @@ const audio = vi.hoisted(() => ({
   ended: null as null | (() => void),
   failed: null as null | ((message: string) => void),
   external: null as null | (() => void),
+  externalPause: null as null | (() => void),
+  /** Set: play() rejects with this real error (not a refusal). */
+  playError: null as string | null,
   calls: [] as string[],
   opts: null as null | { container?: HTMLElement },
 }));
-vi.mock("@/lib/audio/sources", () => ({
-  createSource: (_song: unknown, opts: { container?: HTMLElement } = {}) => {
-    audio.created++;
-    audio.opts = opts;
-    const now = () => performance.now();
-    const time = () => (audio.playing ? audio.base + (now() - audio.at) : audio.base);
-    return {
-      type: "local",
-      lowPrecision: false,
-      load: async () => {
-        audio.calls.push("load");
-        if (audio.loadFails) throw new Error("Die Audiodatei konnte nicht dekodiert werden.");
-      },
-      play: async () => {
-        audio.calls.push("play");
-        if (audio.refuse) throw new DOMException("gesture", "NotAllowedError");
-        audio.base = time();
-        audio.at = now();
-        audio.playing = true;
-      },
-      pause: () => {
-        audio.calls.push("pause");
-        audio.base = time();
-        audio.playing = false;
-      },
-      seek: (ms: number) => {
-        audio.calls.push(`seek:${ms}`);
-        audio.base = ms;
-        audio.at = now();
-      },
-      getTimeMs: time,
-      setVolume: () => {},
-      onEnded: (cb: () => void) => (audio.ended = cb),
-      onError: (cb: (message: string) => void) => (audio.failed = cb),
-      onExternalStart: (cb: () => void) => (audio.external = cb),
-      destroy: () => audio.calls.push("destroy"),
-    };
-  },
-}));
+vi.mock("@/lib/audio/sources", async () => {
+  const { PlayRefusedError } = await import("@/lib/audio/errors");
+  return {
+    createSource: (_song: unknown, opts: { container?: HTMLElement } = {}) => {
+      audio.created++;
+      audio.opts = opts;
+      const now = () => performance.now();
+      const time = () => (audio.playing ? audio.base + (now() - audio.at) : audio.base);
+      return {
+        type: "local",
+        lowPrecision: false,
+        load: async () => {
+          audio.calls.push("load");
+          if (audio.loadFails) throw new Error("Die Audiodatei konnte nicht dekodiert werden.");
+        },
+        play: async () => {
+          audio.calls.push("play");
+          if (audio.refuse) throw new PlayRefusedError();
+          if (audio.playError) throw new Error(audio.playError);
+          audio.base = time();
+          audio.at = now();
+          audio.playing = true;
+        },
+        pause: () => {
+          audio.calls.push("pause");
+          audio.base = time();
+          audio.playing = false;
+        },
+        seek: (ms: number) => {
+          audio.calls.push(`seek:${ms}`);
+          audio.base = ms;
+          audio.at = now();
+        },
+        getTimeMs: time,
+        setVolume: () => {},
+        onEnded: (cb: () => void) => (audio.ended = cb),
+        onError: (cb: (message: string) => void) => (audio.failed = cb),
+        onExternalStart: (cb: () => void) => (audio.external = cb),
+        onExternalPause: (cb: () => void) => (audio.externalPause = cb),
+        destroy: () => audio.calls.push("destroy"),
+      };
+    },
+  };
+});
 
 const scene = vi.hoisted(() => ({ estimators: [] as { closed: boolean }[] }));
 vi.mock("@/lib/mediapipePoseEstimator", () => ({
@@ -151,6 +159,8 @@ beforeEach(() => {
     ended: null,
     failed: null,
     external: null,
+    externalPause: null,
+    playError: null,
     calls: [],
     opts: null,
   });
@@ -356,6 +366,18 @@ describe("Spielscreen (Simulationsmodus)", () => {
     expect(phase()).toBe("playing");
   });
 
+  it("anderer Startfehler: kein „Zum Starten tippen“, sondern die Fehlermeldung", async () => {
+    audio.playError = "Die Audiodatei konnte nicht dekodiert werden.";
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    expect(phase()).toBe("preparing");
+    expect(screen.queryByRole("button", { name: "Zum Starten tippen" })).toBeNull();
+    expect(screen.getByText("Die Musik startet nicht")).toBeInTheDocument();
+    expect(screen.queryByText("Die Musik ist abgebrochen")).toBeNull();
+    expect(screen.getByText("Die Audiodatei konnte nicht dekodiert werden.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Zur Bibliothek" })).toBeInTheDocument();
+  });
+
   it("Audio nicht ladbar: Meldung und Weg zurück", async () => {
     audio.loadFails = true;
     await renderAt(`/play/${SONG_ID}?sim=1`);
@@ -540,6 +562,21 @@ describe("Spielscreen mit YouTube-Quelle", () => {
     expect(screen.queryByText(/Tippe auf das Video/)).toBeNull();
     expect(host).toHaveClass("pointer-events-none", "absolute", "z-20");
     expect(audio.calls.filter((c) => c === "play")).toHaveLength(1);
+  });
+
+  it("Pause direkt im Video öffnet das Pausemenü", async () => {
+    const song = library.songs[0];
+    if (!song) throw new Error("no song");
+    library.songs = [{ ...song, source: { type: "youtube", videoId: "aaaaaaaaaaa" } }];
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    expect(phase()).toBe("playing");
+    audio.base = audio.playing ? audio.base + (performance.now() - audio.at) : audio.base;
+    audio.playing = false;
+    act(() => audio.externalPause?.());
+    await advance(20);
+    expect(phase()).toBe("paused");
+    expect(screen.getByRole("dialog", { name: "Pause" })).toBeInTheDocument();
   });
 
   it("blocked ohne YouTube: kein Hinweis aufs Video", async () => {

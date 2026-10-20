@@ -209,6 +209,7 @@ describe("YouTubeSource: Start und Autoplay-Sperre", () => {
     await advance(1);
     expect(p.state).toBe("rejected");
     expect((p.error as Error).message).toBe("YouTube hat den Start blockiert. Tippe zum Starten.");
+    expect(p.error).toBeInstanceOf(mod.PlayRefusedError);
     expect(player.pauseVideo).not.toHaveBeenCalled();
     expect(src.getTimeMs()).toBe(0);
     src.destroy();
@@ -414,6 +415,21 @@ describe("YouTubeSource: Laden", () => {
     src.destroy();
   });
 
+  it("ohne onReady lehnt load() nach YT_LOAD_TIMEOUT_MS ab", async () => {
+    const src = mod.createSource(ytSong());
+    const done = track(src.load());
+    await tick();
+    await advance(mod.YT_LOAD_TIMEOUT_MS - 1);
+    expect(done.state).toBe("pending");
+    await advance(1);
+    expect(done.state).toBe("rejected");
+    expect((done.error as Error).message).toBe(
+      "YouTube-Video lädt nicht. Prüfe Link und Verbindung.",
+    );
+    expect(vi.getTimerCount()).toBe(0);
+    src.destroy();
+  });
+
   it("Fehler vor onReady lehnt load() ab", async () => {
     const src = mod.createSource(ytSong());
     const done = src.load();
@@ -506,6 +522,35 @@ describe("YouTubeSource: Start von außen (Tipp aufs Video)", () => {
     src.destroy();
   });
 
+  it("Start von außen wendet einen gemerkten Seek an (Intro-Sprung im Countdown bleibt)", async () => {
+    const { src, player } = await loaded();
+    src.onExternalStart?.(() => {});
+    player.emit(PlayerState.CUED);
+    src.seek(5000); // start(): seek while not started → only remembered
+    expect(player.seekTo).not.toHaveBeenCalled();
+    // Tap on the video during the countdown.
+    player.emit(PlayerState.PLAYING);
+    expect(player.seekTo).toHaveBeenCalledWith(5, true);
+    expect(src.getTimeMs()).toBe(5000);
+    await advance(500);
+    expect(src.getTimeMs()).toBe(5500);
+    // Re-paused by the game; the countdown's play() continues from there, no second seek.
+    src.pause();
+    player.emit(PlayerState.PAUSED);
+    void src.play();
+    player.emit(PlayerState.PLAYING);
+    expect(player.seekTo).toHaveBeenCalledTimes(1);
+    src.destroy();
+  });
+
+  it("play() vor onReady lehnt mit PlayRefusedError ab (ein Tipp kann es nachholen)", async () => {
+    const src = mod.createSource(ytSong());
+    const e: unknown = await src.play().catch((err: unknown) => err);
+    expect(e).toBeInstanceOf(mod.PlayRefusedError);
+    expect((e as Error).message).toBe("YouTube-Player ist noch nicht geladen.");
+    src.destroy();
+  });
+
   it("nach destroy() bleibt ein spätes PLAYING folgenlos", async () => {
     const { src, player } = await loaded();
     const onExternal = vi.fn();
@@ -513,5 +558,70 @@ describe("YouTubeSource: Start von außen (Tipp aufs Video)", () => {
     src.destroy();
     player.emit(PlayerState.PLAYING);
     expect(onExternal).not.toHaveBeenCalled();
+  });
+});
+
+describe("YouTubeSource: Pause von außen (Tipp aufs Video)", () => {
+  it("PAUSED während der Wiedergabe ruft onExternalPause genau einmal, die Uhr steht", async () => {
+    const { src, player } = await loaded();
+    const onPause = vi.fn();
+    src.onExternalPause?.(onPause);
+    void src.play();
+    player.emit(PlayerState.PLAYING);
+    await advance(1000);
+    player.emit(PlayerState.PAUSED);
+    expect(onPause).toHaveBeenCalledTimes(1);
+    expect(vi.getTimerCount()).toBe(0); // resync interval cleared
+    const held = src.getTimeMs();
+    await advance(1000);
+    expect(src.getTimeMs()).toBe(held);
+    player.emit(PlayerState.PAUSED);
+    expect(onPause).toHaveBeenCalledTimes(1);
+    src.destroy();
+  });
+
+  it("nach eigenem pause() wird kein PAUSED gemeldet; play() danach funktioniert", async () => {
+    const { src, player } = await loaded();
+    const onPause = vi.fn();
+    src.onExternalPause?.(onPause);
+    void src.play();
+    player.emit(PlayerState.PLAYING);
+    src.pause();
+    player.emit(PlayerState.PAUSED);
+    expect(onPause).not.toHaveBeenCalled();
+    const p = track(src.play());
+    player.emit(PlayerState.PLAYING);
+    await tick();
+    expect(p.state).toBe("resolved");
+    player.emit(PlayerState.PAUSED);
+    expect(onPause).toHaveBeenCalledTimes(1);
+    src.destroy();
+  });
+
+  it("BUFFERING, ENDED und PAUSED während eines ausstehenden play() melden keine Pause", async () => {
+    const { src, player } = await loaded();
+    const onPause = vi.fn();
+    src.onExternalPause?.(onPause);
+    const p = track(src.play());
+    player.emit(PlayerState.PAUSED); // pending play: not an external pause
+    player.emit(PlayerState.PLAYING);
+    await tick();
+    expect(p.state).toBe("resolved");
+    player.emit(PlayerState.BUFFERING);
+    player.emit(PlayerState.PLAYING);
+    player.emit(PlayerState.ENDED);
+    expect(onPause).not.toHaveBeenCalled();
+    src.destroy();
+  });
+
+  it("Pause nach einem Start von außen wird ebenfalls gemeldet", async () => {
+    const { src, player } = await loaded();
+    const onPause = vi.fn();
+    src.onExternalStart?.(() => {});
+    src.onExternalPause?.(onPause);
+    player.emit(PlayerState.PLAYING);
+    player.emit(PlayerState.PAUSED);
+    expect(onPause).toHaveBeenCalledTimes(1);
+    src.destroy();
   });
 });

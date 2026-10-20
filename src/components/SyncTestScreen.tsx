@@ -8,6 +8,7 @@ import { useAudioClock } from "@/hooks/useAudioClock";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { gameTimeMs } from "@/lib/audio/clock";
 import { effectivePlaybackRate } from "@/lib/audio/rate";
+import { PlayRefusedError } from "@/lib/audio/errors";
 import { isLowPrecision } from "@/lib/audio/sources";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { StorageFullError } from "@/lib/library/storage";
@@ -112,6 +113,11 @@ export function SyncTestScreen({
       setStartError(null);
       setPhase("playing");
     },
+    // Paused in the YouTube player itself: stop like the stop button.
+    onExternalPause: () => {
+      playingRef.current = false;
+      setPhase("idle");
+    },
   });
   const source = audio.source;
 
@@ -141,13 +147,16 @@ export function SyncTestScreen({
         playingRef.current = true;
         setPhase("playing");
       })
-      .catch(() => {
+      .catch((e: unknown) => {
         if (!mountedRef.current) return;
         setPhase("idle");
+        // Only a refused start is fixed by tapping again; other errors are shown as they are.
         setStartError(
-          isYouTube
-            ? "Der Start wurde blockiert. Tippe direkt auf das Video."
-            : "Die Musik ließ sich nicht starten. Tippe noch einmal auf „Start“.",
+          !(e instanceof PlayRefusedError) && e instanceof Error
+            ? e.message
+            : isYouTube
+              ? "Der Start wurde blockiert. Tippe direkt auf das Video."
+              : "Die Musik ließ sich nicht starten. Tippe noch einmal auf „Start“.",
         );
       });
   };

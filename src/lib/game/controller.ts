@@ -1,4 +1,5 @@
 import { frameGameTimeMs } from "../audio/clock";
+import { PlayRefusedError } from "../audio/errors";
 import type { IntensityRating } from "../scorer";
 import type { Angles, Move, Rating } from "../types";
 
@@ -72,6 +73,11 @@ export interface GameDeps {
   motion?: GameMotion;
   onState(state: GameState): void;
   onEnd(): void;
+  /**
+   * `audio.play()` failed for another reason than a refused start (`PlayRefusedError`), e.g. the
+   * file cannot be played. The game goes back to "preparing"; the screen shows the message.
+   */
+  onPlayError?(message: string): void;
   /** Countdown sound: 3, 2, 1, and 0 for "go". */
   onBeep?(count: number): void;
 }
@@ -183,15 +189,25 @@ export class GameController {
     });
   }
 
-  /** Starts the audio. Refused (no gesture): "blocked" until `tap()`. */
+  /**
+   * Starts the audio. Refused (no gesture, `PlayRefusedError`): "blocked" until `tap()`. Any other
+   * failure: back to "preparing" and `onPlayError`.
+   */
   private async play() {
     const token = ++this.playToken;
     this.pendingPlay = token;
     try {
       await this.deps.audio.play();
-    } catch {
+    } catch (e: unknown) {
       if (token !== this.playToken || this.disposed) return;
-      this.set({ phase: "blocked", count: null });
+      if (e instanceof PlayRefusedError) {
+        this.set({ phase: "blocked", count: null });
+        return;
+      }
+      this.clearTimers();
+      this.playToken++;
+      this.set({ phase: "preparing", count: null, pauseReason: null, bodyMissing: false });
+      this.deps.onPlayError?.(e instanceof Error ? e.message : String(e));
       return;
     } finally {
       if (this.pendingPlay === token) this.pendingPlay = -1;
@@ -224,13 +240,20 @@ export class GameController {
   }
 
   /**
-   * The audio started without play() (direct tap on the YouTube video). Only leaves "blocked";
-   * a play() still pending is superseded and its late result ignored.
+   * The audio started without play() (direct tap on the YouTube video). "blocked": counts as the
+   * start; a play() still pending is superseded and its late result ignored. "preparing",
+   * "countdown", "paused": the audio runs behind the game's back and is paused again (the game
+   * state stays authoritative; a later play() still works). "playing"/"ended": nothing to do.
    */
   externalStart() {
-    if (this.s.phase !== "blocked" || this.disposed) return;
-    this.playToken++;
-    this.enterPlaying();
+    if (this.disposed) return;
+    const { phase } = this.s;
+    if (phase === "blocked") {
+      this.playToken++;
+      this.enterPlaying();
+    } else if (phase === "preparing" || phase === "countdown" || phase === "paused") {
+      this.deps.audio.pause();
+    }
   }
 
   /** Cancels a running countdown (the screen then goes back to the setup). */

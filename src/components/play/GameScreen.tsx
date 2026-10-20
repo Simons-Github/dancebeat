@@ -21,6 +21,7 @@ import { useDeviceMotion } from "@/hooks/useDeviceMotion";
 import { usePoseTracking, type FrameInfo } from "@/hooks/usePoseTracking";
 import { useScoring } from "@/hooks/useScoring";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { PlayRefusedError } from "@/lib/audio/errors";
 import { effectivePlaybackRate } from "@/lib/audio/rate";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { scrimCss } from "@/lib/contrast";
@@ -94,6 +95,10 @@ export function GameScreen({
   const [retryKey, setRetryKey] = useState(0);
   const controllerRef = useRef<GameController | null>(null);
   const startedRef = useRef(false);
+  /** The round reached "playing" at least once (for the error overlay title). */
+  const playedRef = useRef(false);
+  /** The music failed to start before it ever played (`onPlayError`). */
+  const startFailedRef = useRef(false);
 
   const skeletonRef = useRef<HTMLCanvasElement>(null);
   const piktoRef = useRef<HTMLCanvasElement>(null);
@@ -115,6 +120,8 @@ export function GameScreen({
     container: () => ytHostRef.current,
     onEnded: () => controllerRef.current?.finish(),
     onExternalStart: () => controllerRef.current?.externalStart(),
+    // Paused in the YouTube player itself: show the pause menu like the pause button.
+    onExternalPause: () => controllerRef.current?.pause("user"),
   });
   const scoring = useScoring(choreo, settings.difficulty);
   const timeMs = audio.timeMs;
@@ -199,7 +206,8 @@ export function GameScreen({
     const src = () => audio.source.current;
     const ctl = new GameController({
       audio: {
-        play: () => src()?.play() ?? Promise.reject(new Error("Keine Audioquelle")),
+        // No source (yet): transient, a tap may start it.
+        play: () => src()?.play() ?? Promise.reject(new PlayRefusedError("Keine Audioquelle")),
         pause: () => src()?.pause(),
         seek: (ms) => src()?.seek(ms),
       },
@@ -212,14 +220,22 @@ export function GameScreen({
         // Start and restart rewind the song and begin with the lead-in (count 0): measurements
         // from before belong to another song time. "Weiter" keeps them (no rewind, count 3).
         if (s.phase === "countdown" && s.count === 0) meter.reset();
+        if (s.phase === "playing") playedRef.current = true;
         setGame(s);
       },
       ...(motion ? { motion: motionScoring(meter, () => difficulty.current) } : {}),
       onEnd: () => finishRef.current(),
+      // A real start failure (not a refusal): the error overlay shows it.
+      onPlayError: (message) => {
+        if (!playedRef.current) startFailedRef.current = true;
+        audio.reportError(message);
+      },
       onBeep: (n) => sfx.beep(n === 0),
     });
     controllerRef.current = ctl;
     startedRef.current = false;
+    playedRef.current = false;
+    startFailedRef.current = false;
     return () => {
       ctl.dispose();
       if (controllerRef.current === ctl) controllerRef.current = null;
@@ -378,7 +394,11 @@ export function GameScreen({
     overlay = (
       <MessageOverlay
         title={
-          startedRef.current ? "Die Musik ist abgebrochen" : "Die Musik konnte nicht geladen werden"
+          startFailedRef.current
+            ? "Die Musik startet nicht"
+            : startedRef.current
+              ? "Die Musik ist abgebrochen"
+              : "Die Musik konnte nicht geladen werden"
         }
         actions={toLibrary}
       >

@@ -54,10 +54,11 @@ der Landmarker geschlossen, auch wenn ein asynchroner Schritt erst nach dem Aufr
 
 `createSource(song, { element, container })` liefert einen Adapter mit gemeinsamer Schnittstelle
 `AudioSource` (`type` als Union der Quellarten, `load`, `play`, `pause`, `seek`, `getTimeMs`,
-`setVolume`, `onEnded`, `onError`, `destroy`, optional `onExternalStart`). `onError` meldet
-Fehler, die nach erfolgreichem `load()` auftreten (Verbindung weg, Dekodierfehler,
-YouTube-Fehlercode). `onExternalStart` implementiert nur YouTube: Die Wiedergabe startete ohne
-ausstehendes `play()` (direkter Tipp aufs Video). `SourceOptions.element`
+`setVolume`, `onEnded`, `onError`, `destroy`, optional `onExternalStart` und `onExternalPause`).
+`onError` meldet Fehler, die nach erfolgreichem `load()` auftreten (Verbindung weg,
+Dekodierfehler, YouTube-Fehlercode). `onExternalStart` und `onExternalPause` implementiert nur
+YouTube: Die Wiedergabe startete ohne ausstehendes `play()` bzw. wurde direkt im Player angehalten
+(Tipp aufs Video); die Uhr läuft bzw. steht dann schon. `SourceOptions.element`
 ist das gemeinsame, per Geste entsperrte Audioelement (Datei/URL), `SourceOptions.container` das
 Element, in dem der YouTube-Player angezeigt wird (ohne: unsichtbarer 2×2-px-Player außerhalb des
 Bildschirms):
@@ -68,6 +69,18 @@ Bildschirms):
 | `url`     | `HTMLAudioElement` mit Nutzer-URL      | `currentTime`, interpoliert                |
 | `youtube` | YouTube-IFrame-Player                  | `getCurrentTime()`, nur bei PLAYING, s. u. |
 | `spotify` | Spotify Web Playback SDK (PKCE)        | Player-State `position`, interpoliert      |
+
+**Startfehler:** `play()` unterscheidet zwei Arten von Ablehnung. `PlayRefusedError`
+(`src/lib/audio/errors.ts`, auch aus `sources.ts` exportiert) heißt: Der Start wurde ohne
+Nutzergeste verweigert, ein Tipp kann ihn nachholen. Datei/URL werfen ihn bei `NotAllowedError`
+und `AbortError` von `el.play()`, YouTube nach `YT_PLAY_TIMEOUT_MS`. Vorübergehende Zustände
+zählen ebenfalls als verweigert: YouTube-`play()` vor `onReady` und der Spielscreen ohne Quelle. Jede andere Ablehnung ist ein
+echter Fehler mit Meldung (Datei/URL z. B. `NotSupportedError`, weil iOS oft erst in `play()`
+lädt: dieselbe Meldung wie ein Ladefehler; Spotify: „Spotify konnte den Song nicht starten.“).
+Der `GameController` geht nur bei `PlayRefusedError` nach `blocked`; sonst zurück nach
+`preparing` und ruft `onPlayError`. Der Spielscreen reicht das an `useAudioClock().reportError`
+weiter, das denselben Zustand `error` setzt wie ein Laufzeitfehler (Overlay mit Meldung).
+Sync-Test und Editor-Vorschau zeigen nur bei `PlayRefusedError` „Tippe …“, sonst die Meldung.
 
 Jeder Adapter nutzt eine `SmoothClock`: zwischen den Abfragen wird per `performance.now()`
 fortgeschrieben, Abweichungen werden weich angeglichen (große Sprünge hart übernommen).
@@ -99,10 +112,18 @@ umgesetzt). Ein Fehler des Elements nach dem Laden hält die Uhr an und löst `o
   ist antippbar, das Overlay zeigt „Tippe auf das Video, um zu starten.“ und darunter den Knopf
   „Zum Starten tippen“ (Desktop, Tastatur). iOS reicht einen Tipp auf der Seite nicht ins Iframe
   weiter, dort startet nur der Tipp aufs Video. Meldet YouTube danach PLAYING ohne ausstehendes
-  `play()`, ruft die Quelle `onExternalStart`, setzt `refusedOnce` zurück und startet den Resync.
+  `play()`, ruft die Quelle `onExternalStart`, setzt `refusedOnce` zurück und startet den Resync. Ein gemerkter Seek (`pendingSeekMs`, z. B.
+  der Start-Offset aus `start()` im Countdown) wird dabei per `seekTo` angewandt, damit der
+  Intro-Sprung nicht verloren geht.
   Ob der Tipp aufs Video auf iOS startet, zeigt nur der Gerätetest.
-- Laden: IFrame-API-Skript mit Timeout 15 s (nicht zwischengespeichert, nächster Versuch lädt neu),
-  danach `onReady` mit Timeout 15 s. Fehlercodes vor `onReady` lehnen `load()` ab, danach lösen sie
+- Pause von außen: Meldet YouTube PAUSED, während die Wiedergabe aktiv ist und kein `play()`
+  aussteht (Tipp aufs Video hält an), ruft die Quelle einmal `onExternalPause` und stoppt den
+  Resync. Nicht bei BUFFERING oder ENDED und nicht nach eigenem `pause()` (das setzt `active`
+  vorher zurück). Das Spiel öffnet dann das Pausemenü (`pause("user")`), Sync-Test und
+  Editor-Vorschau stoppen wie mit „Stopp“. Ob iOS beim Tipp PAUSED meldet, zeigt nur der
+  Gerätetest.
+- Laden: IFrame-API-Skript mit Timeout 15 s (`YT_SCRIPT_TIMEOUT_MS`, nicht zwischengespeichert,
+  nächster Versuch lädt neu), danach `onReady` mit Timeout 15 s (`YT_LOAD_TIMEOUT_MS`). Fehlercodes vor `onReady` lehnen `load()` ab, danach lösen sie
   `onError` aus („Dieses Video darf nicht eingebettet werden.“ bzw. „YouTube-Video nicht
   verfügbar.“).
 
@@ -144,14 +165,18 @@ preparing ──(Audio geladen, Kamera bereit, Seite sichtbar)──▶ countdow
 countdown ──▶ playing ──(Audio-Ende oder letzter Move + 2,25 s)──▶ ended → /result/$songId
 countdown/playing ──(Pause-Knopf, Escape, visibilitychange, Kamera weg)──▶ paused
 paused ──Weiter──▶ countdown (3-2-1, ohne Vorlauf) · Neustart ──▶ countdown mit Vorlauf
-play() abgelehnt ──▶ blocked ──Tipp (Knopf) oder Tipp aufs Video (onExternalStart)──▶ playing
+play() verweigert (PlayRefusedError) ──▶ blocked ──Tipp (Knopf) oder Tipp aufs Video──▶ playing
+play() mit anderem Fehler ──▶ preparing + onPlayError (Fehler-Overlay)
+playing ──Pause direkt im YouTube-Player (onExternalPause)──▶ paused
 Abbrechen im Countdown ──▶ /setup/$songId
 ```
 
 - `GameController` (`src/lib/game/controller.ts`) hält diesen Ablauf ohne React; er bekommt
   Audio (`play`/`pause`/`seek`), die Uhr (`timeMs`) und die Wertung über Schnittstellen und ist
   mit Fake-Uhr testbar. Ein zweiter Tipp in `blocked` tut nichts, solange das `play()` des ersten
-  aussteht; `externalStart()` wirkt nur in `blocked`.
+  aussteht. `externalStart()` startet in `blocked` das Spiel; in `preparing`, `countdown` und
+  `paused` lief die Musik am Spiel vorbei an und wird wieder angehalten (der Spielzustand gilt,
+  das spätere `play()` des Countdowns startet normal); in `playing` und `ended` tut es nichts.
 - `GameScreen` (`src/components/play/GameScreen.tsx`) verbindet `useAudioClock`,
   `usePoseTracking`, `useScoring` und den Controller. Eine einzige rAF-Schleife ruft `tick()` und
   zeichnet Piktoleiste, Coach und Beat-Puls auf Canvas bzw. per Style; das Skelett zeichnet der

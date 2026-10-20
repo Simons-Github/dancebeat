@@ -26,6 +26,11 @@ export interface AudioClockOptions {
    * Read from a ref like `onEnded`.
    */
   onExternalStart?: () => void;
+  /**
+   * Called when playback was paused directly in the player (YouTube: tap on the video), not by
+   * `pause()`. Read from a ref like `onEnded`.
+   */
+  onExternalPause?: () => void;
   /** Test seam: replaces `createSource`. */
   create?: (song: Song) => AudioSource;
 }
@@ -85,6 +90,10 @@ export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
       if (cancelled) return;
       latest.current.onExternalStart?.();
     });
+    s.onExternalPause?.(() => {
+      if (cancelled) return;
+      latest.current.onExternalPause?.();
+    });
     // Runtime failure after loading (connection lost): same error state as a load failure.
     s.onError((message) => {
       if (cancelled) return;
@@ -119,5 +128,11 @@ export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
     [],
   );
 
-  return { source: src, state, error, ended, timeMs };
+  /** Shows a start failure (e.g. `play()` rejected with a real error) like a runtime error. */
+  const reportError = useCallback((message: string) => {
+    setError(message);
+    setState("error");
+  }, []);
+
+  return { source: src, state, error, ended, timeMs, reportError };
 }

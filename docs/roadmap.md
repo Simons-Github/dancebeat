@@ -42,6 +42,16 @@ W9 teilweise: `type` als Union, Lade-Race beim Songwechsel, `ended`/`error` zur�
 Editor-Vorschau; die Latenz wird mit der Rate skaliert (`latency · rate`), der Beat-Puls begrenzt nach `bpm × rate`.
 ✅ W11 (Etappe 5a, 5c): Settings mit zod geprüft, Persistenz-Anfrage beim Anlegen, `StorageFullError`
 verständlich angezeigt.
+✅ N8, N9, N16 (Etappe 11b): `YT_LOAD_TIMEOUT_MS` statt fester Zahl; `PlayRefusedError` trennt
+verweigerten Start (`blocked`) von echten Startfehlern (Fehler-Overlay über `onPlayError` und
+`reportError`); `onExternalPause` meldet Pause direkt im YouTube-Player (Spiel → Pausemenü,
+Sync-Test und Editor-Vorschau stoppen), `externalStart()` hält Musik außerhalb von `blocked` wieder
+an; ein Start von außen wendet den gemerkten Seek (Start-Offset) an. Vorübergehende Startfehler
+(YouTube vor `onReady`, keine Quelle) bleiben per Tipp nachholbar; das Spiel zeigt „Die Musik
+startet nicht“. Gerätetest offen: (1) Meldet iOS beim Tipp aufs Video PAUSED? (2) Meldet YouTube
+bei `seekTo` während der Wiedergabe kurz PAUSED (Editor „Ab Move“ könnte auf Stopp springen)?
+(3) Enges Rennen: Wieder-Anhalten per `externalStart()` im Countdown gegen ein `play()`, das den
+Kurzweg „schon PLAYING“ nimmt.
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
@@ -616,9 +626,6 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                               | 11     |
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                           | 11     |
 | N6  | `@tanstack/react-query` bisher ungenutzt                                                                               | 11     |
-| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                     | 11     |
-| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked`               | 11     |
 | N10 | YouTube ignoriert `song.playbackRate`                                                                                  | 11     |
 | N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                        | 11     |
 | N14 | Editor: jede Änderung (Gold, Offset) baut alle Strichfiguren der Timeline neu; bei langen Video-Choreografien spürbar? | 11     |
-| N16 | YouTube: Pause/Weiter direkt im Player wird nicht gemeldet (Sync-Test, Editor-Vorschau zeigen weiter „Stopp“)          | 11     |
