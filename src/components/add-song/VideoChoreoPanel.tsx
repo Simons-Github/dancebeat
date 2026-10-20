@@ -103,6 +103,10 @@ interface VideoChoreoPanelProps {
   musicBeat?: OnsetEnvelope | null;
   /** BPM estimated from the video's audio track; the dialog decides whether to take it. */
   onBpmDetected?: (bpm: number) => void;
+  /** Reports the chosen video file (null when cleared), so the dialog can use it as the music. */
+  onVideoFile?: (file: File | null) => void;
+  /** `musicBeat` comes from this video's audio track (the song's music is the video). */
+  musicFromVideo?: boolean;
   /** Injected in tests. Default: MediaPipe. */
   createEstimator?: (model: PoseModel) => PoseEstimator;
 }
@@ -132,6 +136,8 @@ export function VideoChoreoPanel({
   onChange,
   musicBeat = null,
   onBpmDetected,
+  onVideoFile,
+  musicFromVideo = false,
   createEstimator,
 }: VideoChoreoPanelProps) {
   const id = useId();
@@ -375,6 +381,7 @@ export function VideoChoreoPanel({
     reset();
     beatToken.current++;
     setVideoFile(chosen);
+    onVideoFile?.(chosen);
     if (beatSource?.kind === "video") setBeatSource(null);
     setBeatStatus({ status: "idle" });
     setAnalyzed(null);
@@ -537,9 +544,9 @@ export function VideoChoreoPanel({
           className={`${INPUT} h-auto min-h-11 py-2`}
         />
         <p id={`${id}-video-hint`} className={HINT}>
-          MP4 oder MOV, gleiche Aufnahme wie die Musik (ab Sekunde 0). Das Video bleibt auf diesem
-          Gerät und wird nach dem Hinzufügen verworfen; die Erkennung läuft im Browser ohne externe
-          Abrufe.
+          {musicFromVideo
+            ? "MP4 oder MOV mit der Musik als Ton. Das Video bleibt auf diesem Gerät und wird als Musik des Songs gespeichert; die Erkennung läuft im Browser ohne externe Abrufe."
+            : "MP4 oder MOV, gleiche Aufnahme wie die Musik (ab Sekunde 0). Das Video bleibt auf diesem Gerät und wird nach dem Hinzufügen verworfen; die Erkennung läuft im Browser ohne externe Abrufe."}
         </p>
       </div>
 
@@ -652,7 +659,7 @@ export function VideoChoreoPanel({
             ) : (
               <p id={`${id}-phase-hint`} className={HINT}>
                 {phaseAuto
-                  ? `Erster Beat ab Start, erkannt aus ${beatSource?.kind === "music" ? "der Musikdatei" : "dem Ton des Videos"}. Bitte im Sync-Test prüfen.`
+                  ? `Erster Beat ab Start, erkannt aus ${beatSource?.kind === "music" && !musicFromVideo ? "der Musikdatei" : "dem Ton des Videos"}. Bitte im Sync-Test prüfen.`
                   : "Zeitpunkt eines Beats im Video. Die Feinabstimmung folgt später im Sync-Test."}
               </p>
             )}

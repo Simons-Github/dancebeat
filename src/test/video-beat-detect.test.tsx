@@ -9,7 +9,7 @@ import {
 } from "@/components/add-song/VideoChoreoPanel";
 import { onsetEnvelope, type AudioAnalysis, type DecodedAudio } from "@/lib/beat";
 import type { Song } from "@/lib/types";
-import { patchVideoElement } from "./videoAnalysisFakes";
+import { fakeEstimator, figureLandmarks, patchVideoElement } from "./videoAnalysisFakes";
 
 const analyze = vi.hoisted(() => vi.fn<(file: Blob) => Promise<AudioAnalysis>>());
 vi.mock("@/lib/beat", async (orig) => ({
@@ -247,6 +247,9 @@ describe("Takt erkennen im Dialog „Song hinzufügen“", () => {
     let finish: (a: AudioAnalysis) => void = () => {};
     analyze.mockReturnValueOnce(new Promise((r) => (finish = r)));
     openDialog();
+    // With the video's music the Datei tab would read the video itself; here it has its own file.
+    fireEvent.click(await screen.findByRole("radio", { name: "Aus Video" }));
+    fireEvent.click(screen.getByRole("switch", { name: "Musik aus dem Tanzvideo" }));
     await youtubeWithVideo();
     fireEvent.click(detectButton());
     const fileTab = screen.getByRole("tab", { name: "Datei" });
@@ -275,5 +278,121 @@ describe("Takt erkennen im Dialog „Song hinzufügen“", () => {
     expect(screen.getByText(/erkannt aus der Musikdatei/)).toBeInTheDocument();
     expect(gridError(Number(phaseField().value), 250, audio.bpm)).toBeLessThanOrEqual(15);
     expect(analyze).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Musik aus dem Tanzvideo im Dialog „Song hinzufügen“", () => {
+  const figureEstimator = () => fakeEstimator((t) => (t < 0 ? null : figureLandmarks(t)));
+
+  function openDialog() {
+    const onAdd = vi.fn<(s: Song, a?: Blob) => Promise<void>>().mockResolvedValue();
+    render(<AddSongDialog onAdd={onAdd} createEstimator={() => figureEstimator()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Song hinzufügen" }));
+    return { onAdd };
+  }
+
+  const musicSwitch = () => screen.getByRole("switch", { name: "Musik aus dem Tanzvideo" });
+  const submitButton = () => screen.getByRole("button", { name: "Hinzufügen" });
+  const videoFile = () => new File(["v"], "tanz.mp4", { type: "video/mp4" });
+
+  async function analyzeVideoToResult() {
+    fireEvent.click(screen.getByRole("button", { name: /analysieren$/ }));
+    await screen.findByText(/Moves, davon/, {}, { timeout: 4000 });
+  }
+
+  it("ist ohne Audiodatei vorbelegt, liest den Ton des Videos und speichert das Video als Musik", async () => {
+    const audio = await analysisOf(128, 401, 6);
+    analyze.mockResolvedValue(audio);
+    const { onAdd } = openDialog();
+    fireEvent.click(await screen.findByRole("radio", { name: "Aus Video" }));
+    expect(musicSwitch()).toBeChecked();
+    expect(screen.queryByLabelText("Audiodatei")).not.toBeInTheDocument();
+
+    const video = videoFile();
+    chooseVideo(video, 6000);
+    await waitFor(() => expect(analyze).toHaveBeenCalledWith(video));
+    await waitFor(() => expect(screen.getByLabelText("BPM")).toHaveValue(audio.bpm));
+    expect(screen.getByText(/Ton des Videos gelesen/)).toBeInTheDocument();
+
+    await analyzeVideoToResult();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
+    const [song, blob] = onAdd.mock.calls[0]!;
+    expect(blob).toBe(video);
+    expect(song.source.type).toBe("local");
+    expect(analyze).toHaveBeenCalledTimes(1);
+  });
+
+  it("ist mit gewählter Audiodatei aus und speichert die Audiodatei", async () => {
+    analyze.mockResolvedValue(await analysisOf(120, 0, 6));
+    const { onAdd } = openDialog();
+    const song = new File(["a"], "song.mp3", { type: "audio/mpeg" });
+    fireEvent.change(await screen.findByLabelText("Audiodatei"), { target: { files: [song] } });
+    await waitFor(() => expect(analyze).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("radio", { name: "Aus Video" }));
+    expect(musicSwitch()).not.toBeChecked();
+    expect(screen.getByLabelText("Audiodatei")).toBeInTheDocument();
+
+    chooseVideo(videoFile(), 6000);
+    await analyzeVideoToResult();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
+    expect(onAdd.mock.calls[0]![1]).toBe(song);
+    expect(analyze).toHaveBeenCalledTimes(1);
+    expect(analyze).toHaveBeenCalledWith(song);
+  });
+
+  it("meldet ein zu großes Video, ohne seinen Ton zu lesen", async () => {
+    openDialog();
+    fireEvent.click(await screen.findByRole("radio", { name: "Aus Video" }));
+    const big = videoFile();
+    Object.defineProperty(big, "size", { value: VIDEO_BEAT_MAX_BYTES + 1 });
+    chooseVideo(big, 6000);
+    expect(
+      await screen.findByText(/Das Video ist zu groß, um seine Musik zu verwenden/),
+    ).toBeInTheDocument();
+    expect(analyze).not.toHaveBeenCalled();
+    await analyzeVideoToResult();
+    expect(submitButton()).toBeDisabled();
+  });
+
+  it("meldet unlesbaren Ton des Videos", async () => {
+    analyze.mockRejectedValue(new Error("decode"));
+    openDialog();
+    fireEvent.click(await screen.findByRole("radio", { name: "Aus Video" }));
+    chooseVideo(videoFile(), 6000);
+    expect(
+      await screen.findByText(/Der Ton des Videos kann nicht gelesen werden/),
+    ).toBeInTheDocument();
+  });
+
+  it("liest das Video im YouTube-Tab nicht als Musik, erst beim Wechsel auf Datei", async () => {
+    analyze.mockResolvedValue(await analysisOf(128, 401, 6));
+    openDialog();
+    const ytTab = await screen.findByRole("tab", { name: "YouTube" });
+    fireEvent.mouseDown(ytTab);
+    fireEvent.click(ytTab);
+    fireEvent.click(screen.getByRole("radio", { name: "Aus Video" }));
+    const video = videoFile();
+    chooseVideo(video, 6000);
+    await new Promise((r) => setTimeout(r, 0));
+    expect(analyze).not.toHaveBeenCalled();
+
+    const fileTab = screen.getByRole("tab", { name: "Datei" });
+    fireEvent.mouseDown(fileTab);
+    fireEvent.click(fileTab);
+    await waitFor(() => expect(analyze).toHaveBeenCalledWith(video));
+    expect(analyze).toHaveBeenCalledTimes(1);
+  });
+
+  it("zeigt nach dem Ausschalten wieder die Audiodatei", async () => {
+    openDialog();
+    fireEvent.click(await screen.findByRole("radio", { name: "Aus Video" }));
+    expect(screen.queryByLabelText("Audiodatei")).not.toBeInTheDocument();
+    fireEvent.click(musicSwitch());
+    expect(musicSwitch()).not.toBeChecked();
+    expect(screen.getByLabelText("Audiodatei")).toBeInTheDocument();
   });
 });

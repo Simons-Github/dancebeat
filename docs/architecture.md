@@ -292,7 +292,7 @@ Abbrechen im Countdown ──▶ /setup/$songId
 | Was                              | Wo                                          | Zugriff                        |
 | -------------------------------- | ------------------------------------------- | ------------------------------ |
 | Songs inkl. Choreografie         | IndexedDB `dancebeat`, Store `songs`        | `SongRepository`               |
-| Audiodateien                     | IndexedDB, Store `blobs`                    | `SongRepository.getAudio`      |
+| Audiodateien (auch Tanzvideos)   | IndexedDB, Store `blobs`                    | `SongRepository.getAudio`      |
 | Einstellungen                    | `localStorage` `dancebeat.settings`         | `useSettings`                  |
 | Gelöschte Demo-Songs (IDs)       | `localStorage` `dancebeat.deletedDemos`     | `seedDemos`, `markDemoDeleted` |
 | Version der Demo-Audiodaten      | `localStorage` `dancebeat.demoAudioVersion` | `seedDemos`                    |
@@ -543,7 +543,8 @@ geladenen, pausierten `<video>`; `src/hooks/useVideoAnalysis.ts` kapselt Zustand
 ### Video-Import im Dialog (Etappe 8c)
 
 „Song hinzufügen“ hat als dritte Choreografie-Option „Aus Video“. Die Musik kommt weiter aus
-den Quell-Tabs (Datei, URL, YouTube); das Video liefert nur die Bewegungen.
+den Quell-Tabs (Datei, URL, YouTube, Spotify) oder, im Tab Datei, aus dem Tanzvideo selbst
+(siehe [Musik aus dem Tanzvideo](#musik-aus-dem-tanzvideo-etappe-8h-1)).
 
 - **Zeitannahme:** Videozeit = Audiozeit. Video und Musik sind dieselbe Aufnahme bzw. derselbe
   Song ab Sekunde 0. Der Sync-Test gleicht nur Abweichungen bis zu einem halben Beat aus
@@ -593,6 +594,36 @@ den Quell-Tabs (Datei, URL, YouTube); das Video liefert nur die Bewegungen.
   fertiges Ergebnis aus dem alten.
 - Datenschutz: Das Panel nennt, dass das Video auf dem Gerät bleibt und die Erkennung ohne
   externe Abrufe läuft (Modell von der eigenen Adresse, siehe [Externe Abrufe](#externe-abrufe)).
+
+### Musik aus dem Tanzvideo (Etappe 8h-1)
+
+Im Tab Datei erscheint mit „Aus Video“ der Schalter „Musik aus dem Tanzvideo“. Ist er an, ist
+die Videodatei zugleich die Audiodatei des Songs: Ein MP4 (etwa per yt-dlp) reicht, und
+Videozeit = Audiozeit gilt exakt statt nur angenommen.
+
+- Kein Formatwechsel: Die Quelle bleibt `local` mit `blobId`; im Store `blobs` liegt das ganze
+  Video. `ElementSource` spielt es über `new Audio()` ab, Browser spielen den Ton von MP4 und MOV
+  so ab (iOS am Gerät prüfen). Der Hinweis nennt die Größe, die das Video in der Bibliothek
+  belegt; ein volles Kontingent meldet `StorageFullError` wie bei Audiodateien.
+- Vorbelegung: an, wenn beim Wechsel auf „Aus Video“ noch keine Audiodatei gewählt ist, sonst
+  aus. Ist er an, verschwindet das Feld „Audiodatei“; die gewählte Audiodatei bleibt im
+  Hintergrund und kommt beim Ausschalten zurück.
+- Der Dialog analysiert das Video wie eine Audiodatei (`analyzeAudio`: BPM, Länge, Hüllkurve).
+  Die Hüllkurve geht als `musicBeat` an das Panel, „Takt erkennen“ dekodiert also nicht noch
+  einmal und nennt „dem Ton des Videos“ als Quelle (Prop `musicFromVideo`). Das Panel meldet die
+  gewählte Datei über `onVideoFile`.
+- Gelesen wird das Video erst, wenn der Tab Datei aktiv ist (`syncMusic`): bei URL, YouTube oder
+  Spotify ist sein Ton nicht die Musik, und das Dekodieren kostet Zeit und Speicher. Analysiert
+  wird nur, wenn sich die Musikdatei wirklich ändert (`analyzedMusic`); eine neuere Analyse
+  gewinnt über eine langsamere ältere (`analysisToken`).
+- Grenze wie bei „Takt erkennen“: höchstens 250 MB (`VIDEO_BEAT_MAX_BYTES`), weil Datei und
+  dekodierte Samples ganz in den Speicher müssen. Größere oder nicht lesbare Videos melden sich
+  mit dem Hinweis, die Musik als Audiodatei zu wählen. Die Länge prüft der Dialog nicht (er
+  liest das Video, bevor die Vorschau sie kennt); ein sehr langes, stark komprimiertes Video kann
+  wie eine sehr lange Audiodatei viel Speicher brauchen.
+- Nach dem Ausschalten ist das Dateifeld leer (es wird neu eingehängt); die zuvor gewählte
+  Audiodatei gilt weiter und steht als „Musik: <Name>“ darunter.
+- Nicht enthalten: das Video im Spiel als Vorlage zeigen (Rest von „Video behalten“).
 
 ### Modellwahl Schnell / Genau (Etappe 8g-4b)
 

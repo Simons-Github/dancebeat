@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 
-import { VideoChoreoPanel } from "@/components/add-song/VideoChoreoPanel";
+import { VIDEO_BEAT_MAX_BYTES, VideoChoreoPanel } from "@/components/add-song/VideoChoreoPanel";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { analyzeAudio, type OnsetEnvelope } from "@/lib/beat";
 import { parseChoreoFile } from "@/lib/library/choreoFile";
@@ -59,6 +60,15 @@ type AnalysisState =
   | { status: "done" }
   | { status: "error"; message: string };
 
+/** What decides the Datei tab's music: the audio file, or the dance video if switched on. */
+interface MusicChoice {
+  kind: Kind;
+  video: boolean;
+  fromVideo: boolean;
+  videoFile: File | null;
+  file: File | null;
+}
+
 interface AddSongDialogProps {
   /** Stores the song (and the audio for local files); rejects with StorageFullError when full. */
   onAdd: (song: Song, audio?: Blob) => Promise<void>;
@@ -69,6 +79,8 @@ interface AddSongDialogProps {
 }
 
 const stripExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
+const formatMb = (bytes: number) =>
+  `${Math.max(0.1, bytes / 1024 / 1024).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MB`;
 
 /**
  * Add-song button plus dialog: audio file, direct URL, YouTube or Spotify; choreography generated,
@@ -98,11 +110,16 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   const [imported, setImported] = useState<ChoreoFile | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
   const [videoResult, setVideoResult] = useState<VideoImportResult | null>(null);
+  /** Video chosen in the video import; with `musicFromVideo` it is also the song's music. */
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [musicFromVideo, setMusicFromVideo] = useState(true);
   const [titleTouched, setTitleTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   /** Guards against a slow analysis of a previous file overwriting the current one. */
   const analysisToken = useRef(0);
+  /** File the current analysis belongs to (audio file, dance video or null). */
+  const analyzedMusic = useRef<File | null>(null);
   const choreoToken = useRef(0);
   const kindRef = useRef(kind);
   useEffect(() => {
@@ -119,6 +136,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
 
   const reset = () => {
     analysisToken.current++;
+    analyzedMusic.current = null;
     choreoToken.current++;
     edited.current = {
       title: false,
@@ -146,6 +164,8 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     setImported(null);
     setImportError(null);
     setVideoResult(null);
+    setVideoFile(null);
+    setMusicFromVideo(true);
     setTitleTouched(false);
     setError(null);
   };
@@ -166,6 +186,10 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   }, [open, kind]);
   const useImport = choreoMode === "import";
   const useVideo = choreoMode === "video";
+  /** The dance video's audio track is the music (Datei tab): one file, video and music in sync. */
+  const videoMusic = useVideo && musicFromVideo;
+  /** File analyzed and stored as the song's audio: the chosen audio file or the dance video. */
+  const musicFile = videoMusic ? videoFile : file;
   // The field accepts any decimal (step "any", so the browser never blocks the submit with its own
   // message); the song keeps 0.1 BPM like the estimate.
   const bpmNum = bpm.trim() === "" ? NaN : Math.round(Number(bpm) * 10) / 10;
@@ -183,7 +207,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   const showLinkError = link.trim() !== "" && errors.link;
   const sourceReady =
     kind === "file"
-      ? file !== null && analysis.status !== "busy"
+      ? musicFile !== null && analysis.status !== "busy"
       : !errors.link && link.trim() !== "";
   const choreoReady = useImport ? imported !== null : useVideo ? videoResult !== null : true;
   const canSubmit =
@@ -195,10 +219,10 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     !errors.duration &&
     (kind !== "file" || analysis.status !== "error");
 
-  const chooseAudio = async (e: ChangeEvent<HTMLInputElement>) => {
-    const chosen = e.target.files?.[0] ?? null;
+  /** Analyzes the file that becomes the song's music; a newer call wins over a slower older one. */
+  const analyzeMusic = async (chosen: File | null, fromVideo: boolean) => {
     const token = ++analysisToken.current;
-    setFile(chosen);
+    analyzedMusic.current = chosen;
     setMusicBeat(null);
     setBpmEstimated(false);
     if (!chosen) {
@@ -206,6 +230,14 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       return;
     }
     if (!edited.current.title) setTitle(stripExtension(chosen.name).slice(0, TITLE_MAX));
+    // Like the beat detection: the whole file and its decoded samples must fit in memory.
+    if (fromVideo && chosen.size > VIDEO_BEAT_MAX_BYTES) {
+      setAnalysis({
+        status: "error",
+        message: `Das Video ist zu groß, um seine Musik zu verwenden (höchstens ${formatMb(VIDEO_BEAT_MAX_BYTES)}). Bitte die Musik als Audiodatei wählen.`,
+      });
+      return;
+    }
     setAnalysis({ status: "busy" });
     try {
       const result = await analyzeAudio(chosen);
@@ -223,9 +255,51 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       if (token !== analysisToken.current) return;
       setAnalysis({
         status: "error",
-        message: err instanceof Error ? err.message : "Die Datei konnte nicht analysiert werden.",
+        message: fromVideo
+          ? "Der Ton des Videos kann nicht gelesen werden. Bitte die Musik als Audiodatei wählen."
+          : err instanceof Error
+            ? err.message
+            : "Die Datei konnte nicht analysiert werden.",
       });
     }
+  };
+
+  /**
+   * Keeps the analysis on the Datei tab's music after a change. The dance video is only read once
+   * the Datei tab is open: with URL, YouTube or Spotify its sound is not the song's music.
+   */
+  const syncMusic = (change: Partial<MusicChoice>) => {
+    const next = { kind, video: useVideo, fromVideo: musicFromVideo, videoFile, file, ...change };
+    const fromVideo = next.video && next.fromVideo;
+    const target = fromVideo ? next.videoFile : next.file;
+    if (target === analyzedMusic.current) return;
+    if (fromVideo && target && next.kind !== "file") return;
+    void analyzeMusic(target, fromVideo);
+  };
+
+  const chooseAudio = (e: ChangeEvent<HTMLInputElement>) => {
+    const chosen = e.target.files?.[0] ?? null;
+    setFile(chosen);
+    syncMusic({ file: chosen });
+  };
+
+  const chooseChoreoMode = (mode: "auto" | "import" | "video") => {
+    setChoreoMode(mode);
+    // The panel starts without a video, so the video's music has nothing to analyze yet.
+    setVideoFile(null);
+    if (mode === "video") {
+      // Preset: the video's own music, unless an audio file was chosen already.
+      const fromVideo = file === null;
+      setMusicFromVideo(fromVideo);
+      syncMusic({ video: true, fromVideo, videoFile: null });
+    } else {
+      syncMusic({ video: false, videoFile: null });
+    }
+  };
+
+  const chooseVideoFile = (chosen: File | null) => {
+    setVideoFile(chosen);
+    syncMusic({ videoFile: chosen });
   };
 
   const chooseChoreo = async (e: ChangeEvent<HTMLInputElement>) => {
@@ -300,7 +374,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
         choreo,
       });
       void requestPersistentStorage().catch(() => {});
-      await onAdd(song, kind === "file" && file ? file : undefined);
+      await onAdd(song, kind === "file" ? (musicFile ?? undefined) : undefined);
       setOpen(false);
       reset();
       onAdded?.(song);
@@ -448,7 +522,9 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
           <Tabs
             value={kind}
             onValueChange={(v) => {
-              if (!busy) setKind(v as Kind);
+              if (busy) return;
+              setKind(v as Kind);
+              syncMusic({ kind: v as Kind });
             }}
             className="flex flex-col gap-4"
           >
@@ -467,21 +543,53 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
               </TabsTrigger>
             </TabsList>
             <TabsContent value="file" className="mt-0 flex flex-col gap-4">
+              {useVideo && (
+                <div className="flex flex-col gap-1">
+                  <div className="flex min-h-11 items-center justify-between gap-3">
+                    <Label htmlFor={`${id}-video-music`} className="text-base">
+                      Musik aus dem Tanzvideo
+                    </Label>
+                    <Switch
+                      id={`${id}-video-music`}
+                      checked={musicFromVideo}
+                      onCheckedChange={(on) => {
+                        setMusicFromVideo(on);
+                        syncMusic({ fromVideo: on });
+                      }}
+                      disabled={busy}
+                      aria-describedby={`${id}-video-music-hint`}
+                    />
+                  </div>
+                  <p id={`${id}-video-music-hint`} className={HINT}>
+                    {musicFromVideo
+                      ? "Gespielt wird der Ton des Videos unter „Aus Video“. Dafür wird das Video mit dem Song auf diesem Gerät gespeichert."
+                      : "Einschalten, wenn das Tanzvideo die Musik schon enthält: dann braucht es keine eigene Audiodatei."}
+                  </p>
+                </div>
+              )}
               <div className="flex flex-col gap-2">
-                <Label htmlFor={`${id}-audio`} className="text-base">
-                  Audiodatei
-                </Label>
-                <Input
-                  id={`${id}-audio`}
-                  type="file"
-                  accept={AUDIO_ACCEPT}
-                  aria-invalid={analysis.status === "error" ? true : undefined}
-                  aria-describedby={`${id}-audio-msg`}
-                  onChange={(e) => void chooseAudio(e)}
-                  className={`${INPUT} h-auto min-h-11 py-2`}
-                />
+                {!videoMusic && (
+                  <>
+                    <Label htmlFor={`${id}-audio`} className="text-base">
+                      Audiodatei
+                    </Label>
+                    <Input
+                      id={`${id}-audio`}
+                      type="file"
+                      accept={AUDIO_ACCEPT}
+                      aria-invalid={analysis.status === "error" ? true : undefined}
+                      aria-describedby={`${id}-audio-msg`}
+                      onChange={chooseAudio}
+                      className={`${INPUT} h-auto min-h-11 py-2`}
+                    />
+                  </>
+                )}
                 <div id={`${id}-audio-msg`} aria-live="polite">
-                  {analysis.status === "busy" && <p className={HINT}>Analysiere …</p>}
+                  {analysis.status === "busy" && (
+                    <p className={HINT}>
+                      {videoMusic ? "Lese den Ton des Videos …" : "Analysiere …"}
+                    </p>
+                  )}
                   {analysis.status === "error" && (
                     <p role="alert" className={FIELD_ERROR}>
                       {analysis.message}
@@ -489,7 +597,18 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                   )}
                   {analysis.status === "idle" && (
                     <p className={HINT}>
-                      MP3, M4A, WAV oder OGG. Die Datei bleibt auf diesem Gerät.
+                      {videoMusic
+                        ? "Wähle unten unter „Aus Video“ ein Tanzvideo."
+                        : "MP3, M4A, WAV oder OGG. Die Datei bleibt auf diesem Gerät."}
+                    </p>
+                  )}
+                  {analysis.status === "done" && useVideo && !videoMusic && file && (
+                    <p className={HINT}>Musik: {file.name}</p>
+                  )}
+                  {analysis.status === "done" && videoMusic && videoFile && (
+                    <p className={HINT}>
+                      Ton des Videos gelesen. Das Video belegt {formatMb(videoFile.size)} in der
+                      Bibliothek.
                     </p>
                   )}
                 </div>
@@ -552,7 +671,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                     name={`${id}-choreo`}
                     value={value}
                     checked={choreoMode === value}
-                    onChange={() => setChoreoMode(value)}
+                    onChange={() => chooseChoreoMode(value)}
                     className="size-5 accent-current"
                   />
                   {label}
@@ -565,6 +684,8 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 onChange={setVideoResult}
                 musicBeat={kind === "file" ? musicBeat : null}
                 onBpmDetected={takeVideoBpm}
+                onVideoFile={chooseVideoFile}
+                musicFromVideo={kind === "file" && videoMusic}
                 {...(createEstimator && { createEstimator })}
               />
             )}
