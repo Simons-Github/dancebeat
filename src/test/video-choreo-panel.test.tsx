@@ -124,7 +124,51 @@ describe("VideoChoreoPanel im Dialog „Song hinzufügen“", () => {
     expect(file.video).toBe("tanz.mp4");
     expect(file.range).toEqual({ startMs: 0, endMs: 6000 });
     expect(file.mirror).toBe(true);
+    expect(file.model).toBe("lite");
     expect(file.track.samples.length).toBeGreaterThan(0);
+  });
+
+  it("analysiert standardmäßig mit „Schnell“, „Genau“ nimmt das volle Modell", async () => {
+    const { createEstimator } = setup([figureEstimator(), figureEstimator()]);
+    await prepare();
+    expect(screen.getByRole("button", { name: "Schnell" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "Genau" })).toHaveAttribute("aria-pressed", "false");
+    fireEvent.click(analyzeButton());
+    const summary = await screen.findByText(/Moves, davon/, {}, { timeout: 4000 });
+    expect(summary).toHaveTextContent("Modell: Schnell.");
+    expect(createEstimator).toHaveBeenLastCalledWith("lite");
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+
+    // Switching the model makes the finished analysis stale, like a range change.
+    fireEvent.click(screen.getByRole("button", { name: "Genau" }));
+    expect(screen.getByRole("button", { name: "Genau" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText(/Das Modell hat sich geändert/)).toBeInTheDocument();
+    expect(screen.queryByText(/Moves, davon/)).not.toBeInTheDocument();
+    await waitFor(() => expect(submitButton()).toBeDisabled());
+
+    // Switching back to the analyzed model makes it current again without a new analysis.
+    fireEvent.click(screen.getByRole("button", { name: "Schnell" }));
+    expect(screen.queryByText(/Modell hat sich geändert/)).not.toBeInTheDocument();
+    expect(createEstimator).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "Genau" }));
+    fireEvent.click(screen.getByRole("button", { name: "Neu analysieren" }));
+    expect(screen.getByRole("button", { name: "Schnell" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Genau" })).toBeDisabled();
+    const again = await screen.findByText(/Moves, davon/, {}, { timeout: 4000 });
+    expect(again).toHaveTextContent("Modell: Genau.");
+    expect(createEstimator).toHaveBeenCalledTimes(2);
+    expect(createEstimator).toHaveBeenLastCalledWith("full");
+    expect(screen.queryByText(/Modell hat sich geändert/)).not.toBeInTheDocument();
+
+    createUrl.mockClear();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Rohdaten exportieren" }));
+    const anchor = click.mock.contexts[0] as HTMLAnchorElement;
+    expect(anchor.download).toBe("tanz-full.posetrack.json");
+    click.mockRestore();
+    const blob = (createUrl.mock.calls[0] as unknown as [Blob])[0];
+    expect(parsePoseTrackFile(await blob.text()).model).toBe("full");
   });
 
   it("BPM-Änderung rechnet ohne neue Analyse neu, Bereichsänderung macht sie ungültig", async () => {

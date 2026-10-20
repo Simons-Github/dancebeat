@@ -104,7 +104,7 @@ const mark = (p: TuningParams) => (sameParams(p, CURRENT) ? " ← aktuell" : "")
 export function formatFileReport(file: PoseTrackFile, rows: TuningRow[], top = 10): string {
   const any = rows[0]?.metrics;
   const lines = [
-    `## ${file.video}`,
+    `## ${file.video}${file.model ? ` (Modell ${file.model})` : ""}`,
     any
       ? `Proben ${any.samples}, Erkennung ${pct(any.detectionRatio)}, Zittern roh ${f2(any.jitterRawDeg)}°, BPM ${file.bpm}`
       : "Keine Daten.",

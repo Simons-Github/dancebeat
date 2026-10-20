@@ -5,6 +5,7 @@
  */
 import { z } from "zod";
 
+import { SHIPPED_MODELS } from "./mediapipe";
 import { LandmarkSchema } from "./schema";
 import type { PoseTrack, VideoChoreoOptions } from "./videoChoreo";
 
@@ -22,6 +23,8 @@ export const PoseTrackFileSchema = z.object({
   beatPhaseMs: z.number().finite(),
   range: z.object({ startMs: z.number().finite().nonnegative(), endMs: z.number().finite() }),
   mirror: z.boolean(),
+  /** Pose model of the analysis (Etappe 8g-4b). Missing in older exports (they used "lite"). */
+  model: z.enum(SHIPPED_MODELS).optional(),
   track: z.object({
     aspect: z.number().positive(),
     samples: z.array(

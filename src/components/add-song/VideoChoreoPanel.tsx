@@ -70,6 +70,10 @@ const STILL_MAX_PX = 640;
 
 const BEAT_HAND_HINT = "Bitte die Beat-Phase von Hand eintragen.";
 
+/** Pose models offered for the analysis; live camera tracking always uses "lite". */
+const MODEL_CHOICES = ["lite", "full"] as const satisfies readonly PoseModel[];
+const MODEL_LABELS: Record<PoseModel, string> = { lite: "Schnell", full: "Genau" };
+
 /** Where the automatic beat phase comes from; null = typed by hand. */
 type BeatSource = { kind: "music" } | { kind: "video"; envelope: OnsetEnvelope };
 type BeatStatus = { status: "idle" | "busy" } | { status: "error"; message: string };
@@ -139,6 +143,9 @@ export function VideoChoreoPanel({
   const beatToken = useRef(0);
   /** Range of the last started analysis; the track only covers this section. */
   const [analyzed, setAnalyzed] = useState<VideoRange | null>(null);
+  /** Model of the next analysis, and the one the last started analysis used. */
+  const [model, setModel] = useState<PoseModel>("lite");
+  const [analyzedModel, setAnalyzedModel] = useState<PoseModel | null>(null);
   /** Dev diagnostics only: duration of the last finished analysis. */
   const [analysisMs, setAnalysisMs] = useState<number | null>(null);
   const analysisToken = useRef(0);
@@ -183,7 +190,9 @@ export function VideoChoreoPanel({
   const phaseLost = beatSource !== null && !phaseAuto;
   const phaseMs = phaseAuto ? autoPhaseMs : phaseLost ? null : parseBeatPhaseMs(phaseText);
   const track = state.status === "done" ? state.track : null;
-  const stale = track !== null && (range === null || !sameRange(range, analyzed));
+  const rangeStale = track !== null && (range === null || !sameRange(range, analyzed));
+  const modelStale = track !== null && model !== analyzedModel;
+  const stale = rangeStale || modelStale;
 
   // Target person: chosen after the analysis, a new analysis starts again from the default.
   const multi = useMemo(() => track !== null && hasMultiplePersons(track), [track]);
@@ -238,10 +247,11 @@ export function VideoChoreoPanel({
             beatPhaseMs: phaseMs,
             range: analyzed,
             mirror: !selfie,
+            ...(analyzedModel && { model: analyzedModel }),
             track: target,
           })
         : null,
-    [result, target, analyzed, phaseMs, videoFile, bpm, selfie],
+    [result, target, analyzed, phaseMs, videoFile, bpm, selfie, analyzedModel],
   );
 
   useEffect(() => {
@@ -356,6 +366,7 @@ export function VideoChoreoPanel({
     if (beatSource?.kind === "video") setBeatSource(null);
     setBeatStatus({ status: "idle" });
     setAnalyzed(null);
+    setAnalyzedModel(null);
     setDurationMs(null);
     setVideoError(null);
     setStartText("0");
@@ -391,15 +402,16 @@ export function VideoChoreoPanel({
       video.scrollIntoView({ block: "nearest" });
     }
     setAnalyzed(range);
+    setAnalyzedModel(model);
     if (!import.meta.env.DEV) {
-      void start(video, { range });
+      void start(video, { range, model });
       return;
     }
     // Dev diagnostics: wall-clock analysis time (not game time); only the latest run counts.
     const token = ++analysisToken.current;
     const t0 = performance.now();
     setAnalysisMs(null);
-    void start(video, { range }).then(() => {
+    void start(video, { range, model }).then(() => {
       if (token === analysisToken.current) setAnalysisMs(performance.now() - t0);
     });
   };
@@ -633,6 +645,31 @@ export function VideoChoreoPanel({
             </div>
           </div>
 
+          <div className="flex flex-col gap-2">
+            <span id={`${id}-model`} className="text-base font-medium">
+              Modell
+            </span>
+            <div role="group" aria-labelledby={`${id}-model`} className="flex gap-2">
+              {MODEL_CHOICES.map((m) => (
+                <Button
+                  key={m}
+                  type="button"
+                  aria-pressed={model === m}
+                  variant={model === m ? "default" : "secondary"}
+                  disabled={busy}
+                  onClick={() => setModel(m)}
+                  className={`${BTN} flex-1 px-2`}
+                >
+                  {MODEL_LABELS[m]}
+                </Button>
+              ))}
+            </div>
+            <p className={HINT}>
+              Genau erkennt Posen zuverlässiger, die Analyse dauert aber länger. Beim ersten Mal
+              werden ca. 9 MB geladen.
+            </p>
+          </div>
+
           <div className="flex flex-col gap-3" aria-live="polite">
             {!busy && (
               <Button
@@ -653,7 +690,12 @@ export function VideoChoreoPanel({
             {state.status === "aborted" && <p className={HINT}>Analyse abgebrochen.</p>}
             {stale && (
               <p role="status" className={FIELD_ERROR}>
-                Der Zeitbereich hat sich geändert. Bitte das Video neu analysieren.
+                {rangeStale && modelStale
+                  ? "Zeitbereich und Modell haben sich geändert."
+                  : rangeStale
+                    ? "Der Zeitbereich hat sich geändert."
+                    : "Das Modell hat sich geändert."}{" "}
+                Bitte das Video neu analysieren.
               </p>
             )}
             {track && !stale && !bpmValid && (
@@ -669,6 +711,7 @@ export function VideoChoreoPanel({
                 {selected && `Person ${selected.number} von ${people.length}: `}
                 {result.stats.moves} Moves, davon {result.stats.gold} Gold Moves, Person in{" "}
                 {Math.round(result.stats.detectionRatio * 100)} % der Bilder erkannt.
+                {analyzedModel && ` Modell: ${MODEL_LABELS[analyzedModel]}.`}
               </p>
             )}
             {import.meta.env.DEV && diagnosticsFile && (

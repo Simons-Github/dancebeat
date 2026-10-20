@@ -2,7 +2,8 @@ import { createHash } from "node:crypto";
 
 /**
  * Pose models served from the app's own origin (`public/mediapipe/models/`, not committed).
- * Only "lite" is shipped; "full"/"heavy" need an entry here (URL + SHA-256) before use.
+ * "lite" (live tracking, video import "Schnell") and "full" (video import "Genau") are shipped;
+ * "heavy" would need an entry here (URL + SHA-256) and in SHIPPED_MODELS before use.
  */
 export interface ModelSpec {
   file: string;
@@ -15,6 +16,12 @@ export const MODELS: readonly ModelSpec[] = [
     file: "pose_landmarker_lite.task",
     url: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_lite/float16/1/pose_landmarker_lite.task",
     sha256: "59929e1d1ee95287735ddd833b19cf4ac46d29bc7afddbbf6753c459690d574a",
+  },
+  {
+    // ~9 MB; loaded only when the video import runs with "Genau".
+    file: "pose_landmarker_full.task",
+    url: "https://storage.googleapis.com/mediapipe-models/pose_landmarker/pose_landmarker_full/float16/1/pose_landmarker_full.task",
+    sha256: "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
   },
 ];
 

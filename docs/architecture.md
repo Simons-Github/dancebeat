@@ -397,17 +397,18 @@ anlegen geht trotzdem. BPM und Länge wie bei URL und YouTube von Hand.
 
 **Pose-Erkennung ohne externe Abrufe (Etappe 7b-1):** MediaPipe-WASM-Laufzeit und Pose-Modell
 kommen von der eigenen Adresse der App (`<base>mediapipe/wasm/…`,
-`<base>mediapipe/models/pose_landmarker_lite.task`, siehe `src/lib/mediapipe.ts`).
+`<base>mediapipe/models/pose_landmarker_<lite|full>.task`, siehe `src/lib/mediapipe.ts`).
 
 - WASM: `vite-plugins/mediapipeWasm.ts` liefert die Dateien im Dev-Server direkt aus
   `node_modules/@mediapipe/tasks-vision/wasm` aus und kopiert sie beim Build nach
   `dist/mediapipe/wasm/`. JS und WASM passen damit immer zur installierten Paketversion; die
   frühere Versionskonstante samt Test entfällt. Nicht im Repo.
 - Modell: `scripts/fetch-models.ts` (`bun run fetch-models`, automatisch vor `dev`, `dev:https`,
-  `build`, `build:dev`) lädt das lite-Modell einmalig von einer fest versionierten Google-URL nach
+  `build`, `build:dev`) lädt die Modelle „lite“ (5,8 MB) und „full“ (9 MB, nur für „Genau“ im
+  Video-Import, Etappe 8g-4b) einmalig von fest versionierten Google-URLs nach
   `public/mediapipe/models/` (gitignored) und prüft SHA-256 (`scripts/models.ts`). Ohne Netz und
-  ohne vorhandene Datei bricht der Build mit Meldung ab. „full“/„heavy“ (Etappe 8) müssen dort
-  erst ergänzt werden.
+  ohne vorhandene Datei bricht der Build mit Meldung ab. „heavy“ müsste dort und in
+  `SHIPPED_MODELS` erst ergänzt werden.
 - Das Hosting muss `.wasm` als `application/wasm` ausliefern (`vite preview` tut das).
 - **Telemetrie gesperrt:** `@mediapipe/tasks-vision` 1.1.1 hat einen fest eingebauten Logger
   (kein Schalter in der API), der Nutzungsdaten (Task-Typ, Modus, OS-Klasse, Latenzen, Version;
@@ -534,8 +535,8 @@ geladenen, pausierten `<video>`; `src/hooks/useVideoAnalysis.ts` kapselt Zustand
 - Abbruch über `AbortSignal` (`AbortError`), Fehler als `VideoAnalysisError` mit `code`
   (`no-metadata`, `seek-timeout`, `video-error`, `empty-range`). Fortschritt höchstens alle
   250 ms; der Hook setzt nur dann State, nie pro Bild.
-- Modell: „lite“ (Entscheidung 8b, keine weiteren Downloads); wählbar über die Option `model`.
-  Reicht die Genauigkeit an echten Videos nicht, kommen „full“ oder „heavy“ ins Download-Skript.
+- Modell: Standard „lite“ (Entscheidung 8b); über die Option `model` wählbar, seit 8g-4b auch
+  „full“ (siehe [Modellwahl](#modellwahl-schnell--genau-etappe-8g-4b)).
 - Ein Lauf überschreibt nie den Zustand eines neueren; Abbruch, Neustart und Unmount schließen
   den Estimator sofort.
 
@@ -592,6 +593,31 @@ den Quell-Tabs (Datei, URL, YouTube); das Video liefert nur die Bewegungen.
   fertiges Ergebnis aus dem alten.
 - Datenschutz: Das Panel nennt, dass das Video auf dem Gerät bleibt und die Erkennung ohne
   externe Abrufe läuft (Modell von der eigenen Adresse, siehe [Externe Abrufe](#externe-abrufe)).
+
+### Modellwahl Schnell / Genau (Etappe 8g-4b)
+
+Über der Schaltfläche „Video analysieren“ wählt man das Pose-Modell: „Schnell“ = MediaPipe
+`pose_landmarker_lite` (Standard, wie bisher), „Genau“ = `pose_landmarker_full`. Die
+Live-Erkennung der Kamera bleibt immer bei „lite“.
+
+- Das Panel gibt die Wahl als `model` an `useVideoAnalysis().start` weiter, der Hook an die
+  Schätzer-Fabrik. Während der Analyse ist die Wahl gesperrt; sie wird nicht gespeichert und
+  steht beim nächsten Öffnen wieder auf „Schnell“.
+- Das Modell gehört wie der Zeitbereich zur Analyse: Das Panel merkt sich beim Start Bereich
+  und Modell; weicht die aktuelle Wahl ab, ist das Ergebnis veraltet („Das Modell hat sich
+  geändert. Bitte das Video neu analysieren.“) und Speichern gesperrt. Zurück auf das
+  analysierte Modell gilt das Ergebnis wieder, ohne neue Analyse.
+- Die Zusammenfassung nennt das benutzte Modell („Modell: Genau.“).
+- „full“ (ca. 9 MB) kommt wie „lite“ von der eigenen Adresse (`scripts/models.ts`, fest
+  versionierte URL und SHA-256, kein neuer externer Abruf) und landet erst beim ersten Laden im
+  MediaPipe-Cache des Service Workers. Hinweis im Panel: „Beim ersten Mal werden ca. 9 MB
+  geladen.“
+- Die Dev-Rohdaten (`*.posetrack.json`) enthalten das Modell (Feld `model`, optional; ältere
+  Exporte ohne Feld bleiben lesbar und stammen von „lite“), der Dateiname bekommt die Endung
+  `-lite`/`-full`, das Tuning-Skript nennt das Modell in der Überschrift je Video. So lassen sich
+  „lite“ und „full“ am selben Abschnitt vergleichen.
+- Standard bleibt „lite“, bis Messungen am Gerät (Dauer, Speicher, Erkennungsquote) etwas
+  anderes nahelegen.
 
 ### Zielperson (Etappe 8f)
 
@@ -655,7 +681,8 @@ wird:
   starke Glättung auch bei schnellen Moves.
 - „Rohdaten exportieren“ lädt `*.posetrack.json` herunter (`src/lib/poseTrackFile.ts`, Format
   `dancebeat-pose-track` v1, mit zod geprüft): die Spur der Zielperson und die Einstellungen
-  des Dialogs (BPM, Beat-Phase in Videozeit, Bereich, Spiegeln, Dateiname). Die Datei enthält
+  des Dialogs (BPM, Beat-Phase in Videozeit, Bereich, Spiegeln, Dateiname, seit 8g-4b optional
+  das Pose-Modell). Die Datei enthält
   nur Landmarks, keine Bilder, und gehört nicht zur Bibliothek. `importOptions` rechnet sie in
   dieselben Optionen um, die `buildVideoChoreo` an `choreoFromPoseTrack` gibt. So lässt sich
   das Feintuning ohne neuen MediaPipe-Lauf wiederholen.
@@ -842,8 +869,9 @@ Adresse ab, deshalb gibt es keinen neuen Eintrag unter [Externe Abrufe](#externe
     Inhalte. Wird bei `install` vollständig geladen (`cache: "reload"`), danach cache-first.
   - `dancebeat-mediapipe-<hash>`: WASM und Modell, cache-first, beim ersten erfolgreichen Abruf
     gefüllt. So liegt nur die wirklich geladene WASM-Variante im Cache (ca. 13 MB plus 5,8 MB
-    Modell). Der Name hängt am Inhalt von WASM und Modell, nicht an der App-Version: ein reines
-    App-Update behält den Cache, ein MediaPipe-Update legt einen neuen an.
+    Modell „lite“, plus 9 MB „full“ erst nach einer Analyse mit „Genau“). Der Name hängt am Inhalt
+    aller Dateien unter `mediapipe/` (WASM und Modelle), nicht an der App-Version: ein reines
+    App-Update behält den Cache, ein MediaPipe-Update oder ein neues Modell legt einen neuen an.
   - `activate` löscht alle `dancebeat-`-Caches außer den aktuellen.
 - **Anfragen:** Jede Navigation (auch Deep Links) bekommt die `index.html` aus dem Precache des
   aktiven Service Workers, online wie offline (App-Shell). So passen Seite, Chunks und

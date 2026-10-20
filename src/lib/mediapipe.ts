@@ -3,9 +3,10 @@ import type { PoseLandmarker } from "@mediapipe/tasks-vision";
 // Runtime and model come from the app's own origin (no CDN): the WASM files are served/copied
 // from the installed @mediapipe/tasks-vision by vite-plugins/mediapipeWasm.ts, the models are
 // downloaded by scripts/fetch-models.ts into public/. Kept as a literal list (not imported from
-// scripts/models.ts, which uses Node APIs); a test keeps both in sync. "full"/"heavy" (Etappe 8)
-// must be added to scripts/models.ts and here before use.
-export const SHIPPED_MODELS = ["lite"] as const;
+// scripts/models.ts, which uses Node APIs); a test keeps both in sync. "lite" serves live
+// tracking and the video import's default ("Schnell"), "full" only the video import ("Genau",
+// Etappe 8g-4b). "heavy" must be added to scripts/models.ts and here before use.
+export const SHIPPED_MODELS = ["lite", "full"] as const;
 export type PoseModel = (typeof SHIPPED_MODELS)[number];
 
 export const wasmBaseUrl = (): string => `${import.meta.env.BASE_URL}mediapipe/wasm`;

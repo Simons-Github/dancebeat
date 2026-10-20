@@ -96,6 +96,9 @@ describe("tuning", () => {
     expect(ranking[0]!.score).toBeLessThanOrEqual(ranking[1]!.score);
     const report = formatFileReport(a, results[0]!);
     expect(report).toContain("## a.mp4");
+    expect(formatFileReport({ ...a, model: "full" }, results[0]!)).toContain(
+      "## a.mp4 (Modell full)",
+    );
     expect(report).toContain("← aktuell");
     expect(formatOverall(ranking)).toContain("← aktuell");
   });

@@ -11,6 +11,7 @@ describe("MediaPipe-Adressen", () => {
   it("laden Laufzeit und Modell vom eigenen Origin unter BASE_URL", () => {
     expect(wasmBaseUrl()).toBe(`${BASE}mediapipe/wasm`);
     expect(modelUrl("lite")).toBe(`${BASE}mediapipe/models/pose_landmarker_lite.task`);
+    expect(modelUrl("full")).toBe(`${BASE}mediapipe/models/pose_landmarker_full.task`);
     for (const url of [wasmBaseUrl(), ...SHIPPED_MODELS.map(modelUrl)]) {
       expect(url).not.toMatch(/^[a-z]+:|^\/\//i);
       expect(url).not.toMatch(/jsdelivr|googleapis/);

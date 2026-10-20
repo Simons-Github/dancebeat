@@ -7,19 +7,19 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status                           | Empfohlenes Modell                                                    |
-| -------------------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                               | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅                               | Sonnet                                                                |
-| 3. Gameplay                                  | ✅ (Gerätetest offen)            | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ✅                               | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)            | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)            | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)            | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3, 8g-4a ✅) | Opus                                                                  |
-| 9. Typen und Lint                            | ✅                               | –                                                                     |
-| 10. Spotify                                  | ✅ (Gerätetest offen)            | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳                               | je nach Punkt                                                         |
+| Etappe                                       | Status                                  | Empfohlenes Modell                                                    |
+| -------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                                      | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                                      | Sonnet                                                                |
+| 3. Gameplay                                  | ✅ (Gerätetest offen)                   | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ✅                                      | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)                   | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)                   | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)                   | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3, 8g-4a, 8g-4b ✅) | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                                      | –                                                                     |
+| 10. Spotify                                  | ✅ (Gerätetest offen)                   | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                                      | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
 
@@ -488,7 +488,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b umgesetzt)
 
 Aufteilung:
 
@@ -660,9 +660,31 @@ Aufteilung:
     Formatwechsel (Schema erlaubt Bruchteile). Liegt das Plateau am Rand des Suchbereichs, bleibt
     die grobe BPM. **Offen:** Prüfung mit echten Songs; Gerätetest: BPM-Feld am iPhone mit
     deutscher Tastatur (Komma) liefert den Wert und nicht „BPM muss zwischen 30 und 300 liegen“.
-  - **8g-4 weitere Verbesserungen, nur nach Messung (offen):** Modell „full“/„heavy“ mit
-    Auswahl „Schnell / Genau“; Moves auf markanten Haltepunkten statt starr alle 2 Beats;
-    Hinweis zum Selfie-Schalter bei Mirrored-Videos.
+  - **8g-4b Modellwahl – umgesetzt, Gerätetest offen.** Im Video-Import wählt „Modell“
+    zwischen „Schnell“ (`pose_landmarker_lite`, Standard) und „Genau“ (`pose_landmarker_full`,
+    ca. 9 MB, von der eigenen Adresse, fest versionierte URL und SHA-256 in `scripts/models.ts`,
+    `SHIPPED_MODELS` in `src/lib/mediapipe.ts`, Service-Worker-Cache wie „lite“). Live-Tracking
+    bleibt „lite“. Ein Modellwechsel nach der Analyse macht das Ergebnis veraltet wie eine
+    Bereichsänderung; die Zusammenfassung nennt das Modell. Dev-Rohdaten enthalten `model`
+    (optional, alte Exporte bleiben lesbar), Dateiname `…-full.posetrack.json`, das Tuning-Skript
+    zeigt das Modell. Details:
+    [architecture.md](architecture.md#modellwahl-schnell--genau-etappe-8g-4b). Tests
+    `video-choreo-panel.test.tsx` (Standard „Schnell“, „Genau“ an die Fabrik, Wechsel macht
+    ungültig, Export), `useVideoAnalysis.test.tsx`, `poseTrackFile.test.ts` (Feld `model`, alte
+    Datei ohne Feld), `mediapipe.test.ts` (Abgleich mit `scripts/models.ts`), `tuning.test.ts`.
+    Kein Formatwechsel.
+    - Playwright (390×844 und 844×390, erzeugtes Testvideo ohne Person): Schalter sichtbar,
+      „Schnell“ vorgewählt; mit „Genau“ lädt `pose_landmarker_full.task` (200, localhost), die
+      Analyse läuft durch und meldet „zu selten eine Person erkannt“; Konsole nur mit den
+      erwarteten CSP-/MediaPipe-Meldungen.
+    - **Gerätetest 8g-4b (offen):**
+      - [ ] Analysedauer „Schnell“ gegenüber „Genau“ für denselben 1-min-Abschnitt am iPhone
+            und an Android (Dev-Diagnose „Analyse … s“)
+      - [ ] Speicher und Abstürze mit „Genau“ (langer Abschnitt, mehrere Personen)
+      - [ ] Erkennungsquote und Holdout-Fehler im Vergleich (Rohdaten beider Modelle exportieren)
+  - **8g-4 weitere Verbesserungen, nur nach Messung (offen):** Standard bleibt „lite“, bis die
+    Messungen aus 8g-4b vorliegen; „heavy“ nur, wenn „full“ nicht reicht. Moves auf markanten
+    Haltepunkten statt starr alle 2 Beats; Hinweis zum Selfie-Schalter bei Mirrored-Videos.
 
 Ursprüngliche Schritte:
 

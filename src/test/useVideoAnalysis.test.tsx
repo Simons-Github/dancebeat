@@ -151,6 +151,16 @@ describe("useVideoAnalysis", () => {
     errors.mockRestore();
   });
 
+  it("reicht das gewählte Modell an die Schätzer-Fabrik weiter", async () => {
+    const est = fakeEstimator();
+    const { get, models } = setup([est]);
+    await act(async () => {
+      await get().start(new FakeVideo({ durationMs: 200 }).asVideo(), { model: "full" });
+    });
+    expect(models).toEqual(["full"]);
+    expect(get().state.status).toBe("done");
+  });
+
   it("Modell-Ladefehler führt zu einer deutschen Fehlermeldung", async () => {
     const est = fakeEstimator(() => null, false);
     const { get } = setup([est]);

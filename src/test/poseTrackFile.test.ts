@@ -41,6 +41,14 @@ describe("poseTrackFile", () => {
     expect(parsePoseTrackFile(JSON.stringify(file))).toEqual(file);
   });
 
+  it("speichert das Modell der Analyse, ältere Exporte ohne Modell bleiben lesbar", () => {
+    const withModel = buildPoseTrackFile({ ...input, model: "full" });
+    expect(parsePoseTrackFile(JSON.stringify(withModel)).model).toBe("full");
+    const old = parsePoseTrackFile(JSON.stringify(buildPoseTrackFile(input)));
+    expect(old.model).toBeUndefined();
+    expect(() => parsePoseTrackFile(JSON.stringify({ ...withModel, model: "heavy" }))).toThrow();
+  });
+
   it("lehnt fremde Dateien ab", () => {
     expect(() => parsePoseTrackFile('{"format":"dancebeat-choreo"}')).toThrow();
     expect(() => parsePoseTrackFile("kein json")).toThrow();

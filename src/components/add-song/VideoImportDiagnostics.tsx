@@ -41,7 +41,7 @@ export function VideoImportDiagnostics({ file, analysisMs }: VideoImportDiagnost
     try {
       const a = document.createElement("a");
       a.href = url;
-      a.download = `${slugify(file.video)}.posetrack.json`;
+      a.download = `${slugify(file.video)}${file.model ? `-${file.model}` : ""}.posetrack.json`;
       document.body.append(a);
       a.click();
       a.remove();
@@ -71,6 +71,7 @@ export function VideoImportDiagnostics({ file, analysisMs }: VideoImportDiagnost
         <li>
           BPM {file.bpm}, Beat-Phase {file.beatPhaseMs} ms
         </li>
+        {file.model && <li>Modell {file.model}</li>}
         {analysisMs !== null && <li>Analyse {(analysisMs / 1000).toFixed(1)} s</li>}
       </ul>
       <Button type="button" variant="secondary" onClick={exportRaw} className={BTN}>

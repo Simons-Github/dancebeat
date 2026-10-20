@@ -11,10 +11,11 @@ export const CACHE_PREFIX = "dancebeat-";
 export const precacheName = (version: string): string => `${CACHE_PREFIX}precache-${version}`;
 
 /**
- * Runtime cache for the MediaPipe WASM runtime and pose models (13 MB + 6 MB, only the WASM
- * variant the device actually loads). Keyed by a hash of the MediaPipe files only, not by the
- * app build: an app-only deploy keeps the ~20 MB, while an @mediapipe/tasks-vision upgrade or a
- * new model changes the hash, so stale WASM is never served next to a newer JS glue file.
+ * Runtime cache for the MediaPipe WASM runtime and pose models (13 MB WASM + 5.8 MB lite +
+ * 9 MB full; only the WASM variant and the models the device actually loads). Keyed by a hash
+ * of the MediaPipe files only (everything below mediapipe/, models included), not by the app
+ * build: an app-only deploy keeps the cached files, while an @mediapipe/tasks-vision upgrade or
+ * a new model changes the hash, so stale WASM is never served next to a newer JS glue file.
  */
 export const mediapipeCacheName = (version: string): string =>
   `${CACHE_PREFIX}mediapipe-${version}`;
