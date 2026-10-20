@@ -84,7 +84,10 @@ Aliasing. Neue Mischung: Kick 180→55 Hz mit kurzem Anstieg, Bass eine Oktave h
 (1,2 kHz), Hi-Hat als hochpassgefiltertes Rauschen (6,5 kHz). `encodeWav` normiert auf
 `DEMO_PEAK` (−6 dBFS), Clipping ist damit ausgeschlossen. Schon gespeicherte Demos bekommen über
 `DEMO_AUDIO_VERSION` (Marker `dancebeat.demoAudioVersion`) einmalig neue Audiodaten; Songdaten
-(Highscore, Sync-Offset, Änderungen) bleiben. Gerätetest offen: Demo am iPhone klar? Regler wirkt?
+(Highscore, Sync-Offset, Änderungen) bleiben. Gerätetest 2026-10-20 (iPhone 11): Regler wirkt,
+nicht mehr übersteuert, Bass aber zu stark. **Nachgebessert (Audio-Version 3):** Hochpass 150 Hz
+auf der ganzen Mischung, Kick kürzer und höher (220→90 Hz, leiser), Bass zwei Oktaven über dem
+Grundton. Gerätetest offen: Bass am iPhone angemessen?
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.

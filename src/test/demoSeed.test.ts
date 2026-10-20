@@ -45,7 +45,7 @@ describe("seedDemos", () => {
     if (!pink) throw new Error("demo missing");
     await repo.save({ ...pink, highscore: 9000, stars: 4 });
     localStorage.clear();
-    localStorage.setItem(AUDIO_KEY, "2"); // audio is current: no upgrade run either
+    localStorage.setItem(AUDIO_KEY, String(demo.DEMO_AUDIO_VERSION)); // audio is current: no upgrade run either
 
     await demo.seedDemos(repo, synth);
     expect(await repo.get(PINK)).toMatchObject({ highscore: 9000, stars: 4 });
@@ -170,7 +170,7 @@ describe("demo audio upgrade", () => {
       stars: 4,
       createdAt: pink.createdAt,
     });
-    expect(localStorage.getItem(AUDIO_KEY)).toBe("2");
+    expect(localStorage.getItem(AUDIO_KEY)).toBe(String(demo.DEMO_AUDIO_VERSION));
 
     await demo.seedDemos(repo, synth);
     expect(synth).toHaveBeenCalledTimes(2); // second run: nothing to upgrade
@@ -263,7 +263,7 @@ describe("demo audio upgrade", () => {
     await demo.seedDemos(repo, synth);
     expect(synth).toHaveBeenCalledTimes(4);
     expect(await repo.getAudio(PINK)).toBe("wav");
-    expect(localStorage.getItem(AUDIO_KEY)).toBe("2");
+    expect(localStorage.getItem(AUDIO_KEY)).toBe(String(demo.DEMO_AUDIO_VERSION));
   });
 });
 

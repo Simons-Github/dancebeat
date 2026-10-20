@@ -64,6 +64,9 @@ function build(
   };
 }
 
+/** Lower edge of the demo mix: phone speakers cannot play below it and distort when driven. */
+const DEMO_HIGHPASS_HZ = 150;
+
 /** Peak level of the demo audio (−6 dBFS): leaves headroom for music plus sound effects. */
 export const DEMO_PEAK = 0.5;
 
@@ -106,9 +109,10 @@ function envelope(g: GainNode, t: number, level: number, attack: number, decay: 
 }
 
 /**
- * Synthesizes a beat track as WAV. Mixed for phone speakers: the kick sweeps down only to 55 Hz,
- * the bass plays an octave up through a lowpass, the hihat is highpassed noise (a square wave
- * at this sample rate aliases).
+ * Synthesizes a beat track as WAV. Mixed for phone speakers, which boost and distort deep bass:
+ * everything passes a highpass at DEMO_HIGHPASS_HZ, the kick is a short, high knock, the bass
+ * plays two octaves up through a lowpass, the hihat is highpassed noise (a square wave at this
+ * sample rate aliases).
  */
 async function synthTrack(bpm: number, seconds: number, root: number): Promise<Blob> {
   const sr = 22050; // low rate keeps the stored blob small
@@ -118,17 +122,21 @@ async function synthTrack(bpm: number, seconds: number, root: number): Promise<B
   const noise = ctx.createBuffer(1, Math.ceil(sr * 0.05), sr);
   const nd = noise.getChannelData(0);
   for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
+  const out = ctx.createBiquadFilter();
+  out.type = "highpass";
+  out.frequency.value = DEMO_HIGHPASS_HZ;
+  out.connect(ctx.destination);
   for (let i = 0; i * beat < seconds; i++) {
     const t = i * beat;
     // Kick
     const o = ctx.createOscillator(),
       g = ctx.createGain();
-    o.frequency.setValueAtTime(180, t);
-    o.frequency.exponentialRampToValueAtTime(55, t + 0.12);
-    envelope(g, t, 0.6, 0.004, 0.25);
-    o.connect(g).connect(ctx.destination);
+    o.frequency.setValueAtTime(220, t);
+    o.frequency.exponentialRampToValueAtTime(90, t + 0.08);
+    envelope(g, t, 0.35, 0.004, 0.15);
+    o.connect(g).connect(out);
     o.start(t);
-    o.stop(t + 0.3);
+    o.stop(t + 0.2);
     // Hihat offbeat
     const ht = t + beat / 2;
     const h = ctx.createBufferSource(),
@@ -138,19 +146,19 @@ async function synthTrack(bpm: number, seconds: number, root: number): Promise<B
     hf.type = "highpass";
     hf.frequency.value = 6500;
     envelope(hg, ht, 0.15, 0.002, 0.045);
-    h.connect(hf).connect(hg).connect(ctx.destination);
+    h.connect(hf).connect(hg).connect(out);
     h.start(ht);
     h.stop(ht + 0.05);
-    // Bass, one octave above the root so phone speakers can play it
+    // Bass, two octaves above the root so phone speakers play it without booming
     const b = ctx.createOscillator(),
       bf = ctx.createBiquadFilter(),
       bg = ctx.createGain();
     b.type = "sawtooth";
-    b.frequency.value = root * 2 * Math.pow(2, (notes[Math.floor(i / 4) % 4] ?? 0) / 12); // index is always in range; 0 = root note
+    b.frequency.value = root * 4 * Math.pow(2, (notes[Math.floor(i / 4) % 4] ?? 0) / 12); // index is always in range; 0 = root note
     bf.type = "lowpass";
-    bf.frequency.value = 1200;
-    envelope(bg, t, 0.3, 0.005, beat * 0.9);
-    b.connect(bf).connect(bg).connect(ctx.destination);
+    bf.frequency.value = 1500;
+    envelope(bg, t, 0.2, 0.005, beat * 0.6);
+    b.connect(bf).connect(bg).connect(out);
     b.start(t);
     b.stop(t + beat);
   }
@@ -259,9 +267,10 @@ export function markDemoDeleted(id: string) {
 /**
  * Version of the synthesized demo audio. Raise it when `synthTrack` changes audibly: the next seed
  * replaces the audio of demos already in the library once (song data stays untouched).
- * 1 – original mix (clipped) · 2 – phone-friendly mix, normalized to DEMO_PEAK
+ * 1 – original mix (clipped) · 2 – phone-friendly mix, normalized to DEMO_PEAK · 3 – less bass
+ * (highpass, higher kick and bass; device test: bass still too strong on an iPhone 11)
  */
-export const DEMO_AUDIO_VERSION = 2;
+export const DEMO_AUDIO_VERSION = 3;
 const AUDIO_VERSION_KEY = "dancebeat.demoAudioVersion";
 const AudioVersionSchema = z.number().int().positive();
 
