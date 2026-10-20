@@ -64,66 +64,98 @@ function build(
   };
 }
 
-/** Erzeugt einen synthetischen Beat-Track als WAV. */
+/** Peak level of the demo audio (−6 dBFS): leaves headroom for music plus sound effects. */
+export const DEMO_PEAK = 0.5;
+
+/**
+ * Encodes mono samples as 16-bit PCM WAV. The signal is first peak-normalized to DEMO_PEAK, so
+ * it can never clip whatever the mix; silence stays silence.
+ */
+export function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
+  let peak = 0;
+  for (const s of samples) peak = Math.max(peak, Math.abs(s));
+  const scale = peak > 0 ? DEMO_PEAK / peak : 0;
+  const ab = new ArrayBuffer(44 + samples.length * 2);
+  const v = new DataView(ab);
+  const w = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
+  w(0, "RIFF");
+  v.setUint32(4, 36 + samples.length * 2, true);
+  w(8, "WAVE");
+  w(12, "fmt ");
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true); // PCM
+  v.setUint16(22, 1, true); // mono
+  v.setUint32(24, sampleRate, true);
+  v.setUint32(28, sampleRate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  w(36, "data");
+  v.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i++) {
+    const s = Math.max(-1, Math.min(1, (samples[i] ?? 0) * scale));
+    v.setInt16(44 + i * 2, Math.round(s * 0x7fff), true);
+  }
+  return ab;
+}
+
+/** Shapes a gain envelope: short linear attack (no click), then exponential decay. */
+function envelope(g: GainNode, t: number, level: number, attack: number, decay: number) {
+  g.gain.setValueAtTime(0, t);
+  g.gain.linearRampToValueAtTime(level, t + attack);
+  g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+}
+
+/**
+ * Synthesizes a beat track as WAV. Mixed for phone speakers: the kick sweeps down only to 55 Hz,
+ * the bass plays an octave up through a lowpass, the hihat is highpassed noise (a square wave
+ * at this sample rate aliases).
+ */
 async function synthTrack(bpm: number, seconds: number, root: number): Promise<Blob> {
-  const sr = 22050;
+  const sr = 22050; // low rate keeps the stored blob small
   const ctx = new OfflineAudioContext(1, sr * seconds, sr);
   const beat = 60 / bpm;
   const notes = [0, 3, 7, 5];
+  const noise = ctx.createBuffer(1, Math.ceil(sr * 0.05), sr);
+  const nd = noise.getChannelData(0);
+  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
   for (let i = 0; i * beat < seconds; i++) {
     const t = i * beat;
     // Kick
     const o = ctx.createOscillator(),
       g = ctx.createGain();
-    o.frequency.setValueAtTime(140, t);
-    o.frequency.exponentialRampToValueAtTime(40, t + 0.15);
-    g.gain.setValueAtTime(0.9, t);
-    g.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+    o.frequency.setValueAtTime(180, t);
+    o.frequency.exponentialRampToValueAtTime(55, t + 0.12);
+    envelope(g, t, 0.6, 0.004, 0.25);
     o.connect(g).connect(ctx.destination);
     o.start(t);
     o.stop(t + 0.3);
     // Hihat offbeat
-    const h = ctx.createOscillator(),
+    const ht = t + beat / 2;
+    const h = ctx.createBufferSource(),
+      hf = ctx.createBiquadFilter(),
       hg = ctx.createGain();
-    h.type = "square";
-    h.frequency.value = 8000;
-    hg.gain.setValueAtTime(0.04, t + beat / 2);
-    hg.gain.exponentialRampToValueAtTime(0.001, t + beat / 2 + 0.05);
-    h.connect(hg).connect(ctx.destination);
-    h.start(t + beat / 2);
-    h.stop(t + beat / 2 + 0.06);
-    // Bass
+    h.buffer = noise;
+    hf.type = "highpass";
+    hf.frequency.value = 6500;
+    envelope(hg, ht, 0.15, 0.002, 0.045);
+    h.connect(hf).connect(hg).connect(ctx.destination);
+    h.start(ht);
+    h.stop(ht + 0.05);
+    // Bass, one octave above the root so phone speakers can play it
     const b = ctx.createOscillator(),
+      bf = ctx.createBiquadFilter(),
       bg = ctx.createGain();
     b.type = "sawtooth";
-    b.frequency.value = root * Math.pow(2, (notes[Math.floor(i / 4) % 4] ?? 0) / 12); // index is always in range; 0 = root note
-    bg.gain.setValueAtTime(0.12, t);
-    bg.gain.exponentialRampToValueAtTime(0.001, t + beat * 0.9);
-    b.connect(bg).connect(ctx.destination);
+    b.frequency.value = root * 2 * Math.pow(2, (notes[Math.floor(i / 4) % 4] ?? 0) / 12); // index is always in range; 0 = root note
+    bf.type = "lowpass";
+    bf.frequency.value = 1200;
+    envelope(bg, t, 0.3, 0.005, beat * 0.9);
+    b.connect(bf).connect(bg).connect(ctx.destination);
     b.start(t);
     b.stop(t + beat);
   }
   const buf = await ctx.startRendering();
-  const d = buf.getChannelData(0);
-  const ab = new ArrayBuffer(44 + d.length * 2);
-  const v = new DataView(ab);
-  const w = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-  w(0, "RIFF");
-  v.setUint32(4, 36 + d.length * 2, true);
-  w(8, "WAVE");
-  w(12, "fmt ");
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true);
-  v.setUint16(22, 1, true);
-  v.setUint32(24, sr, true);
-  v.setUint32(28, sr * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  w(36, "data");
-  v.setUint32(40, d.length * 2, true);
-  for (let i = 0; i < d.length; i++)
-    v.setInt16(44 + i * 2, Math.max(-1, Math.min(1, d[i] ?? 0)) * 0x7fff, true);
-  return new Blob([ab], { type: "audio/wav" });
+  return new Blob([encodeWav(buf.getChannelData(0), sr)], { type: "audio/wav" });
 }
 
 const DEMOS = [
@@ -224,6 +256,68 @@ export function markDemoDeleted(id: string) {
   }
 }
 
+/**
+ * Version of the synthesized demo audio. Raise it when `synthTrack` changes audibly: the next seed
+ * replaces the audio of demos already in the library once (song data stays untouched).
+ * 1 – original mix (clipped) · 2 – phone-friendly mix, normalized to DEMO_PEAK
+ */
+export const DEMO_AUDIO_VERSION = 2;
+const AUDIO_VERSION_KEY = "dancebeat.demoAudioVersion";
+const AudioVersionSchema = z.number().int().positive();
+
+/** Audio version of the stored demos. Missing, unreadable or invalid storage counts as 1. */
+function getDemoAudioVersion(): number {
+  try {
+    const raw = localStorage.getItem(AUDIO_VERSION_KEY);
+    if (raw === null) return 1;
+    const parsed = AudioVersionSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : 1;
+  } catch {
+    return 1;
+  }
+}
+
+function setDemoAudioVersion(version: number) {
+  try {
+    localStorage.setItem(AUDIO_VERSION_KEY, JSON.stringify(version));
+  } catch (e) {
+    console.warn("Version der Demo-Audiodaten konnte nicht gespeichert werden:", e);
+  }
+}
+
+type Demo = (typeof DEMOS)[number];
+
+const buildDemoChoreo = (d: Demo) => build(d.choreoId, d.title, d.bpm, d.seq, d.gold, d.colors);
+
+/** Track length for a demo: last move plus a short tail. */
+const demoSeconds = (lastMove: Move) => Math.ceil(lastMove.timeMs / 1000) + 4;
+
+/** True if the stored song still plays the synthesized demo audio (not a source the player set). */
+const usesDemoAudio = (song: Song) =>
+  song.source.type === "local" && song.source.blobId === song.id;
+
+/**
+ * Replaces the audio of a demo already in the library with a fresh synthesis. The stored song
+ * (highscore, sync offset, edits) is saved back unchanged. Returns false if the upgrade failed;
+ * the failure is logged, not thrown, so seeding the other demos goes on.
+ */
+async function upgradeDemoAudio(repo: SongRepository, synth: typeof synthTrack, d: Demo) {
+  const lastMove = buildDemoChoreo(d).moves.at(-1);
+  if (!lastMove) return true; // no moves: nothing to play
+  try {
+    const blob = await synth(d.bpm, demoSeconds(lastMove), d.root);
+    // Synthesis is slow: re-read so changes made meanwhile (highscore, deletion) are kept.
+    if (getDeletedDemos().includes(d.id)) return true;
+    const current = await repo.get(d.id);
+    if (!current || !usesDemoAudio(current)) return true;
+    await repo.save(current, blob);
+    return true;
+  } catch (e) {
+    console.warn(`Audio der Demo „${d.title}“ konnte nicht erneuert werden:`, e);
+    return false;
+  }
+}
+
 async function seedMissingDemos(repo: SongRepository, synth: typeof synthTrack) {
   try {
     localStorage.removeItem(LEGACY_SEEDED_KEY);
@@ -231,14 +325,22 @@ async function seedMissingDemos(repo: SongRepository, synth: typeof synthTrack) 
     // storage unavailable: nothing to clean up
   }
   const deleted = getDeletedDemos();
+  const outdated = getDemoAudioVersion() < DEMO_AUDIO_VERSION;
+  let upgradeFailed = false;
   for (const d of DEMOS) {
     if (deleted.includes(d.id)) continue;
-    // Never overwrite an existing demo: it carries the player's highscore and stars.
-    if (await repo.get(d.id)) continue;
-    const choreo = build(d.choreoId, d.title, d.bpm, d.seq, d.gold, d.colors);
+    // Never overwrite an existing demo: it carries the player's highscore and stars. Only its
+    // audio is replaced, once, when the synthesis changed.
+    const existing = await repo.get(d.id);
+    if (existing) {
+      if (outdated && usesDemoAudio(existing) && !(await upgradeDemoAudio(repo, synth, d)))
+        upgradeFailed = true;
+      continue;
+    }
+    const choreo = buildDemoChoreo(d);
     const lastMove = choreo.moves.at(-1);
     if (!lastMove) continue; // no moves: nothing to seed
-    const blob = await synth(d.bpm, Math.ceil(lastMove.timeMs / 1000) + 4, d.root);
+    const blob = await synth(d.bpm, demoSeconds(lastMove), d.root);
     // Synthesis is slow: the demo may have been deleted or saved meanwhile (e.g. other tab).
     if (getDeletedDemos().includes(d.id) || (await repo.get(d.id))) continue;
     const now = Date.now();
@@ -259,13 +361,16 @@ async function seedMissingDemos(repo: SongRepository, synth: typeof synthTrack) 
     };
     await repo.save(song, blob);
   }
+  // Only after every upgrade succeeded; otherwise the next seed tries again.
+  if (outdated && !upgradeFailed) setDemoAudioVersion(DEMO_AUDIO_VERSION);
 }
 
 // One run for all callers; there is only one repository in the app, so no per-repo keying.
 let seeding: Promise<void> | null = null;
 
 /**
- * Adds every demo that is neither in the library nor deleted by the player. Concurrent calls
+ * Adds every demo that is neither in the library nor deleted by the player and, once per
+ * DEMO_AUDIO_VERSION, replaces the audio of demos already there. Concurrent calls
  * (StrictMode runs effects twice) share one run, so no demo is synthesized twice.
  * `synth` is replaceable for tests (jsdom has no OfflineAudioContext).
  */

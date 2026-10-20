@@ -239,14 +239,15 @@ Abbrechen im Countdown ──▶ /setup/$songId
 
 ## Speicher
 
-| Was                              | Wo                                      | Zugriff                        |
-| -------------------------------- | --------------------------------------- | ------------------------------ |
-| Songs inkl. Choreografie         | IndexedDB `dancebeat`, Store `songs`    | `SongRepository`               |
-| Audiodateien                     | IndexedDB, Store `blobs`                | `SongRepository.getAudio`      |
-| Einstellungen                    | `localStorage` `dancebeat.settings`     | `useSettings`                  |
-| Gelöschte Demo-Songs (IDs)       | `localStorage` `dancebeat.deletedDemos` | `seedDemos`, `markDemoDeleted` |
-| Spotify-Token und PKCE-Verifier  | `sessionStorage`                        | `lib/audio/sources.ts`         |
-| App-Hülle, MediaPipe-WASM/Modell | Cache Storage `dancebeat-*`             | Service Worker (`src/sw/`)     |
+| Was                              | Wo                                          | Zugriff                        |
+| -------------------------------- | ------------------------------------------- | ------------------------------ |
+| Songs inkl. Choreografie         | IndexedDB `dancebeat`, Store `songs`        | `SongRepository`               |
+| Audiodateien                     | IndexedDB, Store `blobs`                    | `SongRepository.getAudio`      |
+| Einstellungen                    | `localStorage` `dancebeat.settings`         | `useSettings`                  |
+| Gelöschte Demo-Songs (IDs)       | `localStorage` `dancebeat.deletedDemos`     | `seedDemos`, `markDemoDeleted` |
+| Version der Demo-Audiodaten      | `localStorage` `dancebeat.demoAudioVersion` | `seedDemos`                    |
+| Spotify-Token und PKCE-Verifier  | `sessionStorage`                            | `lib/audio/sources.ts`         |
+| App-Hülle, MediaPipe-WASM/Modell | Cache Storage `dancebeat-*`                 | Service Worker (`src/sw/`)     |
 
 **SongRepository** (`src/lib/library/repository.ts`) ist die einzige Schnittstelle zur
 Bibliothek: `list`, `get`, `save`, `delete`, `getAudio`, `export`, `import`. Vorerst gibt es nur
@@ -270,7 +271,9 @@ die IndexedDB-Implementierung; eine Server-Variante kann dieselbe Schnittstelle 
   fehlt und ihre ID nicht in `dancebeat.deletedDemos` steht. Vorhandene Einträge (Highscore,
   Umbenennung) werden nie überschrieben. Die Liste liegt bewusst in `localStorage` statt in
   einem eigenen IndexedDB-Store (keine neue DB-Version); geht sie verloren, kehren gelöschte
-  Demos zurück.
+  Demos zurück. Ändert sich die Synthese hörbar, wird `DEMO_AUDIO_VERSION` erhöht: der nächste
+  Seed ersetzt bei vorhandenen Demos einmalig nur das Audio (`save` mit dem unveränderten
+  gespeicherten Song), danach steht die Version in `localStorage` `dancebeat.demoAudioVersion`.
 - `src/lib/library/storage.ts`: `requestPersistentStorage()` (Safari löscht sonst Daten nicht
   installierter Seiten nach 7 Tagen ohne Nutzung) und `getStorageUsage()` für die Anzeige.
 

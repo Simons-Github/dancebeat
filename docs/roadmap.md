@@ -74,6 +74,14 @@ der `AudioContext` nach dem Start nicht, gilt der Start als blockiert („Zum St
 Gerätetest offen: Regler am iPhone mit Datei-Song hörbar? Übersteuerung weg? URL-Song nach einem
 Datei-Song in derselben Sitzung noch hörbar? Rückkehr aus Hintergrund/Sperrbildschirm → „Zum
 Starten tippen“ oder spielt? Sync-Test-Offset im Vergleich zu vorher?
+✅ Demo-Ton am iPhone (Etappe 11f): Die Demo-Synthese übersteuerte (Kick, Bass und Hi-Hat
+zusammen über 1, hart geclippt), fast die ganze Energie lag im Tiefbass (Kick bis 40 Hz, Bass bei
+49/55 Hz), den Handy-Lautsprecher nicht wiedergeben, und die 8-kHz-Rechteck-Hi-Hat erzeugte
+Aliasing. Neue Mischung: Kick 180→55 Hz mit kurzem Anstieg, Bass eine Oktave höher durch Tiefpass
+(1,2 kHz), Hi-Hat als hochpassgefiltertes Rauschen (6,5 kHz). `encodeWav` normiert auf
+`DEMO_PEAK` (−6 dBFS), Clipping ist damit ausgeschlossen. Schon gespeicherte Demos bekommen über
+`DEMO_AUDIO_VERSION` (Marker `dancebeat.demoAudioVersion`) einmalig neue Audiodaten; Songdaten
+(Highscore, Sync-Offset, Änderungen) bleiben. Gerätetest offen: Demo am iPhone klar? Regler wirkt?
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
@@ -218,7 +226,9 @@ Gerätetest-Befunde 3b (iPhone, 2026-10-19):
 - Musik am iPhone übersteuert bzw. viel zu laut (lokale Datei und URL). Ursache: iOS ignoriert
   `HTMLMediaElement.volume`, die Musik lief immer mit 100 %, nur die Effekte folgten dem Regler.
   **Behoben in 11e** für lokale Dateien (Gain über Web Audio); bei URL und YouTube gelten die
-  Lautstärketasten. Gerätetest offen.
+  Lautstärketasten. Gerätetest nach 11e (2026-10-20): Demo weiterhin übersteuert, Regler ohne
+  Wirkung. Ursache der Übersteuerung war die Demo-Synthese, **behoben in 11f**; Regler-Wirkung
+  noch offen.
 
 ### 4. Ergebnis-Screen und Highscores ✅
 
