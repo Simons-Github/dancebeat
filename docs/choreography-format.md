@@ -45,7 +45,7 @@ Die Soll-Winkel eines Moves werden aus den Frames zum Zeitpunkt `timeMs` interpo
 
 `id` (UUID), `title`, `artist`, `bpm`, `difficulty` (1–3), `source` (`local` mit `blobId`,
 `url`, `youtube` mit `videoId`, `spotify` mit `trackUri`), `syncOffsetMs`, `startOffsetMs`,
-optional `playbackRate` (0.5–2), `choreo`, `highscore`, `stars` (0–5), `createdAt`, `updatedAt`.
+optional `playbackRate` (0.5–2; wirkt bei Datei, URL und YouTube, Spotify spielt immer 1×), `choreo`, `highscore`, `stars` (0–5), `createdAt`, `updatedAt`.
 
 ## Koordinaten
 

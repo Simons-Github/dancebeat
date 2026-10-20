@@ -19,10 +19,11 @@ describe("effectivePlaybackRate", () => {
     expect(effectivePlaybackRate(withSource({ type: "local", blobId: "b" }))).toBe(1);
   });
 
-  it("youtube and spotify always play at 1", () => {
+  it("youtube applies the stored rate (N10), spotify always plays at 1", () => {
     expect(
       effectivePlaybackRate(withSource({ type: "youtube", videoId: "abcdefghijk" }, 1.25)),
-    ).toBe(1);
+    ).toBe(1.25);
+    expect(effectivePlaybackRate(withSource({ type: "youtube", videoId: "abcdefghijk" }))).toBe(1);
     expect(
       effectivePlaybackRate(withSource({ type: "spotify", trackUri: "spotify:track:x" }, 1.25)),
     ).toBe(1);
@@ -32,5 +33,7 @@ describe("effectivePlaybackRate", () => {
     const s = withSource({ type: "youtube", videoId: "abcdefghijk" });
     expect(supportsTempo(s)).toBe(appliesPlaybackRate(s.source));
     expect(supportsTempo(withSource({ type: "local", blobId: "b" }))).toBe(true);
+    expect(supportsTempo(s)).toBe(true);
+    expect(supportsTempo(withSource({ type: "spotify", trackUri: "spotify:track:x" }))).toBe(false);
   });
 });

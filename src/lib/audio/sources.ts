@@ -317,6 +317,13 @@ class YouTubeSource implements AudioSource {
   private refusedOnce = false;
   /** Playback was started (by play() or externally) and not paused since. */
   private active = false;
+  /**
+   * The rate cannot be played (rejected on load, or the player kept another one): the video stays
+   * visible, but a tap on it must not start playback at the wrong speed.
+   */
+  private rateFailed = false;
+  /** `setPlaybackRate` retried after the player reported another rate. */
+  private rateRetried = false;
   private loadTimer = 0;
   private settleLoad: (() => void) | null = null;
   private endedCb = () => {};
@@ -327,8 +334,14 @@ class YouTubeSource implements AudioSource {
   private visible: boolean;
   constructor(
     private videoId: string,
+    /**
+     * Playback rate (`effectivePlaybackRate`). Must match what the player really plays at, or the
+     * game clock and the latency scaling (latency × rate) drift apart from the video.
+     */
+    private rate: number,
     container?: HTMLElement,
   ) {
+    this.clock.setRate(rate);
     this.visible = !!container;
     this.host = document.createElement("div");
     this.host.style.cssText = container
@@ -377,6 +390,18 @@ class YouTubeSource implements AudioSource {
           onReady: () => {
             if (this.destroyed) return;
             settle();
+            const player = this.player;
+            if (this.rate !== 1 && player) {
+              // An unsupported rate fails loudly instead of silently playing at 1× (desync).
+              // An empty list means "unknown" (e.g. before the first start): try anyway.
+              const available = player.getAvailablePlaybackRates();
+              if (available.length > 0 && !available.includes(this.rate)) {
+                this.rateFailed = true;
+                rej(new Error(this.rateErrorText()));
+                return;
+              }
+              player.setPlaybackRate(this.rate);
+            }
             this.ready = true;
             res();
           },
@@ -389,18 +414,51 @@ class YouTubeSource implements AudioSource {
             } else this.fail(message);
           },
           onStateChange: (e: YT.OnStateChangeEvent) => this.stateChanged(api, e.data),
+          onPlaybackRateChange: (e: YT.OnPlaybackRateChangeEvent) => this.rateChanged(e.data),
         },
       });
     });
+  }
+  /** Re-applies the rate if the player reports another one (it may reset it, e.g. on load). */
+  private applyRate() {
+    const player = this.player;
+    if (this.rate === 1 || !player) return;
+    if (player.getPlaybackRate() !== this.rate) player.setPlaybackRate(this.rate);
+  }
+  private rateErrorText() {
+    const shown = String(this.rate).replace(".", ",");
+    return `Dieses Video lässt sich nicht im Tempo ${shown}× abspielen. Stelle im Editor 1× ein.`;
+  }
+  /**
+   * The player confirms rate changes asynchronously (`getPlaybackRate()` is cached). A different
+   * rate is retried once; if it still differs, the clock (running at `rate`) would drift by up to
+   * ~0.3 s without ever hard-resyncing, so playback stops with an error instead.
+   */
+  private rateChanged(actual: number) {
+    if (this.destroyed || !this.ready || this.rateFailed || actual === this.rate) return;
+    if (!this.rateRetried) {
+      this.rateRetried = true;
+      this.player?.setPlaybackRate(this.rate);
+      return;
+    }
+    this.rateFailed = true;
+    this.player?.pauseVideo();
+    this.fail(this.rateErrorText());
   }
   private currentMs() {
     return this.pendingSeekMs ?? (this.player?.getCurrentTime() ?? 0) * 1000;
   }
   private stateChanged(api: typeof YT, state: YT.PlayerState) {
     if (this.destroyed) return;
+    const playing = state === api.PlayerState.PLAYING;
+    if (this.rateFailed) {
+      // Wrong speed: a tap on the still visible video must not start the game clock.
+      if (playing) this.player?.pauseVideo();
+      return;
+    }
     this.ytState = state;
     // Game time runs only while YouTube reports PLAYING; buffering and pausing hold it.
-    const playing = state === api.PlayerState.PLAYING;
+    if (playing) this.applyRate();
     const seekMs = this.pendingSeekMs;
     if (playing && seekMs !== null && !this.pending && !this.active && this.player) {
       // Started some other way (direct tap on the video, e.g. during the countdown): apply the
@@ -468,6 +526,7 @@ class YouTubeSource implements AudioSource {
     if (this.destroyed || !player || !api || !this.ready)
       // Transient (not ready yet): a later tap may start it, so it counts as refused.
       return Promise.reject(new PlayRefusedError("YouTube-Player ist noch nicht geladen."));
+    if (this.rateFailed) return Promise.reject(new Error(this.rateErrorText()));
     if (this.pending) return this.pending.promise;
     if (this.ytState === api.PlayerState.PLAYING) {
       this.active = true;
@@ -486,6 +545,7 @@ class YouTubeSource implements AudioSource {
       player.seekTo(this.pendingSeekMs / 1000, true);
       this.pendingSeekMs = null;
     }
+    this.applyRate();
     player.playVideo();
     this.startResync(api);
     if (!this.refusedOnce) {
@@ -728,7 +788,7 @@ export function createSource(song: Song, opts: SourceOptions = {}): AudioSource 
     case "url":
       return new ElementSource("url", async () => s.url, effectivePlaybackRate(song), opts.element);
     case "youtube":
-      return new YouTubeSource(s.videoId, opts.container);
+      return new YouTubeSource(s.videoId, effectivePlaybackRate(song), opts.container);
     case "spotify":
       return new SpotifySource(s.trackUri);
   }

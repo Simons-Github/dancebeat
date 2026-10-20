@@ -29,7 +29,7 @@ React rendert nur, wenn ein Move bewertet wurde (etwa einmal pro Move), nie pro 
 - Spielzeit kommt nur aus `useAudioClock().timeMs()`:
   `Audioposition − globale Latenz · Rate − song.syncOffsetMs − choreo.offsetMs` (`gameTimeMs` in
   `src/lib/audio/clock.ts`). `startOffsetMs` ist ein Sprung der Audioposition und steckt darin. „Rate“ ist die effektive
-  Wiedergaberate (`effectivePlaybackRate`, YouTube/Spotify immer 1): die Latenz ist Wandzeit und
+  Wiedergaberate (`effectivePlaybackRate`, Spotify immer 1): die Latenz ist Wandzeit und
   entspricht bei Rate r `Latenz · r` ms Audio.
 - **Verzögerung der Pose-Erkennung (neu):** `usePoseTracking` meldet je Bild das Alter
   `frameAgeMs`: vom Aufnahmezeitpunkt (`captureTime` aus den Video-Frame-Metadaten, wenn der
@@ -48,7 +48,7 @@ React rendert nur, wenn ein Move bewertet wurde (etwa einmal pro Move), nie pro 
 Route `/sync/$songId` (`SyncTestScreen`, erreichbar über „Sync-Test“ im Dialog „Song
 bearbeiten“). Der Song läuft ab `startOffsetMs`; der Spieler tippt im Takt auf die Fläche oder
 drückt die Leertaste. Jeder Tipp speichert `AudioSource.getTimeMs()`, abzüglich des Alters des Eingabe-Events
-(`performance.now() − event.timeStamp`, mal effektive Rate, YouTube/Spotify: 1; Werte außerhalb 0–200 ms gelten als 0,
+(`performance.now() − event.timeStamp`, mal effektive Rate, Spotify: 1; Werte außerhalb 0–200 ms gelten als 0,
 `tapAudioMs`, wie `frameGameTimeMs`); nur Taps bei laufender Musik
 zählen. Die Berechnung steckt in `computeSyncOffset` (`src/lib/sync.ts`):
 

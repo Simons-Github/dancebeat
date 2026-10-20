@@ -20,6 +20,9 @@ class FakePlayer {
   state = PlayerState.UNSTARTED;
   private time = 0;
   private since = 0;
+  rate = 1;
+  /** Rates the video offers; tests override it (empty = unknown). */
+  available = [0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2];
   playVideo = vi.fn();
   pauseVideo = vi.fn();
   seekTo = vi.fn((sec: number) => {
@@ -27,6 +30,13 @@ class FakePlayer {
     this.since = now;
   });
   setVolume = vi.fn();
+  setPlaybackRate = vi.fn((r: number) => {
+    this.time = this.getCurrentTime();
+    this.since = now;
+    this.rate = r;
+  });
+  getPlaybackRate = () => this.rate;
+  getAvailablePlaybackRates = () => this.available;
   destroy = vi.fn();
   constructor(
     public el: HTMLElement,
@@ -36,7 +46,9 @@ class FakePlayer {
   }
   getPlayerState = () => this.state;
   getCurrentTime = () =>
-    this.state === PlayerState.PLAYING ? this.time + (now - this.since) / 1000 : this.time;
+    this.state === PlayerState.PLAYING
+      ? this.time + ((now - this.since) / 1000) * this.rate
+      : this.time;
   private get target() {
     return this as unknown as YT.Player;
   }
@@ -50,6 +62,12 @@ class FakePlayer {
     this.state = state;
     const cb = this.opts.events?.onStateChange;
     if (typeof cb === "function") cb({ target: this.target, data: state });
+  }
+  /** Fires onPlaybackRateChange with the rate the player actually took. */
+  rateEvent(r: number) {
+    this.rate = r;
+    const cb = this.opts.events?.onPlaybackRateChange;
+    if (typeof cb === "function") cb({ target: this.target, data: r });
   }
   fail(code: number) {
     const cb = this.opts.events?.onError;
@@ -89,12 +107,21 @@ function track(p: Promise<void>) {
   return r;
 }
 
-async function loaded(): Promise<{ src: AudioSource; player: FakePlayer }> {
-  const src = mod.createSource(ytSong());
+/** Creates the source and its player; `ready()` on the player ends `load()`. */
+async function created(
+  rate?: number,
+): Promise<{ src: AudioSource; player: FakePlayer; done: Promise<void> }> {
+  const song = ytSong();
+  const src = mod.createSource(rate === undefined ? song : { ...song, playbackRate: rate });
   const done = src.load();
   await tick();
   const player = FakePlayer.all.at(-1);
   if (!player) throw new Error("no player");
+  return { src, player, done };
+}
+
+async function loaded(rate?: number): Promise<{ src: AudioSource; player: FakePlayer }> {
+  const { src, player, done } = await created(rate);
   player.ready();
   await done;
   return { src, player };
@@ -622,6 +649,125 @@ describe("YouTubeSource: Pause von außen (Tipp aufs Video)", () => {
     player.emit(PlayerState.PLAYING);
     player.emit(PlayerState.PAUSED);
     expect(onPause).toHaveBeenCalledTimes(1);
+    src.destroy();
+  });
+});
+
+describe("YouTubeSource: Tempo (N10)", () => {
+  it("setzt die Rate bei onReady, die Uhr läuft im Tempo des Videos", async () => {
+    const { src, player } = await loaded(1.25);
+    expect(player.setPlaybackRate).toHaveBeenCalledWith(1.25);
+    void src.play();
+    player.emit(PlayerState.PLAYING);
+    const start = src.getTimeMs();
+    await advance(400);
+    expect(src.getTimeMs() - start).toBeCloseTo(500, 0);
+    await advance(1600);
+    expect(src.getTimeMs() - start).toBeCloseTo(2500, 0);
+    src.destroy();
+  });
+
+  it("nicht angebotene Rate lässt load() mit Hinweis scheitern", async () => {
+    const { src, player, done } = await created(1.25);
+    player.available = [0.5, 1, 2];
+    const r = track(done);
+    player.ready();
+    await tick();
+    expect(r.state).toBe("rejected");
+    expect((r.error as Error).message).toBe(
+      "Dieses Video lässt sich nicht im Tempo 1,25× abspielen. Stelle im Editor 1× ein.",
+    );
+    expect(player.setPlaybackRate).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    src.destroy();
+  });
+
+  it("leere Ratenliste gilt als unbekannt: load() klappt, Rate wird gesetzt", async () => {
+    const { src, player, done } = await created(0.75);
+    player.available = [];
+    player.ready();
+    await done;
+    expect(player.setPlaybackRate).toHaveBeenCalledWith(0.75);
+    src.destroy();
+  });
+
+  it("bei Rate 1 wird setPlaybackRate nie aufgerufen", async () => {
+    const { src, player } = await loaded();
+    void src.play();
+    player.emit(PlayerState.PLAYING);
+    await advance(1000);
+    expect(player.setPlaybackRate).not.toHaveBeenCalled();
+    src.destroy();
+  });
+
+  it("play() und PLAYING setzen die Rate neu, wenn der Player 1 meldet", async () => {
+    const { src, player } = await loaded(1.25);
+    player.setPlaybackRate.mockClear();
+    player.rate = 1;
+    void src.play();
+    expect(player.setPlaybackRate).toHaveBeenCalledWith(1.25);
+    expect(player.setPlaybackRate.mock.invocationCallOrder[0]).toBeLessThan(
+      player.playVideo.mock.invocationCallOrder[0] ?? 0,
+    );
+    player.emit(PlayerState.PLAYING);
+    expect(player.setPlaybackRate).toHaveBeenCalledTimes(1);
+    player.rate = 1;
+    player.emit(PlayerState.BUFFERING);
+    player.emit(PlayerState.PLAYING);
+    expect(player.setPlaybackRate).toHaveBeenCalledTimes(2);
+    src.destroy();
+  });
+
+  it("Player behält eine andere Rate: einmal neu setzen, dann Fehler statt Drift", async () => {
+    const { src, player } = await loaded(1.25);
+    const errors: string[] = [];
+    src.onError((m) => errors.push(m));
+    void src.play();
+    player.emit(PlayerState.PLAYING);
+    player.setPlaybackRate.mockClear();
+    player.rateEvent(1);
+    expect(player.setPlaybackRate).toHaveBeenCalledWith(1.25);
+    expect(errors).toEqual([]);
+    player.rateEvent(1);
+    expect(errors).toEqual([
+      "Dieses Video lässt sich nicht im Tempo 1,25× abspielen. Stelle im Editor 1× ein.",
+    ]);
+    expect(player.pauseVideo).toHaveBeenCalled();
+    const t = src.getTimeMs();
+    await advance(1000);
+    expect(src.getTimeMs()).toBe(t);
+    const r = track(src.play());
+    await tick();
+    expect(r.state).toBe("rejected");
+    src.destroy();
+  });
+
+  it("bestätigte Rate löst nichts aus", async () => {
+    const { src, player } = await loaded(0.75);
+    const errors: string[] = [];
+    src.onError((m) => errors.push(m));
+    player.setPlaybackRate.mockClear();
+    player.rateEvent(0.75);
+    expect(player.setPlaybackRate).not.toHaveBeenCalled();
+    expect(errors).toEqual([]);
+    src.destroy();
+  });
+
+  it("nach abgelehnter Rate startet ein Tipp aufs Video das Spiel nicht", async () => {
+    const { src, player, done } = await created(1.25);
+    player.available = [1];
+    const started = vi.fn();
+    src.onExternalStart?.(started);
+    const r = track(done);
+    player.ready();
+    await tick();
+    expect(r.state).toBe("rejected");
+    player.emit(PlayerState.PLAYING);
+    expect(started).not.toHaveBeenCalled();
+    expect(player.pauseVideo).toHaveBeenCalled();
+    const t = src.getTimeMs();
+    await advance(1000);
+    expect(src.getTimeMs()).toBe(t);
     src.destroy();
   });
 });

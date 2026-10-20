@@ -86,7 +86,7 @@ describe("useAudioClock", () => {
     expect(api!.timeMs()).toBe(5000 - 100 - 30 - 20);
   });
 
-  it("timeMs skaliert die Latenz mit der effektiven Rate (url), nicht bei YouTube", async () => {
+  it("timeMs skaliert die Latenz mit der effektiven Rate (url, YouTube), nicht bei Spotify", async () => {
     const base = makeSong({ ...makeChoreo(), offsetMs: 0 });
     const url = {
       ...base,
@@ -94,9 +94,11 @@ describe("useAudioClock", () => {
       source: { type: "url" as const, url: "https://x/a.mp3" },
     };
     const yt = { ...url, source: { type: "youtube" as const, videoId: "abcdefghijk" } };
+    const sp = { ...url, source: { type: "spotify" as const, trackUri: "spotify:track:x" } };
     for (const [song, expected] of [
       [url, 5000 - 100 * 1.25],
-      [yt, 5000 - 100],
+      [yt, 5000 - 100 * 1.25],
+      [sp, 5000 - 100],
     ] as const) {
       const src = fakeSource();
       const { unmount } = render(

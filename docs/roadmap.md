@@ -52,6 +52,18 @@ startet nicht“. Gerätetest offen: (1) Meldet iOS beim Tipp aufs Video PAUSED?
 bei `seekTo` während der Wiedergabe kurz PAUSED (Editor „Ab Move“ könnte auf Stopp springen)?
 (3) Enges Rennen: Wieder-Anhalten per `externalStart()` im Countdown gegen ein `play()`, das den
 Kurzweg „schon PLAYING“ nimmt.
+✅ N10 (Etappe 11c): YouTube spielt mit `song.playbackRate` (`effectivePlaybackRate` jetzt für
+Datei, URL und YouTube, nur Spotify bleibt 1×). `YouTubeSource` setzt die Rate bei `onReady` und
+erneut vor `playVideo()` und bei PLAYING, falls der Player eine andere meldet; die Uhr läuft im
+gleichen Tempo. Bietet das Video die Rate nicht an (`getAvailablePlaybackRates`), scheitert das
+Laden mit Hinweis; eine leere Liste gilt als unbekannt. Meldet der Player per
+`onPlaybackRateChange` eine andere Rate, wird sie einmal neu gesetzt, danach bricht die Musik mit
+demselben Hinweis ab (sonst liefe die Uhr bis ~0,3 s daneben); ein Tipp aufs Video startet dann
+nicht mit 1×. Der Editor sperrt das Tempo nur noch bei Spotify. Achtung: YouTube-Songs mit schon
+gespeichertem `playbackRate` (z. B. per Import) spielen jetzt in diesem Tempo, Werte außerhalb der
+YouTube-Liste (z. B. 0,8) laden nicht mehr. Gerätetest offen: wendet YouTube die Rate auf iOS an,
+meldet `getAvailablePlaybackRates` vor dem ersten Start die Liste (bei `[1]` scheitert jeder
+YouTube-Song mit Tempo)?
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
@@ -492,7 +504,7 @@ Aufteilung:
     Choreografie.
   - Offset ±1 Beat, ±100 ms, ±10 ms (höchstens ±10 s um den gespeicherten Wert, kein Move vor
     Musikzeit 0); Tempo 0,75× /
-    1× / 1,25× (1× entfernt `playbackRate`), bei YouTube (N10) und Spotify gesperrt mit
+    1× / 1,25× (1× entfernt `playbackRate`), bei Spotify gesperrt mit
     Hinweis.
   - Logik in `src/lib/choreoEditor.ts`; Tests `choreoEditor.test.ts`,
     `choreo-editor-screen.test.tsx`, Link im Bibliothekstest. Kein Formatwechsel.
@@ -626,6 +638,5 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                               | 11     |
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                           | 11     |
 | N6  | `@tanstack/react-query` bisher ungenutzt                                                                               | 11     |
-| N10 | YouTube ignoriert `song.playbackRate`                                                                                  | 11     |
 | N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                        | 11     |
 | N14 | Editor: jede Änderung (Gold, Offset) baut alle Strichfiguren der Timeline neu; bei langen Video-Choreografien spürbar? | 11     |

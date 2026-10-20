@@ -1,11 +1,11 @@
 import type { Song } from "../types";
 
 /**
- * Whether an audio source applies `playbackRate`. Only file and URL sources (HTML media element)
- * do; YouTube and Spotify always play at normal speed.
+ * Whether an audio source applies `playbackRate`. File and URL sources (HTML media element) and
+ * YouTube (`setPlaybackRate`) do; Spotify always plays at normal speed.
  */
 export const appliesPlaybackRate = (source: Song["source"]) =>
-  source.type === "local" || source.type === "url";
+  source.type === "local" || source.type === "url" || source.type === "youtube";
 
 /**
  * The rate the song actually plays at: `song.playbackRate ?? 1` for sources that apply it, else 1.

@@ -294,15 +294,13 @@ describe("shiftOffset", () => {
 });
 
 describe("Tempo", () => {
-  it("nur Datei- und URL-Quellen unterstützen Tempo", () => {
+  it("Datei, URL und YouTube unterstützen Tempo, Spotify nicht", () => {
     const s = makeSong();
     expect(supportsTempo({ ...s, source: { type: "local", blobId: "b" } })).toBe(true);
     expect(supportsTempo({ ...s, source: { type: "url", url: "https://example.com/a.mp3" } })).toBe(
       true,
     );
-    expect(supportsTempo({ ...s, source: { type: "youtube", videoId: "dQw4w9WgXcQ" } })).toBe(
-      false,
-    );
+    expect(supportsTempo({ ...s, source: { type: "youtube", videoId: "dQw4w9WgXcQ" } })).toBe(true);
     expect(
       supportsTempo({
         ...s,

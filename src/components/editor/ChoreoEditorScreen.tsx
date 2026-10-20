@@ -482,10 +482,7 @@ export function ChoreoEditorScreen({
                   className="flex items-start gap-2 text-base font-medium"
                 >
                   <AlertTriangle aria-hidden className="mt-0.5 size-5 shrink-0 text-gold" />
-                  <span>
-                    {working.source.type === "spotify" ? "Spotify" : "YouTube"} spielt immer mit
-                    normalem Tempo.
-                  </span>
+                  <span>Spotify spielt immer mit normalem Tempo.</span>
                 </p>
               )}
             </Card>

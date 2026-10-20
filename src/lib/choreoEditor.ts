@@ -176,8 +176,8 @@ export function shiftOffset(
 export const tempoOf = (song: Song) => song.playbackRate ?? 1;
 
 /**
- * Whether the song's audio source applies `playbackRate`. Only file and URL sources (HTML media
- * element) do; YouTube and Spotify always play at normal speed (finding N10).
+ * Whether the song's audio source applies `playbackRate`. File, URL and YouTube sources do (YouTube
+ * since finding N10); Spotify always plays at normal speed.
  */
 export const supportsTempo = (song: Song) => appliesPlaybackRate(song.source);
 

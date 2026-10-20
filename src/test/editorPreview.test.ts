@@ -41,7 +41,7 @@ describe("previewStartAudioMs", () => {
     );
   });
 
-  it("Latenz wird mit der effektiven Rate skaliert (url), bei YouTube nicht", () => {
+  it("Latenz wird mit der effektiven Rate skaliert (url, YouTube), bei Spotify nicht", () => {
     const url = {
       ...withOffset,
       playbackRate: 1.25,
@@ -50,7 +50,9 @@ describe("previewStartAudioMs", () => {
     // Move 4 → game 1000 → audio 1000 + 100·1.25 + 40 + 3000.
     expect(previewStartAudioMs(url, 100, 4)).toBe(4165);
     const yt = { ...url, source: { type: "youtube" as const, videoId: "abcdefghijk" } };
-    expect(previewStartAudioMs(yt, 100, 4)).toBe(4140);
+    expect(previewStartAudioMs(yt, 100, 4)).toBe(4165);
+    const sp = { ...url, source: { type: "spotify" as const, trackUri: "spotify:track:x" } };
+    expect(previewStartAudioMs(sp, 100, 4)).toBe(4140);
   });
 
   it("nie vor startOffsetMs oder 0", () => {

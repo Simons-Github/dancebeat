@@ -135,7 +135,7 @@ abgebrochen“ (sonst „Die Musik konnte nicht geladen werden“) mit Rückweg 
 `timeMs = getTimeMs() − globale Latenz · Rate − song.syncOffsetMs − choreo.offsetMs` (reine Funktion
 `gameTimeMs` in `src/lib/audio/clock.ts`). Positive Offsets verschieben die Choreografie also nach
 hinten (sie kommt später). Die Rate ist `effectivePlaybackRate(song)` (`src/lib/audio/rate.ts`):
-`song.playbackRate ?? 1` nur für Datei und URL, YouTube/Spotify immer 1. Die Latenz ist Wandzeit und
+`song.playbackRate ?? 1` für Datei, URL und YouTube, Spotify immer 1. Die Latenz ist Wandzeit und
 wird damit in Audiozeit umgerechnet. Bei Songs mit Rate ≠ 1, deren `syncOffsetMs` vorher gemessen
 wurde, verschiebt sich die Choreografie um `Latenz · (r − 1)`: klein, bei Bedarf den Sync-Test
 wiederholen. `timeMs` behält seine Identität (Offsets über Refs), damit Schleifen
@@ -536,7 +536,7 @@ Browser (`beforeunload`).
 - Reine Logik in `src/lib/choreoEditor.ts` (unveränderlich, ohne React): `deleteMove`
   (mindestens `MIN_MOVES` = 2), `toggleGold`, `suggestGold` (nutzt `suggestGoldMoves`),
   `shiftOffset` (ganze ms, ±10 s um den gespeicherten Wert, kein Move vor Musikzeit 0), `beatLengthMs`, `setTempo` (1× entfernt
-  `playbackRate`), `supportsTempo` (nur Datei und URL), `isEdited` (Speichern/Verwerfen nur bei Änderungen), `prepareSave`.
+  `playbackRate`), `supportsTempo` (Datei, URL und YouTube), `isEdited` (Speichern/Verwerfen nur bei Änderungen), `prepareSave`.
 - Etappe 8d-2a: `shiftMove`/`canShiftMove` (Move um ½ oder 1 Beat verschieben) und
   `insertMoveAfter`/`canInsertAfter` (Move nach dem gewählten einfügen, liefert den neuen Index),
   geprüft über eine gemeinsame Hilfsfunktion: sortiert, `MIN_MOVE_GAP_MS` (300 ms,
@@ -550,8 +550,11 @@ Browser (`beforeunload`).
   (`moveFigures` + `drawMoveFigure` auf Canvas, gezeichnet nur bei Änderung, kein rAF), Zeit in
   Musikzeit (`move.timeMs + offsetMs`, ohne Latenz und Sync-Offset), Gold-Markierung.
 - Der Offset verschiebt die Moves gegen die Musik; die Geräteverzögerung bleibt Sache des
-  Sync-Tests (`syncOffsetMs`). YouTube (N10) und Spotify ignorieren das Tempo; der Editor sperrt die Tempo-Knöpfe dort und
-  nennt den Grund.
+  Sync-Tests (`syncOffsetMs`). Spotify ignoriert das Tempo; der Editor sperrt die Tempo-Knöpfe dort und
+  nennt den Grund. YouTube setzt die Rate per `setPlaybackRate` (N10); bietet das Video sie nicht
+  an, scheitert das Laden mit Hinweis statt still mit 1× zu spielen. Bestätigt der Player per
+  `onPlaybackRateChange` eine andere Rate, setzt die Quelle sie einmal neu und meldet sonst einen
+  Laufzeitfehler (`onError`); ein Tipp aufs Video startet danach nicht mehr.
 - Keine Kamera. Kein Formatwechsel (siehe
   [choreography-format.md](choreography-format.md#editor)).
 - Etappe 8d-2b, Karte „Vorschau“ (`src/components/editor/EditorPreview.tsx`, unter der Timeline):

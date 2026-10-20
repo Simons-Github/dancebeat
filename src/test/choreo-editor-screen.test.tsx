@@ -338,7 +338,7 @@ describe("Choreografie-Editor", () => {
     ).toHaveLength(2);
   });
 
-  it("YouTube und Spotify: Tempo gesperrt mit Hinweis, Wert sichtbar", async () => {
+  it("Spotify: Tempo gesperrt mit Hinweis, Wert sichtbar", async () => {
     setSong(3, {
       source: { type: "spotify", trackUri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" },
       playbackRate: 1.25,
@@ -353,12 +353,12 @@ describe("Choreografie-Editor", () => {
     );
   });
 
-  it("zeigt Speicherfehler, YouTube-Hinweis zum Tempo", async () => {
+  it("zeigt Speicherfehler; YouTube: Tempo wählbar, kein Hinweis (N10)", async () => {
     setSong(3, { source: { type: "youtube", videoId: "dQw4w9WgXcQ" } });
     repo.fail = new Error("boom");
     await renderAt(`/edit/${SONG_ID}`);
-    expect(screen.getByRole("note")).toHaveTextContent("YouTube spielt immer mit normalem Tempo.");
-    expect(screen.getByRole("button", { name: "0,75×" })).toBeDisabled();
+    expect(screen.queryByRole("note")).toBeNull();
+    expect(screen.getByRole("button", { name: "0,75×" })).toBeEnabled();
     fireEvent.click(screen.getByRole("switch", { name: "Gold Move" }));
     fireEvent.click(saveBtn());
     expect(await screen.findByRole("alert")).toHaveTextContent("Speichern hat nicht geklappt");
