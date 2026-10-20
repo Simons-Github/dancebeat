@@ -20,6 +20,24 @@ export const BEAT_PHASE_MAX_MS = 3_600_000;
 /** Rounding slack between the shown end (0.1 s) and the real video duration. */
 const END_TOLERANCE_MS = 100;
 
+/**
+ * "mirror"/"mirrored" and German "gespiegelt"/"spiegelverkehrt" as whole words, Korean 거울
+ * ("mirror", as in 거울모드). Underscores and digits count as separators, unlike `\b`; camelCase
+ * is split before the test. "ungespiegelt" and "nicht gespiegelt" do not match.
+ */
+const MIRRORED_NAME =
+  /(?:^|[^a-z])mirror(?:ed)?(?![a-z])|(?<!nicht[ _-]?)(?:^|[^a-zäöüß])(?:gespiegelt|spiegelverkehrt)|거울/i;
+
+/**
+ * True if the file name says the video is already mirrored, like K-pop dance practice videos
+ * titled "(Mirrored)" (yt-dlp keeps the title in the file name). Such videos must not be
+ * mirrored again (`mirror: false`).
+ */
+export function looksMirrored(fileName: string): boolean {
+  const name = fileName.normalize("NFC").replace(/([a-zäöüß])([A-ZÄÖÜ])/g, "$1 $2");
+  return MIRRORED_NAME.test(name);
+}
+
 export interface VideoRange {
   startMs: number;
   endMs: number;

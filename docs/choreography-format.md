@@ -97,7 +97,11 @@ Choreografie im Format v1:
    `x' = 0.5 + (x − 0.5) · aspect / s` und `y' = 0.5 + (y − 0.5) / s`. Die längere Bildseite
    füllt also 0..1, die kürzere liegt mittig.
 4. Spiegeln (`mirrorChoreo`) ist Standard, weil ein Video den Tänzer ungespiegelt zeigt (siehe
-   [Spiegeln](#spiegeln)). Bereits gespiegelte Aufnahmen (Selfie) mit `mirror: false`.
+   [Spiegeln](#spiegeln)). Bereits gespiegelte Aufnahmen (Selfie, Dance-Practice „Mirrored“) mit
+   `mirror: false`. Der Dialog belegt den Schalter je neuer Datei nach dem Dateinamen vor
+   (`looksMirrored`: „mirror“/„mirrored“, „gespiegelt“, „spiegelverkehrt“ als ganze Wörter,
+   „거울“; nicht „ungespiegelt“ oder „nicht gespiegelt“). yt-dlp übernimmt den Videotitel in den
+   Dateinamen (Etappe 8g-4d).
 5. Frames etwa alle 100 ms. Koordinaten auf 4 Stellen gerundet, Winkel auf 1 Stelle. Die
    Visibility wird auf 2 Stellen **abgerundet**, damit kein unsicherer Punkt über die Schwelle
    rutscht. Ab 0.99 entfällt sie (`[x, y]` = voll sichtbar). `lowVisibility` steht, wenn nicht

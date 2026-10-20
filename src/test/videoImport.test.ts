@@ -6,6 +6,7 @@ import type { AngleKey } from "@/lib/types";
 import { buildNewSong, validateNewSongFields } from "@/lib/library/newSong";
 import {
   buildVideoChoreo,
+  looksMirrored,
   parseBeatPhaseMs,
   parseVideoSeconds,
   validateVideoRange,
@@ -213,5 +214,35 @@ describe("buildNewSong (video)", () => {
     expect(validateNewSongFields({ ...fields, video: true })).toEqual({});
     expect(validateNewSongFields(fields).duration).toBeDefined();
     expect(validateNewSongFields({ ...fields, video: true, bpm: NaN }).bpm).toBeDefined();
+  });
+});
+
+describe("looksMirrored", () => {
+  it("erkennt gespiegelte Videos am Dateinamen", () => {
+    for (const name of [
+      "NewJeans 'Super Shy' Dance Practice (Mirrored) [abc123].mp4",
+      "BLACKPINK_Pink_Venom_MIRRORED.mp4",
+      "dance-practice-mirror.mov",
+      "mirror.mp4",
+      "MirrorMode.mp4",
+      "kpop_mirror2.mp4",
+      "Tanz gespiegelt.mp4",
+      "Choreo spiegelverkehrt.mov",
+      "안무 거울모드.mp4",
+    ]) {
+      expect(looksMirrored(name), name).toBe(true);
+    }
+  });
+
+  it("ignoriert Namen ohne Hinweis, Wörter, die nur so beginnen oder enden, und Verneinungen", () => {
+    for (const name of [
+      "tanz.mp4",
+      "Mirrorball Party.mp4",
+      "Supermirror.mov",
+      "Zumba 2024.mp4",
+      "",
+    ]) {
+      expect(looksMirrored(name), name).toBe(false);
+    }
   });
 });

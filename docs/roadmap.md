@@ -16,7 +16,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)              | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)              | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)              | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3, 8g-4a–c ✅) | Opus                                                                  |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3, 8g-4a–d ✅) | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                                 | –                                                                     |
 | 10. Spotify                                  | ✅ (Gerätetest offen)              | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                 | je nach Punkt                                                         |
@@ -488,7 +488,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d umgesetzt)
 
 Aufteilung:
 
@@ -697,9 +697,24 @@ Aufteilung:
     - **Gerätetest 8g-4c (offen):**
       - [ ] Fühlen sich Moves mit „Haltepunkte“ im Spiel besser an als mit „Fester Takt“
             (gleiches Video, gleicher Abschnitt)?
+  - **8g-4d Selfie-Schalter bei Mirrored-Videos – umgesetzt.** `looksMirrored`
+    (`src/lib/library/videoImport.ts`) erkennt gespiegelte Videos am Dateinamen („Mirrored“,
+    „mirror“, „gespiegelt“ und „spiegelverkehrt“ als ganze Wörter, auch neben `_` und Ziffern
+    und in camelCase, „거울“; „ungespiegelt“ und „nicht gespiegelt“ zählen nicht).
+    Jede neue Datei belegt „Video ist gespiegelt“ danach vor (wie der Zeitbereich startet die
+    Wahl je Datei neu); der Hinweis unter dem Schalter nennt den Grund, bis der Schalter
+    angetippt wird, und erklärt immer, wann er gehört. Tests `videoImport.test.ts` (Treffer,
+    „Mirrorball“ und Ähnliches kein Treffer), `video-choreo-panel.test.tsx` (Vorbelegung, Grund
+    entfällt nach Antippen, neue Datei setzt neu). Kein Formatwechsel.
+    - Playwright (390×844 und 844×390, erzeugtes Testvideo „Dance Practice (Mirrored).mp4“):
+      Schalter eingeschaltet mit Grund im Hinweis, nach Antippen aus und nur der allgemeine
+      Hinweis; Konsole ohne Fehler und Warnungen.
+    - **Gerätetest 8g-4d (offen):**
+      - [ ] Behält der Dateiname am iPhone und an Android den Titel (Auswahl aus „Dateien“
+            bzw. Downloads)? Aus der Fotomediathek kommt meist `IMG_….MOV`, dann bleibt nur
+            der Hinweis.
   - **8g-4 weitere Verbesserungen, nur nach Messung (offen):** Standard bleibt „lite“, bis die
-    Messungen aus 8g-4b vorliegen; „heavy“ nur, wenn „full“ nicht reicht. Hinweis zum
-    Selfie-Schalter bei Mirrored-Videos.
+    Messungen aus 8g-4b vorliegen; „heavy“ nur, wenn „full“ nicht reicht.
 
 Ursprüngliche Schritte:
 

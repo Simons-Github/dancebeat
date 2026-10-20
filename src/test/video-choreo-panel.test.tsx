@@ -323,6 +323,44 @@ describe("VideoChoreoPanel", () => {
   });
 });
 
+describe("VideoChoreoPanel: Selfie-Schalter aus dem Dateinamen", () => {
+  const SWITCH = "Video ist gespiegelt (Selfie-Aufnahme)";
+  const choose = (name: string) => {
+    fireEvent.change(screen.getByLabelText("Tanzvideo"), {
+      target: { files: [new File(["v"], name, { type: "video/mp4" })] },
+    });
+    const video = screen.getByLabelText<HTMLVideoElement>("Videovorschau");
+    patchVideoElement(video, { durationMs: 6000 });
+    fireEvent.loadedMetadata(video);
+  };
+
+  it("schaltet bei „Mirrored“ im Namen ein und nennt den Grund", () => {
+    render(<VideoChoreoPanel bpm={120} onChange={() => {}} />);
+    choose("Dance Practice (Mirrored).mp4");
+    const sw = screen.getByRole("switch", { name: SWITCH });
+    expect(sw).toBeChecked();
+    expect(sw).toHaveAccessibleDescription(/weil der Dateiname auf ein gespiegeltes Video/);
+
+    // Touching the switch drops the reason; the general hint stays.
+    fireEvent.click(sw);
+    expect(sw).not.toBeChecked();
+    expect(sw).not.toHaveAccessibleDescription(/weil der Dateiname/);
+    expect(sw).toHaveAccessibleDescription(/„Mirrored“ im Titel/);
+  });
+
+  it("setzt den Schalter für jede neue Datei nach ihrem Namen", () => {
+    render(<VideoChoreoPanel bpm={120} onChange={() => {}} />);
+    choose("tanz.mp4");
+    expect(screen.getByRole("switch", { name: SWITCH })).not.toBeChecked();
+    fireEvent.click(screen.getByRole("switch", { name: SWITCH }));
+    expect(screen.getByRole("switch", { name: SWITCH })).toBeChecked();
+    choose("zumba.mp4");
+    expect(screen.getByRole("switch", { name: SWITCH })).not.toBeChecked();
+    choose("kpop_mirror.mp4");
+    expect(screen.getByRole("switch", { name: SWITCH })).toBeChecked();
+  });
+});
+
 describe("VideoChoreoPanel: Moves", () => {
   it("startet mit „Fester Takt“, „Haltepunkte“ rechnet ohne neue Analyse neu", async () => {
     const est = figureEstimator();

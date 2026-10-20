@@ -25,6 +25,7 @@ import { BPM_MAX, BPM_MIN } from "@/lib/library/newSong";
 import {
   VIDEO_RANGE_MAX_MS,
   buildVideoChoreo,
+  looksMirrored,
   parseBeatPhaseMs,
   parseVideoSeconds,
   validateVideoRange,
@@ -141,6 +142,8 @@ export function VideoChoreoPanel({
   const [startText, setStartText] = useState("0");
   const [endText, setEndText] = useState("");
   const [selfie, setSelfie] = useState(false);
+  /** Switch was turned on from the file name and not touched since. */
+  const [selfieFromName, setSelfieFromName] = useState(false);
   const [phaseText, setPhaseText] = useState("0");
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [beatSource, setBeatSource] = useState<BeatSource | null>(null);
@@ -380,6 +383,10 @@ export function VideoChoreoPanel({
     setVideoError(null);
     setStartText("0");
     setEndText("");
+    // A new video is a new decision: preset from its name, like the range starts over.
+    const named = chosen !== null && looksMirrored(chosen.name);
+    setSelfie(named);
+    setSelfieFromName(named);
     setUrl(chosen ? URL.createObjectURL(chosen) : null);
   };
 
@@ -597,16 +604,29 @@ export function VideoChoreoPanel({
             </p>
           )}
 
-          <div className="flex min-h-11 items-center justify-between gap-3">
-            <Label htmlFor={`${id}-selfie`} className="text-base">
-              Video ist gespiegelt (Selfie-Aufnahme)
-            </Label>
-            <Switch
-              id={`${id}-selfie`}
-              checked={selfie}
-              onCheckedChange={setSelfie}
-              disabled={busy}
-            />
+          <div className="flex flex-col gap-1">
+            <div className="flex min-h-11 items-center justify-between gap-3">
+              <Label htmlFor={`${id}-selfie`} className="text-base">
+                Video ist gespiegelt (Selfie-Aufnahme)
+              </Label>
+              <Switch
+                id={`${id}-selfie`}
+                checked={selfie}
+                onCheckedChange={(on) => {
+                  setSelfie(on);
+                  setSelfieFromName(false);
+                }}
+                disabled={busy}
+                aria-describedby={`${id}-selfie-hint`}
+              />
+            </div>
+            <p id={`${id}-selfie-hint`} className={HINT}>
+              {selfieFromName
+                ? "Eingeschaltet, weil der Dateiname auf ein gespiegeltes Video hinweist. "
+                : ""}
+              Einschalten bei Selfie-Aufnahmen und Dance-Practice-Videos mit „Mirrored“ im Titel:
+              Dort sind links und rechts schon vertauscht.
+            </p>
           </div>
 
           <div className="flex flex-col gap-2">
