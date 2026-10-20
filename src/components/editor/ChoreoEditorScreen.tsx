@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useBlocker, useNavigate } from "@tanstack/react-router";
 import { AlertTriangle, ArrowLeft, Plus, Save, Sparkles, Star, Trash2, Undo2 } from "lucide-react";
 
@@ -35,20 +35,15 @@ import {
   tempoOf,
   toggleGold,
 } from "@/lib/choreoEditor";
+import { scrollIntoBoxDelta } from "@/lib/editorPreview";
 import { drawMoveFigure } from "@/lib/game/draw";
 import { moveFigures, type StickFigure } from "@/lib/game/pikto";
 import { StorageFullError } from "@/lib/library/storage";
 import { formatOffsetMs } from "@/lib/sync";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
-
-const CARD =
-  "bg-(--scrim-banner) shadow-pop flex flex-col gap-4 rounded-3xl border border-white/15 p-5 text-white backdrop-blur-md";
-const BTN =
-  "btn-pill h-12 gap-2 rounded-full px-6 text-base focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
-const HINT = "text-sm text-white/85";
-const ERROR =
-  "rounded-xl bg-destructive px-3 py-2 text-base font-medium text-destructive-foreground";
+import { EditorPreview } from "./EditorPreview";
+import { BTN, Card, ERROR, HINT } from "./parts";
 
 /** Offset steps; `beat` steps use the choreography's beat length. */
 const OFFSET_STEPS = [
@@ -69,15 +64,6 @@ const MOVE_STEPS = [
 ] as const;
 
 const formatRate = (r: number) => `${String(r).replace(".", ",")}×`;
-
-function Card({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className={CARD} aria-label={title}>
-      <h2 className="font-title text-stroke text-2xl">{title}</h2>
-      {children}
-    </section>
-  );
-}
 
 /** Stick figure on a fixed-size canvas, redrawn only when figure, gold flag or colors change. */
 function MoveCanvas({
@@ -101,12 +87,14 @@ function MoveCanvas({
 }
 
 /**
- * Choreography editor (stages 8d-1, 8d-2a): works on a local copy of the song. Moves can be marked
- * gold, shifted in time (half or whole beats), inserted after the selected move or deleted, the
- * gold suggestion applied, `choreo.offsetMs` shifted and the tempo chosen. Shifts and insertions
- * that break the timing rules (see `shiftMove`) are disabled, with a hint.
+ * Choreography editor (stages 8d-1, 8d-2a, 8d-2b): works on a local copy of the song. Moves can be
+ * marked gold, shifted in time (half or whole beats), inserted after the selected move or deleted,
+ * the gold suggestion applied, `choreo.offsetMs` shifted and the tempo chosen. Shifts and
+ * insertions that break the timing rules (see `shiftMove`) are disabled, with a hint.
+ * "Vorschau" (`EditorPreview`) plays the working copy with a click per move and highlights the
+ * current move in the timeline; edits apply while it plays, a tempo change rebuilds its source.
  * "Speichern" writes the copy via `onSave` and returns to the library; "Verwerfen" resets it
- * after a confirmation. No audio playback here.
+ * after a confirmation.
  */
 export function ChoreoEditorScreen({
   song,
@@ -124,6 +112,11 @@ export function ChoreoEditorScreen({
   const [resetOpen, setResetOpen] = useState(false);
   // Last dialog mode; kept after closing so the text does not flip during the close animation.
   const [mode, setMode] = useState<"leave" | "reset">("leave");
+  /** Move the preview is at (null: not playing or before the first move). */
+  const [nowIndex, setNowIndex] = useState<number | null>(null);
+  /** "Klick bei jedem Move" (not persisted); here so it survives the preview's tempo remount. */
+  const [click, setClick] = useState(true);
+  const timelineRef = useRef<HTMLOListElement>(null);
   // Set right before the navigation after a successful save, which must not be blocked.
   const leavingRef = useRef(false);
   const mountedRef = useRef(true);
@@ -148,6 +141,17 @@ export function ChoreoEditorScreen({
   const shiftOk = MOVE_STEPS.map((s) => canShiftMove(choreo, sel, s.beats * beat));
   const insertOk = canInsertAfter(choreo, sel);
   const timeBlocked = !insertOk || shiftOk.some((ok) => !ok);
+
+  // Keep the current preview move visible in the timeline (horizontal scroll only).
+  useEffect(() => {
+    const ol = timelineRef.current;
+    const li = nowIndex === null ? null : ol?.children[nowIndex];
+    if (!ol || !(li instanceof HTMLElement)) return;
+    const delta = scrollIntoBoxDelta(ol.getBoundingClientRect(), li.getBoundingClientRect());
+    if (delta === 0) return;
+    const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    ol.scrollBy({ left: delta, behavior: still ? "auto" : "smooth" });
+  }, [nowIndex]);
 
   // Any navigation away (in-app link, browser or Android back) with unsaved changes asks first;
   // reloading or closing the tab triggers the browser's beforeunload warning.
@@ -263,18 +267,24 @@ export function ChoreoEditorScreen({
         <Card title="Moves">
           <p className={HINT}>
             {moves.length} Moves, davon {goldCount} Gold Moves. Zeiten in Musikzeit (Move-Zeit plus
-            Offset).
+            Offset). Beim Abspielen leuchtet der aktuelle Move in Songfarbe.
           </p>
-          <ol aria-label="Timeline" className="-mx-1 flex gap-3 overflow-x-auto px-1 pt-1 pb-2">
+          <ol
+            ref={timelineRef}
+            aria-label="Timeline"
+            className="-mx-1 flex gap-3 overflow-x-auto px-1 pt-1 pb-2"
+          >
             {moves.map((m, i) => (
               <li key={`${m.timeMs}-${i}`} className="shrink-0">
                 <button
                   type="button"
                   aria-pressed={i === sel}
+                  aria-current={i === nowIndex ? "true" : undefined}
                   aria-label={`Move ${i + 1}, ${formatMoveTime(moveAudioMs(choreo, i))}${m.gold ? ", Gold Move" : ""}`}
                   onClick={() => setSelected(i)}
                   className={cn(
-                    "flex w-24 flex-col items-center gap-1 rounded-2xl border-4 bg-black/25 p-1.5 text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gold",
+                    "flex w-24 flex-col items-center gap-1 rounded-2xl border-4 p-1.5 text-white focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gold",
+                    i === nowIndex ? "glow-song bg-song/60" : "bg-black/25",
                     i === sel ? "border-white" : m.gold ? "border-gold" : "border-white/20",
                   )}
                 >
@@ -294,6 +304,15 @@ export function ChoreoEditorScreen({
             ))}
           </ol>
         </Card>
+
+        <EditorPreview
+          key={rate}
+          song={working}
+          selected={sel}
+          onNow={setNowIndex}
+          click={click}
+          onClickChange={setClick}
+        />
 
         <div className="grid gap-4 landscape:grid-cols-2">
           {move && (

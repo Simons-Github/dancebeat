@@ -7,19 +7,19 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status                     | Empfohlenes Modell                                                    |
-| -------------------------------------------- | -------------------------- | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                         | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
-| 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d-1, 8d-2a ✅) | Opus                                                                  |
-| 9. Typen und Lint                            | ✅                         | –                                                                     |
-| 10. Spotify                                  | ⏳                         | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
+| Etappe                                       | Status                            | Empfohlenes Modell                                                    |
+| -------------------------------------------- | --------------------------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                                | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                                | Sonnet                                                                |
+| 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5)        | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ✅                                | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)             | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)             | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)             | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d-1, 8d-2a, 8d-2b ✅) | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                                | –                                                                     |
+| 10. Spotify                                  | ⏳                                | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                                | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
 
@@ -426,7 +426,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b umgesetzt)
 
 Aufteilung:
 
@@ -507,7 +507,27 @@ Aufteilung:
   - **Gerätetest 8d-2a (offen):**
     - [ ] Zeit-Knöpfe und Einfügen im Hoch- und Querformat erreichbar, Hinweis lesbar
     - [ ] Verschobene und eingefügte Moves treffen im Spiel die Musik
-- **8d-2b (offen):** Abspielen mit Audio-Vorschau.
+- **8d-2b Abspielen mit Audio-Vorschau – umgesetzt, Gerätetest offen.** Karte „Vorschau“ unter
+  der Timeline: „Abspielen“/„Stopp“, „Ab Move N abspielen“ (zwei Beats vor dem gewählten Move,
+  mit Latenz und Sync-Offset wie im Spiel), Musikzeit-Anzeige, Schalter „Klick bei jedem Move“
+  (Gold Moves klingen anders; Klick auf der Audioposition, Markierung auf der Spielzeit). Der aktuelle Move leuchtet in der Timeline und wird
+  hineingescrollt. Änderungen wirken während der Wiedergabe sofort; ein Tempo-Wechsel stoppt und
+  baut die Quelle neu. Datei, URL und YouTube (sichtbarer Player, Hinweis bei blockiertem Start);
+  Spotify gesperrt (Etappe 10). Stopp bei verborgener Seite, Songende und Verlassen; Wake Lock.
+  Details: [architecture.md](architecture.md#choreografie-editor-etappe-8d-1).
+  - Logik `previewStartAudioMs`, `currentMoveIndex`, `dueMoves`, `scrollIntoBoxDelta` in
+    `src/lib/editorPreview.ts`; Tests `editorPreview.test.ts` und
+    `choreo-editor-screen.test.tsx` (Fake-Quelle, Fake-rAF). Kein Formatwechsel.
+  - Bekannte Grenze: Klick und Markierung laufen in der rAF-Schleife und kommen bis etwa einen
+    Frame (~16 ms) nach der Move-Zeit; bei Schritten über 250 ms Spielzeit (Seek, Ruckler) fällt
+    der Klick aus.
+  - **Gerätetest 8d-2b (offen):**
+    - [ ] Klick hörbar und sitzt auf der Musik (Beat bzw. Move-Zeit), auch mit Latenz und
+          Sync-Offset ≠ 0; Markierung entspricht der Pikto-Zeit im Spiel
+    - [ ] Start auf iOS mit Datei, URL und YouTube (direkt im Tipp, Hinweis bei Blockade)
+    - [ ] Tempo-Wechsel: Wiedergabe stoppt, neues Tempo hörbar, Klicks passen weiter
+    - [ ] Display sperren oder App wechseln → Wiedergabe stoppt
+    - [ ] Lautstärke aus den Einstellungen gilt für Musik und Klick
 
 Ursprüngliche Schritte:
 
@@ -564,3 +584,4 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | N13 | Beat-Puls im Spiel (`beatsPerPulse`) begrenzt nach Song-BPM, nicht nach `bpm × playbackRate`: bei Rate > 1 über 3 Hz möglich | 11     |
 | N14 | Editor: jede Änderung (Gold, Offset) baut alle Strichfiguren der Timeline neu; bei langen Video-Choreografien spürbar?       | 11     |
 | N15 | Spiel und Sync-Test rechnen mit `playbackRate`, auch wenn die Quelle sie ignoriert (YouTube, Spotify)                        | 11     |
+| N16 | YouTube: Pause/Weiter direkt im Player wird nicht gemeldet (Sync-Test, Editor-Vorschau zeigen weiter „Stopp“)                | 11     |

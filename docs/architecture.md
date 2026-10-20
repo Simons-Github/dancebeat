@@ -275,6 +275,9 @@ UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 | Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden                        |
 | Audio-URL                      | vom Nutzer eingegebene Adresse        | in der Aufstellhilfe mit Hostname benannt |
 
+Sync-Test und Choreografie-Editor (Karte „Vorschau“, Etappe 8d-2b) laden dieselben Quellen
+(YouTube-Skript und -Player, Audio-URL) beim Öffnen und nennen sie dort ebenfalls.
+
 Der Dialog „Song hinzufügen“ ruft selbst nichts ab, nennt aber schon beim Anlegen den Host der
 Audio-URL bzw. youtube-nocookie.com als spätere Gegenstelle.
 
@@ -310,7 +313,8 @@ und dass die Erkennung vollständig auf dem Gerät läuft, bei YouTube-Songs zus
 Adresse; beide mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Der Sync-Test
 (`/sync/$songId`) startet keine Kamera; er nennt per `PrivacyNote camera={false}` nur den Abruf
 der Songquelle (YouTube bzw. Host der Audio-URL, bei lokalen Dateien nichts). Spotify-Songs
-lädt er nicht (folgt mit Etappe 10).
+lädt er nicht (folgt mit Etappe 10). Ebenso die Vorschau im Choreografie-Editor (`/edit/$songId`,
+Etappe 8d-2b).
 
 **Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
 selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gibt keine Anfrage an
@@ -464,8 +468,48 @@ Browser (`beforeunload`).
 - Der Offset verschiebt die Moves gegen die Musik; die Geräteverzögerung bleibt Sache des
   Sync-Tests (`syncOffsetMs`). YouTube (N10) und Spotify ignorieren das Tempo; der Editor sperrt die Tempo-Knöpfe dort und
   nennt den Grund.
-- Kein Audio, keine Kamera, keine externen Abrufe. Kein Formatwechsel (siehe
+- Keine Kamera. Kein Formatwechsel (siehe
   [choreography-format.md](choreography-format.md#editor)).
+- Etappe 8d-2b, Karte „Vorschau“ (`src/components/editor/EditorPreview.tsx`, unter der Timeline):
+  „Abspielen“ (ab `startOffsetMs`, wie der Sync-Test) bzw. „Stopp“, „Ab Move N abspielen“ (zwei
+  Beats vor dem gewählten Move, umgerechnet mit `audioTimeMs` und denselben Offsets wie im Spiel,
+  nie vor `startOffsetMs`; während der Wiedergabe nur ein Seek), Anzeige „Musikzeit“ und Schalter
+  „Klick bei jedem Move“ (an, nicht gespeichert). Quelle über `useAudioClock` mit dem geteilten
+  Audio-Element; `seek` und `play()` laufen synchron im Tipp (iOS, YouTube). YouTube zeigt den
+  Player sichtbar (mindestens 200 × 200 px) und meldet einen blockierten Start („Tippe direkt auf
+  das Video“, `onExternalStart`); Spotify ist gesperrt (folgt mit Etappe 10, keine Quelle).
+  - Eine rAF-Schleife liest Moves und Offsets der Arbeitskopie über Refs; Änderungen (Offset,
+    Verschieben, Einfügen, Löschen, Gold) wirken also sofort ohne Neustart. Pure Logik in
+    `src/lib/editorPreview.ts`: `previewStartAudioMs`, `currentMoveIndex`, `dueMoves`,
+    `tickTimeMs`, `scrollIntoBoxDelta`.
+  - Zwei Zeitachsen: Die Markierung folgt der Spielzeit (`timeMs()` aus `useAudioClock`, mit
+    Latenz, `syncOffsetMs` und `choreo.offsetMs`), wie die Piktogramme im Spiel. Der Klick ist
+    selbst Audio und hat dieselbe Ausgabeverzögerung wie die Musik; er folgt deshalb der
+    Audioposition minus `choreo.offsetMs` (`tickTimeMs` = Spielzeit + Latenz + Sync-Offset) und
+    sitzt direkt auf der Musik.
+  - Klick: `dueMoves` liefert die Moves mit `prev < timeMs ≤ jetzt`. Nach Start oder Seek beginnt
+    das Intervall knapp vor dem Ziel (`SEEK_TICK_EPSILON_MS`), ein Move genau am Startpunkt klickt
+    also. Nach einer Offset-Änderung, bei einem Rücksprung oder einem Schritt über
+    `TICK_MAX_GAP_MS` (250 ms) klickt nichts, damit übersprungene Moves keine Klicksalve auslösen.
+    Normaler Move `sfx.click`, Gold Move `sfx.beep(true)`; `resumeSfx()` im Start-Tipp weckt den
+    AudioContext. Der Klick kommt im nächsten Frame nach der Move-Zeit (bis etwa ein Frame
+    später). Der Schalter „Klick bei jedem Move“ liegt im Editor und übersteht den Tempo-Wechsel.
+  - Aktueller Move: Der Editor bekommt den Index per `onNow` nur bei Änderung (kein setState pro
+    Frame), markiert die Karte (`aria-current`, Songfarbe mit Glow, getrennt von Auswahl und Gold)
+    und scrollt die Timeline waagerecht nach (`scrollBy`, bei `prefers-reduced-motion` ohne
+    Animation).
+  - Angezeigte Zeit: Spielzeit plus `choreo.offsetMs`, also dieselbe Musikzeit wie bei den Move-Karten
+    (ohne Latenz und Sync-Offset). Klickt ein Move, steht dort seine Zeit. Geschrieben per
+    `textContent`, nicht über React.
+  - Start: Solange `play()` aussteht, zeigt die Karte „Stopp“ (ein später erfülltes `play()`
+    wird wieder pausiert); bei YouTube bleibt nach einer Ablehnung der Hinweis „Tippe direkt auf
+    das Video“ beim nächsten Versuch stehen.
+  - Tempo: `playbackRate` wird beim Anlegen der Quelle festgelegt. Der Editor rendert die Vorschau
+    mit `key` = Tempo, ein Tempo-Wechsel stoppt also und baut die Quelle mit dem neuen Tempo neu.
+  - Stopp bei `visibilitychange` (verborgen), am Songende (`onEnded`) und beim Verlassen (der Hook
+    zerstört die Quelle). Wake Lock während der Wiedergabe.
+  - Externe Abrufe: Die Quelle lädt beim Öffnen des Editors; die Karte nennt sie per
+    `PrivacyNote camera={false}` (Host der Audio-URL bzw. YouTube/youtube-nocookie.com).
 
 ## Messwerte
 

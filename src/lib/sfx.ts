@@ -9,6 +9,19 @@ export function setSfxVolume(v: number) {
   volume = Math.max(0, Math.min(1, v));
 }
 
+/**
+ * Resumes the shared AudioContext. Call synchronously inside a tap when effects follow later
+ * without a gesture (iOS keeps a suspended context silent otherwise). Never throws.
+ */
+export function resumeSfx() {
+  try {
+    const c = sharedAudioContext();
+    if (c && c.state === "suspended") void c.resume().catch(() => {});
+  } catch {
+    /* */
+  }
+}
+
 function tone(freq: number, dur: number, type: OscillatorType, delay = 0, gain = 0.15) {
   const c = sharedAudioContext();
   if (!c || volume === 0) return;
