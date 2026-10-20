@@ -1,4 +1,5 @@
 import { QueryClient } from "@tanstack/react-query";
+import { SONGS_QUERY_KEY } from "@/hooks/useSongLibrary";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
 import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
@@ -12,6 +13,7 @@ import { makeChoreo, makeSong } from "./fixtures";
 
 const library = vi.hoisted(() => ({ songs: [] as Song[] }));
 vi.mock("@/hooks/useSongLibrary", () => ({
+  SONGS_QUERY_KEY: ["songs"],
   useSongLibrary: () => ({ songs: library.songs, loading: false }),
 }));
 /** In-memory repository over library.songs (the game stores the best result through it). */
@@ -106,11 +108,13 @@ vi.mock("@/lib/mediapipePoseEstimator", () => ({
 
 const SONG_ID = "song-1";
 let router: ReturnType<typeof createRouter>;
+let queryClient: QueryClient;
 
 async function renderAt(path: string) {
+  queryClient = new QueryClient();
   router = createRouter({
     routeTree,
-    context: { queryClient: new QueryClient() },
+    context: { queryClient },
     history: createMemoryHistory({ initialEntries: [path] }),
   });
   await act(async () => {
@@ -279,6 +283,17 @@ describe("Spielscreen (Simulationsmodus)", () => {
     expect(r.newHighscore).toBe(true);
     expect(library.songs[0]).toMatchObject({ highscore: 4000, stars: 3 });
     expect(screen.getByTestId("new-highscore")).toBeInTheDocument();
+  });
+
+  it("Nach dem Speichern ist die gecachte Song-Liste veraltet und wird nicht sofort neu geladen", async () => {
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    queryClient.setQueryData(SONGS_QUERY_KEY, library.songs);
+    await advance(5000);
+    for (let i = 0; i < 40; i++) await advance(100);
+    expect(path()).toBe(`/result/${SONG_ID}`);
+    const state = queryClient.getQueryState(SONGS_QUERY_KEY);
+    expect(state?.isInvalidated).toBe(true);
+    expect(state?.fetchStatus).toBe("idle");
   });
 
   it("Speicherfehler beim Highscore: Ergebnis erscheint trotzdem", async () => {

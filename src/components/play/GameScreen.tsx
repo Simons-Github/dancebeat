@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useReducedMotion } from "framer-motion";
 import { ArrowLeft, Home, Pause, Settings } from "lucide-react";
@@ -20,6 +21,7 @@ import { useAudioClock } from "@/hooks/useAudioClock";
 import { useDeviceMotion } from "@/hooks/useDeviceMotion";
 import { usePoseTracking, type FrameInfo } from "@/hooks/usePoseTracking";
 import { useScoring } from "@/hooks/useScoring";
+import { SONGS_QUERY_KEY } from "@/hooks/useSongLibrary";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { PlayRefusedError } from "@/lib/audio/errors";
 import { effectivePlaybackRate } from "@/lib/audio/rate";
@@ -175,6 +177,7 @@ export function GameScreen({
       mountedRef.current = false;
     };
   }, []);
+  const queryClient = useQueryClient();
   const finishRef = useRef(() => {});
   finishRef.current = () => {
     const snap = scoring.getSnapshot();
@@ -185,6 +188,9 @@ export function GameScreen({
     }
     void recordResultSafely(songRepository, song.id, snap.score, snap.stars).then(
       ({ newHighscore }) => {
+        // The result was written past useSongLibrary: mark the cached list stale so the next
+        // screen reloads it. No refetch now, it would hand this still-mounted screen new objects.
+        void queryClient.invalidateQueries({ queryKey: SONGS_QUERY_KEY, refetchType: "none" });
         // Left the game while saving (e.g. back button): stay where the player went.
         if (!mountedRef.current) return;
         setLastResult({

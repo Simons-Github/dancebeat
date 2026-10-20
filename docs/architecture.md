@@ -303,6 +303,19 @@ Abbrechen im Countdown ──▶ /setup/$songId
 Bibliothek: `list`, `get`, `save`, `delete`, `getAudio`, `export`, `import`. Vorerst gibt es nur
 die IndexedDB-Implementierung; eine Server-Variante kann dieselbe Schnittstelle erfüllen.
 
+**useSongLibrary** (`src/hooks/useSongLibrary.ts`) hält die Song-Liste im TanStack-Query-Cache
+unter `SONGS_QUERY_KEY` (`["songs"]`); alle Screens teilen diesen Eintrag. Die Abfrage (Demos
+seeden, dann `list()`) läuft einmal pro Seitenaufruf: `staleTime` und `gcTime` unendlich, kein
+Neuladen bei Fokus, Reconnect oder Mount, kein Retry. Ein Neuladen mitten im Spiel würde den
+Screens neue Song-Objekte geben und Effekte neu auslösen. `save`, `remove` und `updateDetails`
+laden die Liste nach dem Schreiben neu und lösen erst auf, wenn die Screens die neue Liste haben;
+scheitert nur das Neuladen, bleibt es eine Warnung („Reloading the library failed“), kein
+Schreibfehler. Schreibt Code am Hook vorbei (Highscore am Spielende in `GameScreen`), markiert er
+den Eintrag per `invalidateQueries` mit `refetchType: "none"` als veraltet; der nächste Mount lädt
+neu. Änderungen aus einem anderen Tab erscheinen erst nach einem Neuladen der Seite.
+Schlägt das erste `list()` fehl, bleibt `loading` gesetzt; der nächste Screen-Mount versucht es
+erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle zum Tauschen.
+
 - Gelesene Einträge werden mit zod geprüft; ungültige werden übersprungen (nicht gelöscht).
 - `save` prüft vor dem Schreiben und setzt `updatedAt`. Song und Audio werden in einer
   Transaktion geschrieben, `delete` entfernt beides in einer Transaktion.

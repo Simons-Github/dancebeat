@@ -1,4 +1,6 @@
 import { IDBFactory } from "fake-indexeddb";
+import { createElement, type ReactNode } from "react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -320,12 +322,65 @@ describe("useSongLibrary", () => {
     localStorage.setItem(DELETED_KEY, JSON.stringify([PINK, SUNSET]));
   });
 
-  async function renderLibrary() {
+  /** Fresh cache per test; pass a client to share it between hook instances. */
+  async function renderLibrary(client = new QueryClient()) {
     const { useSongLibrary } = await import("@/hooks/useSongLibrary");
-    const hook = renderHook(() => useSongLibrary());
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+    const hook = renderHook(() => useSongLibrary(), { wrapper });
     await waitFor(() => expect(hook.result.current.loading).toBe(false));
     return hook;
   }
+
+  it("loads the library once for all hook instances under one client", async () => {
+    await repo.save(makeSong());
+    const list = vi.spyOn(repo, "list");
+    const client = new QueryClient();
+    const a = await renderLibrary(client);
+    const b = await renderLibrary(client);
+    expect(list).toHaveBeenCalledTimes(1);
+    expect(b.result.current.songs).toBe(a.result.current.songs);
+    expect(b.result.current.songs).toHaveLength(1);
+  });
+
+  it("a save() through one instance updates the songs of the other", async () => {
+    const client = new QueryClient();
+    const a = await renderLibrary(client);
+    const b = await renderLibrary(client);
+    expect(b.result.current.songs).toEqual([]);
+    const s = makeSong();
+    await act(() => a.result.current.save(s));
+    expect(b.result.current.songs.map((x) => x.id)).toEqual([s.id]);
+  });
+
+  it("keeps the same empty songs array while loading", async () => {
+    const { useSongLibrary } = await import("@/hooks/useSongLibrary");
+    const client = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+    const hook = renderHook(() => useSongLibrary(), { wrapper });
+    const first = hook.result.current.songs;
+    expect(hook.result.current.loading).toBe(true);
+    hook.rerender();
+    expect(hook.result.current.songs).toBe(first);
+    await waitFor(() => expect(hook.result.current.loading).toBe(false));
+  });
+
+  it("stays loading and warns when the first list() fails", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.spyOn(repo, "list").mockRejectedValueOnce(new Error("read failed"));
+    const { useSongLibrary } = await import("@/hooks/useSongLibrary");
+    const client = new QueryClient();
+    const wrapper = ({ children }: { children: ReactNode }) =>
+      createElement(QueryClientProvider, { client }, children);
+    const hook = renderHook(() => useSongLibrary(), { wrapper });
+    await waitFor(() =>
+      expect(warn).toHaveBeenCalledWith("Loading the library failed:", expect.any(Error)),
+    );
+    expect(hook.result.current.loading).toBe(true);
+    expect(hook.result.current.songs).toEqual([]);
+    warn.mockRestore();
+  });
 
   it("remove() deletes the song and marks a demo as deleted", async () => {
     localStorage.setItem(DELETED_KEY, JSON.stringify([SUNSET]));

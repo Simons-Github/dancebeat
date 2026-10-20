@@ -1,4 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import {
+  notifyManager,
+  useQuery,
+  useQueryClient,
+  type QueryFunctionContext,
+} from "@tanstack/react-query";
 import { songRepository } from "@/lib/library/repository";
 import { markDemoDeleted, seedDemos } from "@/data/demo";
 import type { Song } from "@/lib/types";
@@ -12,18 +18,51 @@ export interface SongDetailsPatch {
   startOffsetMs?: number;
 }
 
+/** Query key of the song list; one shared cache entry for every screen. */
+export const SONGS_QUERY_KEY = ["songs"] as const;
+
+/** Stable reference while nothing is loaded, so effects depending on `songs` do not re-run. */
+const NO_SONGS: Song[] = [];
+
+/**
+ * Seeds the demos, then lists the library. The only place that reads the library: a server
+ * backend would replace this function, not the screens.
+ */
+async function loadSongs({ client, queryKey }: QueryFunctionContext<typeof SONGS_QUERY_KEY>) {
+  await seedDemos(songRepository).catch((e: unknown) => console.warn("Seeding demos failed:", e));
+  try {
+    return await songRepository.list();
+  } catch (e) {
+    // Reloads after a write report their own failure (see refreshAfterWrite).
+    if (client.getQueryData(queryKey) === undefined) console.warn("Loading the library failed:", e);
+    throw e;
+  }
+}
+
 export function useSongLibrary() {
-  const [songs, setSongs] = useState<Song[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
+  const { data } = useQuery({
+    queryKey: SONGS_QUERY_KEY,
+    queryFn: loadSongs,
+    // Loaded once per page load. Writes go through this hook and refetch explicitly; a background
+    // refetch mid-game would hand screens new Song objects and re-trigger their effects. Changes
+    // from another tab show after a reload.
+    staleTime: Infinity,
+    gcTime: Infinity,
+    refetchOnWindowFocus: false,
+    refetchOnReconnect: false,
+    retry: false,
+  });
+
+  /**
+   * Refetches the list; rejects when it fails. Resolves only after the observers were notified,
+   * so a caller continuing after `await save()` already renders with the new list (React Query
+   * delivers updates in a later task, see notifyManager).
+   */
   const refresh = useCallback(async () => {
-    setSongs(await songRepository.list());
-    setLoading(false);
-  }, []);
-  useEffect(() => {
-    seedDemos(songRepository)
-      .catch((e: unknown) => console.warn("Seeding demos failed:", e))
-      .finally(refresh);
-  }, [refresh]);
+    await queryClient.refetchQueries({ queryKey: SONGS_QUERY_KEY }, { throwOnError: true });
+    await new Promise<void>((resolve) => notifyManager.schedule(resolve));
+  }, [queryClient]);
 
   /** Reload after a successful write; a failing reload must not look like a failed write. */
   const refreshAfterWrite = useCallback(async () => {
@@ -68,5 +107,13 @@ export function useSongLibrary() {
   );
   /** JSON text of the song's choreography export (no audio). */
   const exportChoreo = useCallback((s: Song) => songRepository.export(s.id), []);
-  return { songs, loading, save, remove, updateDetails, exportChoreo, refresh };
+  return {
+    songs: data ?? NO_SONGS,
+    loading: data === undefined,
+    save,
+    remove,
+    updateDetails,
+    exportChoreo,
+    refresh,
+  };
 }

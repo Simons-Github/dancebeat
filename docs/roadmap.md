@@ -96,6 +96,13 @@ W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video sta
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
 ✅ W12 (Etappe 2, 3b, 7b-1): externe Abrufe in der UI benannt; MediaPipe-WASM und Pose-Modell
 kommen seit 7b-1 von der eigenen Adresse, der Hinweis nennt sie nicht mehr.
+✅ N6, N11 (Etappe 11g): `useSongLibrary` liest die Bibliothek über TanStack Query (ein Eintrag
+`SONGS_QUERY_KEY` für alle Screens). Seed und `list()` laufen einmal pro Seitenaufruf statt bei
+jedem Screen-Wechsel; Schreiben lädt die Liste danach neu, ein Fehler dabei bleibt eine Warnung.
+Der Highscore-Schreibzugriff am Spielende markiert die Liste als veraltet (sonst zeigte die
+Bibliothek den alten Highscore).
+Rückgabe des Hooks unverändert, keine Screen-Änderungen. `index.html` ist Prettier-konform. Kein
+Gerätetest nötig.
 
 ## Etappen
 
@@ -747,12 +754,10 @@ Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
 Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
-| ID  | Befund                                                                          | Etappe |
-| --- | ------------------------------------------------------------------------------- | ------ |
-| W6  | Spotify: Code erledigt (10a, 10b), Gerätetest mit echtem Konto offen            | 10b    |
-| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                          | 3b     |
-| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)          | 3b     |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                        | 11     |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                    | 11     |
-| N6  | `@tanstack/react-query` bisher ungenutzt                                        | 11     |
-| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal) | 11     |
+| ID  | Befund                                                                 | Etappe |
+| --- | ---------------------------------------------------------------------- | ------ |
+| W6  | Spotify: Code erledigt (10a, 10b), Gerätetest mit echtem Konto offen   | 10b    |
+| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                 | 3b     |
+| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen) | 3b     |
+| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht               | 11     |
+| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen           | 11     |
