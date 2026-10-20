@@ -11,9 +11,10 @@ export interface AudioClockOptions {
   volume: number;
   /**
    * Returns the shared, gesture-unlocked element for file and URL sources (see
-   * src/lib/audio/unlock.ts). Called inside the effect, never during render.
+   * src/lib/audio/unlock.ts). Called inside the effect, never during render, and only for file
+   * and URL songs (with the song's source type).
    */
-  element?: () => HTMLAudioElement;
+  element?: (type: "local" | "url") => HTMLAudioElement;
   /**
    * Returns the element a YouTube video is shown in (null: hidden player). Called inside the
    * effect, never during render.
@@ -71,10 +72,13 @@ export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
     let cancelled = false;
     const { create, element, container } = latest.current;
     const box = container?.() ?? null;
+    const type = song.source.type;
+    const el =
+      !create && element && (type === "local" || type === "url") ? element(type) : undefined;
     const s = create
       ? create(song)
       : createSource(song, {
-          ...(element ? { element: element() } : {}),
+          ...(el ? { element: el } : {}),
           ...(box ? { container: box } : {}),
         });
     src.current = s;

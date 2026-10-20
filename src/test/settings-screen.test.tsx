@@ -3,6 +3,7 @@ import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/rea
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { resetAudioUnlockForTests } from "@/lib/audio/unlock";
 import { routeTree } from "@/routeTree.gen";
 
 async function renderSettings() {
@@ -66,5 +67,26 @@ describe("Einstellungen", () => {
     expect(
       screen.queryByRole("button", { name: "Gespeicherte Kamera vergessen" }),
     ).not.toBeInTheDocument();
+  });
+
+  it("Hinweis zum Regler nur, wenn das Gerät media.volume ignoriert", async () => {
+    const hint = /regelt der Regler nur eigene Audiodateien/;
+    await renderSettings();
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    cleanup();
+    resetAudioUnlockForTests();
+    const volume = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "volume");
+    Object.defineProperty(HTMLMediaElement.prototype, "volume", {
+      configurable: true,
+      get: () => 1,
+      set: () => {},
+    });
+    try {
+      await renderSettings();
+      expect(await screen.findByText(hint)).toBeInTheDocument();
+    } finally {
+      if (volume) Object.defineProperty(HTMLMediaElement.prototype, "volume", volume);
+      resetAudioUnlockForTests();
+    }
   });
 });

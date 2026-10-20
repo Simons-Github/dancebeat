@@ -67,6 +67,13 @@ YouTube-Song mit Tempo)?
 ✅ N14 (Etappe 11d): Der Editor baut Strichfiguren nicht mehr bei jeder Änderung neu.
 `createMoveFigureCache` (`pikto.ts`) behält die Figur eines Moves, solange `frames` und die Zeiten
 von Move und Vorgänger gleich bleiben; Gold umschalten zeichnet keine Karte neu.
+✅ Lautstärke am iPhone (Etappe 11e): iOS ignoriert `media.volume`. Auf solchen Geräten laufen
+Datei-Songs über ein zweites, per Web Audio geroutetes Element (`GainNode`), der Regler wirkt
+über den Gain; URL-Songs bleiben ungeroutet (CORS), dafür ein Hinweis in den Einstellungen. Läuft
+der `AudioContext` nach dem Start nicht, gilt der Start als blockiert („Zum Starten tippen“).
+Gerätetest offen: Regler am iPhone mit Datei-Song hörbar? Übersteuerung weg? URL-Song nach einem
+Datei-Song in derselben Sitzung noch hörbar? Rückkehr aus Hintergrund/Sperrbildschirm → „Zum
+Starten tippen“ oder spielt? Sync-Test-Offset im Vergleich zu vorher?
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
@@ -208,8 +215,10 @@ Gerätetest-Befunde 3b (iPhone, 2026-10-19):
 - Ein Video zeigte am iPhone „Dieses Video ist nicht verfügbar“, am MacBook lief es. Ein zweites
   Video lief am iPhone; vermutlich sperrt der Rechteinhaber die Einbettung auf Mobilgeräten. Kein
   App-Fehler.
-- Musik am iPhone übersteuert bzw. viel zu laut (lokale Datei und URL). Offen, noch nicht
-  untersucht.
+- Musik am iPhone übersteuert bzw. viel zu laut (lokale Datei und URL). Ursache: iOS ignoriert
+  `HTMLMediaElement.volume`, die Musik lief immer mit 100 %, nur die Effekte folgten dem Regler.
+  **Behoben in 11e** für lokale Dateien (Gain über Web Audio); bei URL und YouTube gelten die
+  Lautstärketasten. Gerätetest offen.
 
 ### 4. Ergebnis-Screen und Highscores ✅
 

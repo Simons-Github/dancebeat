@@ -1,6 +1,7 @@
 import { songRepository } from "../library/repository";
 import { PlayRefusedError } from "./errors";
 import { effectivePlaybackRate } from "./rate";
+import { musicGainFor, sharedAudioContext } from "./unlock";
 import type { Song } from "../types";
 
 export { PlayRefusedError };
@@ -81,6 +82,12 @@ class SmoothClock {
  * does the actual loading). A real error still rejects.
  */
 export const LOAD_TIMEOUT_MS = 5000;
+
+/**
+ * Element routed through Web Audio (iOS, see unlock.ts): after `play()` the AudioContext gets this
+ * long to reach "running". Otherwise the start counts as refused (the clock would run in silence).
+ */
+export const CONTEXT_RESUME_TIMEOUT_MS = 500;
 
 class ElementSource implements AudioSource {
   lowPrecision = false;
@@ -169,6 +176,16 @@ class ElementSource implements AudioSource {
     };
   }
   async play() {
+    // Routed element: resume the context synchronously, while a tap gesture is still active.
+    const ctx = musicGainFor(this.el) ? sharedAudioContext() : null;
+    let resumed: Promise<void> = Promise.resolve();
+    if (ctx) {
+      try {
+        resumed = ctx.resume().catch(() => {});
+      } catch {
+        /* checked below via ctx.state */
+      }
+    }
     try {
       await this.el.play();
     } catch (e: unknown) {
@@ -179,6 +196,23 @@ class ElementSource implements AudioSource {
       throw new Error(this.errorMessage());
     }
     if (this.destroyed) return;
+    if (ctx) {
+      const running = () => ctx.state === "running";
+      if (!running()) {
+        let timeout = 0;
+        await Promise.race([
+          resumed,
+          new Promise<void>((res) => (timeout = window.setTimeout(res, CONTEXT_RESUME_TIMEOUT_MS))),
+        ]);
+        clearTimeout(timeout);
+        if (this.destroyed) return;
+        if (!running()) {
+          // The element would play into a suspended graph: silence while the clock runs.
+          this.el.pause();
+          throw new PlayRefusedError();
+        }
+      }
+    }
     this.clock.sync(this.el.currentTime * 1000, true, true);
     clearInterval(this.timer);
     this.timer = window.setInterval(
@@ -201,6 +235,9 @@ class ElementSource implements AudioSource {
   }
   setVolume(v: number) {
     this.el.volume = v;
+    // iOS ignores `volume`; a routed element is controlled through its gain instead.
+    const gain = musicGainFor(this.el);
+    if (gain) gain.gain.value = v;
   }
   onEnded(cb: () => void) {
     this.el.onended = cb;

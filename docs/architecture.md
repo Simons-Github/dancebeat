@@ -158,6 +158,20 @@ wegzuwerfen. Die Soundeffekte (`src/lib/sfx.ts`) nutzen denselben `AudioContext`
 Browser `play()` trotzdem ab (z. B. nach Neuladen auf `/play`), zeigt das Spiel „Zum Starten
 tippen“ und ruft `play()` in diesem Tipp auf. Ob das auf iOS reicht, zeigt nur der Gerätetest.
 
+**Lautstärke auf iOS:** iOS Safari ignoriert `HTMLMediaElement.volume` (Setter ohne Wirkung,
+liest 1 zurück). `mediaVolumeIgnored()` prüft das einmal beim ersten Aufruf. Auf solchen Geräten
+gibt `claimSharedElement("local")` ein zweites gemeinsames Element zurück, das einmalig über
+`createMediaElementSource → GainNode → destination` am gemeinsamen `AudioContext` hängt;
+`setVolume` setzt dann den Gain (`musicGainFor`). `unlockAudio()` entsperrt beide Elemente in
+derselben Geste. URL-Songs bleiben ungeroutet: Eine fremde URL ohne CORS-Header gäbe über
+`MediaElementSource` nur Stille aus (die URL-Quelle verlangt bewusst kein CORS), und das Routing
+lässt sich nicht rückgängig machen. Dort und bei YouTube gelten die Lautstärketasten; die
+Einstellungen sagen das. Beim gerouteten Element ruft `play()` synchron `ctx.resume()` auf;
+läuft der Kontext nach dem Start nicht binnen `CONTEXT_RESUME_TIMEOUT_MS` (500 ms), pausiert die
+Quelle und wirft `PlayRefusedError` (Zustand `blocked`, „Zum Starten tippen“), statt die Uhr in
+Stille laufen zu lassen. Über Web Audio kann sich die Ausgabelatenz leicht ändern: Sync-Test auf
+dem iPhone neu messen.
+
 ### Spielablauf
 
 ```

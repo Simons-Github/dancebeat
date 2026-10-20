@@ -3,10 +3,18 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { useAudioClock, type AudioClockOptions } from "@/hooks/useAudioClock";
 import { audioTimeMs, frameGameTimeMs, gameTimeMs, MAX_FRAME_AGE_MS } from "@/lib/audio/clock";
-import { createSource, PlayRefusedError, type AudioSource } from "@/lib/audio/sources";
+import {
+  CONTEXT_RESUME_TIMEOUT_MS,
+  createSource,
+  PlayRefusedError,
+  type AudioSource,
+} from "@/lib/audio/sources";
 import {
   claimSharedElement,
+  mediaVolumeIgnored,
+  musicGainFor,
   resetAudioUnlockForTests,
+  sharedAudioContext,
   sharedAudioElement,
   unlockAudio,
 } from "@/lib/audio/unlock";
@@ -421,6 +429,16 @@ describe("useAudioClock: Start von außen", () => {
     expect(api!.reportError).toBe(report);
   });
 
+  it("element-Fabrik erhält den Quelltyp des Songs", async () => {
+    const audio = document.createElement("audio");
+    const element = vi.fn((_type: "local" | "url") => audio);
+    const song = makeSong();
+    song.source = { type: "url", url: "https://example.org/e.mp3" };
+    const { unmount } = render(<Probe song={song} opts={{ latencyMs: 0, volume: 1, element }} />);
+    expect(element).toHaveBeenCalledWith("url");
+    unmount();
+  });
+
   it("Quellen ohne onExternalStart funktionieren unverändert", async () => {
     const src = fakeSource();
     render(
@@ -431,5 +449,148 @@ describe("useAudioClock: Start von außen", () => {
     );
     await flush();
     expect(api!.state).toBe("ready");
+  });
+});
+
+/** Minimal AudioContext with the routing graph the iOS volume path builds. */
+class FakeAudioContext {
+  state: AudioContextState = "suspended";
+  /** State `resume()` switches to; "suspended" models a context that never starts. */
+  resumeTo: AudioContextState = "running";
+  destination = {};
+  gainNode = { gain: { value: 1 }, connect: vi.fn() };
+  createMediaElementSource = vi.fn(() => ({ connect: vi.fn() }));
+  createGain = vi.fn(() => this.gainNode);
+  resume = vi.fn(async () => {
+    this.state = this.resumeTo;
+  });
+  createBufferSource = () => ({ buffer: null, connect: () => {}, start: () => {} });
+  createBuffer = () => ({});
+}
+const fakeCtx = () => sharedAudioContext() as unknown as FakeAudioContext;
+
+describe("Lautstärke bei ignoriertem media.volume (iOS)", () => {
+  const volume = Object.getOwnPropertyDescriptor(HTMLMediaElement.prototype, "volume");
+  /** iOS Safari: the volume setter is a no-op, the getter always reports 1. */
+  function ignoreMediaVolume() {
+    Object.defineProperty(HTMLMediaElement.prototype, "volume", {
+      configurable: true,
+      get: () => 1,
+      set: () => {},
+    });
+  }
+  afterEach(() => {
+    if (volume) Object.defineProperty(HTMLMediaElement.prototype, "volume", volume);
+    resetAudioUnlockForTests();
+    vi.unstubAllGlobals();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  async function routedSource() {
+    const el = claimSharedElement("local");
+    // A URL song on the routed element exercises the same ElementSource without IndexedDB.
+    const song = makeSong();
+    song.source = { type: "url", url: "https://example.org/r.mp3" };
+    const src = createSource(song, { element: el });
+    const loading = src.load();
+    await Promise.resolve();
+    el.dispatchEvent(new Event("loadedmetadata"));
+    await loading;
+    return { el, src };
+  }
+
+  it("Standard (jsdom): kein Routing, beide Typen erhalten das normale Element", () => {
+    const ctor = vi.fn();
+    vi.stubGlobal("AudioContext", ctor);
+    expect(mediaVolumeIgnored()).toBe(false);
+    const el = sharedAudioElement();
+    expect(claimSharedElement("local")).toBe(el);
+    expect(claimSharedElement("url")).toBe(el);
+    expect(musicGainFor(el)).toBeNull();
+    expect(ctor).not.toHaveBeenCalled();
+  });
+
+  it("ohne AudioContext bleibt es beim normalen Element", () => {
+    ignoreMediaVolume();
+    vi.stubGlobal("AudioContext", undefined);
+    expect(mediaVolumeIgnored()).toBe(true);
+    expect(claimSharedElement("local")).toBe(sharedAudioElement());
+  });
+
+  it("Dateien laufen über das geroutete Element (einmal verbunden), URLs über das normale", () => {
+    ignoreMediaVolume();
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    const local = claimSharedElement("local");
+    expect(local).not.toBe(sharedAudioElement());
+    expect(claimSharedElement("local")).toBe(local);
+    expect(claimSharedElement("url")).toBe(sharedAudioElement());
+    const ctx = fakeCtx();
+    expect(ctx.createMediaElementSource).toHaveBeenCalledTimes(1);
+    expect(ctx.createMediaElementSource).toHaveBeenCalledWith(local);
+    expect(ctx.gainNode.connect).toHaveBeenCalledWith(ctx.destination);
+    expect(musicGainFor(local)).toBe(ctx.gainNode);
+    expect(musicGainFor(sharedAudioElement())).toBeNull();
+  });
+
+  it("schlägt das Routing fehl, gibt es das normale Element", () => {
+    ignoreMediaVolume();
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    const ctx = fakeCtx();
+    ctx.createMediaElementSource.mockImplementation(() => {
+      throw new DOMException("x", "InvalidStateError");
+    });
+    expect(claimSharedElement("local")).toBe(sharedAudioElement());
+    expect(claimSharedElement("local")).toBe(sharedAudioElement());
+    expect(ctx.createMediaElementSource).toHaveBeenCalledTimes(1);
+  });
+
+  it("setVolume setzt den Gain des gerouteten Elements", async () => {
+    ignoreMediaVolume();
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    const { src } = await routedSource();
+    src.setVolume(0.3);
+    expect(fakeCtx().gainNode.gain.value).toBe(0.3);
+    src.destroy();
+  });
+
+  it("Entsperren spielt die stille Datei auf beiden Elementen an", () => {
+    ignoreMediaVolume();
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    const play = vi.spyOn(HTMLMediaElement.prototype, "play");
+    unlockAudio();
+    const local = claimSharedElement("local");
+    expect(play).toHaveBeenCalledTimes(2);
+    expect(play.mock.contexts).toContain(sharedAudioElement());
+    expect(play.mock.contexts).toContain(local);
+    expect(local.src.startsWith("data:audio/wav;base64,")).toBe(true);
+  });
+
+  it("play(): Kontext erreicht nie running → PlayRefusedError, Element pausiert", async () => {
+    ignoreMediaVolume();
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    vi.useFakeTimers();
+    const { el, src } = await routedSource();
+    const ctx = fakeCtx();
+    ctx.resumeTo = "suspended";
+    const pause = vi.spyOn(el, "pause");
+    const result = src.play().catch((e: unknown) => e);
+    expect(ctx.resume).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(CONTEXT_RESUME_TIMEOUT_MS);
+    expect(await result).toBeInstanceOf(PlayRefusedError);
+    expect(pause).toHaveBeenCalled();
+    src.destroy();
+  });
+
+  it("play(): Kontext läuft → normaler Start", async () => {
+    ignoreMediaVolume();
+    vi.stubGlobal("AudioContext", FakeAudioContext);
+    const { el, src } = await routedSource();
+    const pause = vi.spyOn(el, "pause");
+    await expect(src.play()).resolves.toBeUndefined();
+    expect(fakeCtx().resume).toHaveBeenCalled();
+    expect(fakeCtx().state).toBe("running");
+    expect(pause).not.toHaveBeenCalled();
+    src.destroy();
   });
 });

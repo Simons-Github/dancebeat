@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import { mediaVolumeIgnored } from "@/lib/audio/unlock";
 import { getStorageUsage, type StorageUsage } from "@/lib/library/storage";
 import { DIFFICULTIES, type Difficulty } from "@/lib/scoring";
 import { LATENCY_MAX, LATENCY_MIN, LATENCY_STEP, useSettings } from "@/lib/settings";
@@ -69,6 +70,12 @@ export function SettingsScreen() {
   const [volume, setVolume] = useState<number | null>(null);
   const [latency, setLatency] = useState<number | null>(null);
   const [usage, setUsage] = useState<StorageUsage | null | undefined>(undefined);
+  // iOS ignores the media element volume; probed in an effect (creates an Audio element).
+  const [volumeIgnored, setVolumeIgnored] = useState(false);
+
+  useEffect(() => {
+    setVolumeIgnored(mediaVolumeIgnored());
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -166,6 +173,12 @@ export function SettingsScreen() {
                 setVolume(null);
               }}
             />
+            {volumeIgnored && (
+              <p className={HINT}>
+                Auf diesem Gerät regelt der Regler nur eigene Audiodateien. Bei Audio-URLs und
+                YouTube gelten die Lautstärketasten.
+              </p>
+            )}
           </div>
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between gap-3">

@@ -8,11 +8,20 @@
  *
  * If `play()` is still refused later (page reloaded on /play, other browser rules), the game
  * shows "Zum Starten tippen" and calls `play()` inside that tap.
+ *
+ * iOS Safari ignores `HTMLMediaElement.volume` (the setter is a no-op, it reads back 1). On such
+ * devices file songs play through a second shared element that is routed through Web Audio
+ * (MediaElementSource → GainNode → destination), so the volume slider works via the gain.
  */
 
 let element: HTMLAudioElement | null = null;
 let context: AudioContext | null = null;
 let unlocked = false;
+let volumeIgnored: boolean | null = null;
+/** Element routed through `routedGain`; null until created (or when routing failed). */
+let routed: HTMLAudioElement | null = null;
+let routedGain: GainNode | null = null;
+let routingFailed = false;
 
 /** A 50 ms silent 8-bit mono WAV as data URI. */
 function silentWav(): string {
@@ -60,29 +69,81 @@ export function sharedAudioContext(): AudioContext | null {
 }
 
 /**
+ * True where the browser ignores `HTMLMediaElement.volume` (iOS Safari). Measured once on first
+ * call (never at module level) and cached.
+ */
+export function mediaVolumeIgnored(): boolean {
+  if (volumeIgnored !== null) return volumeIgnored;
+  try {
+    const probe = new Audio();
+    probe.volume = 0.5;
+    volumeIgnored = probe.volume !== 0.5;
+  } catch {
+    volumeIgnored = false;
+  }
+  return volumeIgnored;
+}
+
+/**
+ * The element file songs play through on volume-ignoring devices, connected once to
+ * MediaElementSource → GainNode → destination. Null where routing is not needed or failed.
+ */
+function routedAudioElement(): HTMLAudioElement | null {
+  if (routed) return routed;
+  if (routingFailed || !mediaVolumeIgnored()) return null;
+  const ctx = sharedAudioContext();
+  if (!ctx) return null;
+  const el = new Audio();
+  try {
+    // Allowed only once per element; the connection is permanent.
+    const node = ctx.createMediaElementSource(el);
+    const gain = ctx.createGain();
+    node.connect(gain);
+    gain.connect(ctx.destination);
+    routed = el;
+    routedGain = gain;
+  } catch {
+    routingFailed = true;
+    return null;
+  }
+  return routed;
+}
+
+/** Gain node the element's sound passes through (routed element only), else null. */
+export function musicGainFor(el: HTMLAudioElement): GainNode | null {
+  return el === routed ? routedGain : null;
+}
+
+/** Plays the silent clip on `el` (inside a gesture this lifts WebKit's per-element lock). */
+function unlockElement(el: HTMLAudioElement) {
+  // Only touch the element while it is not playing a song.
+  if (el.src && el.dataset["silent"] !== "1" && !el.paused) return;
+  try {
+    el.dataset["silent"] = "1";
+    el.src = silentWav();
+    const p = el.play();
+    void Promise.resolve(p)
+      .then(() => {
+        unlocked = true;
+        if (el.dataset["silent"] === "1") el.pause();
+      })
+      .catch(() => {
+        /* still locked; the game falls back to "Zum Starten tippen" */
+      });
+  } catch {
+    /* play() not implemented (tests) or refused synchronously */
+  }
+}
+
+/**
  * Must run synchronously inside a user gesture (click/tap handler). Safe to call repeatedly;
  * never throws.
  */
 export function unlockAudio(): void {
-  const el = sharedAudioElement();
-  // Only touch the element while it is not playing a song.
-  if (!el.src || el.dataset["silent"] === "1" || el.paused) {
-    try {
-      el.dataset["silent"] = "1";
-      el.src = silentWav();
-      const p = el.play();
-      void Promise.resolve(p)
-        .then(() => {
-          unlocked = true;
-          if (el.dataset["silent"] === "1") el.pause();
-        })
-        .catch(() => {
-          /* still locked; the game falls back to "Zum Starten tippen" */
-        });
-    } catch {
-      /* play() not implemented (tests) or refused synchronously */
-    }
-  }
+  unlockElement(sharedAudioElement());
+  // Volume-ignoring devices: the routed element needs its own unlock in the same gesture.
+  const r = routedAudioElement();
+  if (r) unlockElement(r);
   const ctx = sharedAudioContext();
   if (ctx) {
     try {
@@ -101,9 +162,14 @@ export function unlockAudio(): void {
 /** True once the silent clip actually played (only a hint; play() may still be refused). */
 export const isAudioUnlocked = () => unlocked;
 
-/** Hands the shared element over to a song: no silent clip, no leftovers from earlier songs. */
-export function claimSharedElement(): HTMLAudioElement {
-  const el = sharedAudioElement();
+/**
+ * Hands a shared element over to a song: no silent clip, no leftovers from earlier songs. File
+ * songs get the routed element on volume-ignoring devices. URL songs always get the plain one: a
+ * cross-origin URL without CORS headers would output silence through MediaElementSource (the URL
+ * source deliberately does not require CORS), and routing an element cannot be undone.
+ */
+export function claimSharedElement(type: "local" | "url" = "url"): HTMLAudioElement {
+  const el = (type === "local" ? routedAudioElement() : null) ?? sharedAudioElement();
   delete el.dataset["silent"];
   el.onended = null;
   el.onerror = null;
@@ -117,4 +183,8 @@ export function resetAudioUnlockForTests() {
   element = null;
   context = null;
   unlocked = false;
+  volumeIgnored = null;
+  routed = null;
+  routedGain = null;
+  routingFailed = false;
 }
