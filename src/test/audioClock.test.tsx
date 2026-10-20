@@ -265,6 +265,36 @@ describe("Audio-Entsperrung (iOS)", () => {
   });
 });
 
+describe("URL-Quelle: destroy während des Ladens", () => {
+  afterEach(() => {
+    resetAudioUnlockForTests();
+    vi.useRealTimers();
+  });
+
+  it("lässt das gemeinsame Element nach dem Lade-Timeout unberührt", async () => {
+    vi.useFakeTimers();
+    const el = claimSharedElement();
+    const song = makeSong();
+    song.source = { type: "url", url: "https://example.org/d.mp3" };
+    song.playbackRate = 0.75;
+    const src = createSource(song, { element: el });
+    const loading = src.load();
+    await Promise.resolve();
+    src.destroy();
+    await expect(loading).resolves.toBeUndefined();
+    // The next source (normal tempo) takes the element over.
+    el.defaultPlaybackRate = 1;
+    el.playbackRate = 1;
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(el.playbackRate).toBe(1);
+    expect(el.defaultPlaybackRate).toBe(1);
+    expect(el.onerror).toBeNull();
+    expect(el.onwaiting).toBeNull();
+    expect(el.onplaying).toBeNull();
+    expect(el.oncanplay).toBeNull();
+  });
+});
+
 describe("useAudioClock: Start von außen", () => {
   afterEach(() => {
     api = null;

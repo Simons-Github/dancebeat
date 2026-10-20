@@ -76,6 +76,9 @@ class ElementSource implements AudioSource {
   /** True while the element stalls for data (`waiting`); the clock holds until `playing`. */
   private waiting = false;
   private errorCb: (message: string) => void = () => {};
+  /** Pending `load()` timeout and its resolver; cleared and settled by `destroy()`. */
+  private loadTimeout = 0;
+  private settleLoad: (() => void) | null = null;
   constructor(
     public type: "local" | "url",
     private getUrl: () => Promise<string>,
@@ -103,20 +106,22 @@ class ElementSource implements AudioSource {
     }
     const el = this.el;
     await new Promise<void>((res, rej) => {
-      let timeout = 0;
       const done = () => {
-        clearTimeout(timeout);
+        clearTimeout(this.loadTimeout);
+        this.settleLoad = null;
         el.oncanplay = null;
         el.onloadedmetadata = null;
         res();
       };
+      this.settleLoad = done;
       el.oncanplay = done;
       el.onloadedmetadata = done;
       el.onerror = () => {
-        clearTimeout(timeout);
+        clearTimeout(this.loadTimeout);
+        this.settleLoad = null;
         rej(new Error(this.errorMessage()));
       };
-      timeout = window.setTimeout(done, LOAD_TIMEOUT_MS);
+      this.loadTimeout = window.setTimeout(done, LOAD_TIMEOUT_MS);
       el.src = url;
       try {
         el.load();
@@ -124,6 +129,8 @@ class ElementSource implements AudioSource {
         /* jsdom */
       }
     });
+    // Destroyed while loading: the (shared) element may already belong to the next source.
+    if (this.destroyed) return;
     el.defaultPlaybackRate = this.rate;
     el.playbackRate = this.rate;
     // After loading, errors are runtime errors (connection lost, decode failure mid-song).
@@ -180,6 +187,11 @@ class ElementSource implements AudioSource {
   destroy() {
     this.destroyed = true;
     clearInterval(this.timer);
+    clearTimeout(this.loadTimeout);
+    // A pending load() resolves (and returns early) instead of hanging.
+    const settle = this.settleLoad;
+    this.settleLoad = null;
+    settle?.();
     const el = this.el;
     el.pause();
     el.onended = null;
