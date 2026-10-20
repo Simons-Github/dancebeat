@@ -32,6 +32,7 @@ import {
   type VideoRange,
 } from "@/lib/library/videoImport";
 import type { PoseModel } from "@/lib/mediapipe";
+import { buildPoseTrackFile } from "@/lib/poseTrackFile";
 import { drawPersonPicker } from "@/lib/overlay";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import { formatStartOffsetSeconds } from "@/lib/sync";
@@ -46,6 +47,8 @@ import {
   type MultiPoseTrack,
   type TargetSeed,
 } from "@/lib/targetPerson";
+
+import { VideoImportDiagnostics } from "./VideoImportDiagnostics";
 
 const BTN = "h-11 rounded-full px-4 text-base focus-visible:ring-4 focus-visible:ring-gold";
 const INPUT = "h-11 rounded-xl text-base md:text-base";
@@ -136,6 +139,9 @@ export function VideoChoreoPanel({
   const beatToken = useRef(0);
   /** Range of the last started analysis; the track only covers this section. */
   const [analyzed, setAnalyzed] = useState<VideoRange | null>(null);
+  /** Dev diagnostics only: duration of the last finished analysis. */
+  const [analysisMs, setAnalysisMs] = useState<number | null>(null);
+  const analysisToken = useRef(0);
   const { state, start, cancel, reset } = useVideoAnalysis(
     createEstimator ? { createEstimator } : {},
   );
@@ -220,6 +226,23 @@ export function VideoChoreoPanel({
     }
   }, [target, analyzed, stale, bpmValid, phaseMs, bpm, selfie, durationMs]);
   const result = built?.ok ? built.result : null;
+
+  // Dev diagnostics: the exact input of buildVideoChoreo, as a raw-data file for tuning.
+  const diagnosticsFile = useMemo(
+    () =>
+      import.meta.env.DEV && result && target && analyzed && phaseMs !== null
+        ? buildPoseTrackFile({
+            exportedAt: 0, // set on export
+            video: videoFile?.name ?? "video",
+            bpm,
+            beatPhaseMs: phaseMs,
+            range: analyzed,
+            mirror: !selfie,
+            track: target,
+          })
+        : null,
+    [result, target, analyzed, phaseMs, videoFile, bpm, selfie],
+  );
 
   useEffect(() => {
     onChangeRef.current(result);
@@ -368,7 +391,17 @@ export function VideoChoreoPanel({
       video.scrollIntoView({ block: "nearest" });
     }
     setAnalyzed(range);
-    void start(video, { range });
+    if (!import.meta.env.DEV) {
+      void start(video, { range });
+      return;
+    }
+    // Dev diagnostics: wall-clock analysis time (not game time); only the latest run counts.
+    const token = ++analysisToken.current;
+    const t0 = performance.now();
+    setAnalysisMs(null);
+    void start(video, { range }).then(() => {
+      if (token === analysisToken.current) setAnalysisMs(performance.now() - t0);
+    });
   };
 
   /** Beat phase from the song's audio file if there is one, else from the video's audio track. */
@@ -637,6 +670,9 @@ export function VideoChoreoPanel({
                 {result.stats.moves} Moves, davon {result.stats.gold} Gold Moves, Person in{" "}
                 {Math.round(result.stats.detectionRatio * 100)} % der Bilder erkannt.
               </p>
+            )}
+            {import.meta.env.DEV && diagnosticsFile && (
+              <VideoImportDiagnostics file={diagnosticsFile} analysisMs={analysisMs} />
             )}
           </div>
 

@@ -612,6 +612,24 @@ werden. Logik in `src/lib/targetPerson.ts` (ohne React).
   wechseln. Die Nummern gelten je Standbild; nach „Aktuelles Bild“ können sie anders lauten. Die
   Analyse mit `numPoses` 3 kann länger dauern als mit 1.
 
+### Diagnose im Dev-Modus (Etappe 8g-2)
+
+Nur hinter `import.meta.env.DEV` zeigt `VideoChoreoPanel` unter der Zusammenfassung den Kasten
+„Diagnose (nur Dev-Modus)“ (`VideoImportDiagnostics`), damit der Import an echten Videos messbar
+wird:
+
+- Kennzahlen aus `trackMetrics` (`src/lib/videoChoreo.ts`), mit denselben Optionen wie der
+  Import: Erkennungsquote, Moves gegenüber Rasterpunkten, Zittern roh und geglättet (mittlere
+  Änderung der Winkeländerung von Probe zu Probe in Grad; echte Bewegung ist glatt und trägt
+  wenig bei, Erkennungsrauschen überwiegt), BPM und Beat-Phase sowie die Dauer der Analyse
+  (Uhrzeit, keine Spielzeit).
+- „Rohdaten exportieren“ lädt `*.posetrack.json` herunter (`src/lib/poseTrackFile.ts`, Format
+  `dancebeat-pose-track` v1, mit zod geprüft): die Spur der Zielperson und die Einstellungen
+  des Dialogs (BPM, Beat-Phase in Videozeit, Bereich, Spiegeln, Dateiname). Die Datei enthält
+  nur Landmarks, keine Bilder, und gehört nicht zur Bibliothek. `importOptions` rechnet sie in
+  dieselben Optionen um, die `buildVideoChoreo` an `choreoFromPoseTrack` gibt. So lässt sich
+  das Feintuning ohne neuen MediaPipe-Lauf wiederholen.
+
 ## Choreografie-Editor (Etappe 8d-1)
 
 Route `/edit/$songId` (`src/routes/edit/$songId.tsx`, gleicher Aufbau wie der Sync-Test), Einstieg

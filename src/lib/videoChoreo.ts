@@ -242,6 +242,15 @@ export function suggestGoldMoves(moves: Move[], frames: Frame[]): Move[] {
   return moves.map((m, i) => ({ ...m, gold: picked.includes(i) }));
 }
 
+/** Grid points offset + n · step in [0, durationMs]: the candidate move times. */
+function beatSlots(offset: number, step: number, durationMs: number): number[] {
+  const out: number[] = [];
+  for (let n = Math.ceil(-offset / step); offset + n * step <= durationMs; n++) {
+    out.push(offset + n * step);
+  }
+  return out;
+}
+
 /** Builds a choreography from a raw video pose track. Throws (German message) if unusable. */
 export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions): Choreography {
   const interval = opts.frameIntervalMs ?? 100;
@@ -292,8 +301,7 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
     return Math.abs(f.timeMs - t) <= interval ? f : null;
   };
   const moves: Move[] = [];
-  for (let n = Math.ceil(-offset / step); offset + n * step <= durationMs; n++) {
-    const t = offset + n * step;
+  for (const t of beatSlots(offset, step, durationMs)) {
     const f = nearest(t);
     if (!f || !isUsablePose(f)) continue;
     moves.push({ timeMs: t, label: "Move", iconId: "video", gold: false });
@@ -326,4 +334,103 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
   };
   // 4. Stored choreos live in mirror space.
   return ChoreographySchema.parse(opts.mirror === false ? choreo : mirrorChoreo(choreo));
+}
+
+/** Quality figures of a video import, for tuning on real videos (dev diagnostics, script). */
+export interface TrackMetrics {
+  /** Samples in the range. */
+  samples: number;
+  /** Samples with a detected person / samples (0..1). */
+  detectionRatio: number;
+  /**
+   * Mean |second difference| of the joint angles over consecutive samples, in degrees per
+   * sample. Real movement is smooth and contributes little; detection noise dominates. Raw
+   * and after `smoothTrack` with the given filter. null without three usable samples in a row.
+   */
+  jitterRawDeg: number | null;
+  jitterSmoothDeg: number | null;
+  /** Grid points where a move could sit. */
+  moveSlots: number;
+  /** Moves the choreography got (0 if the build failed). */
+  moves: number;
+  /** moves / moveSlots (0..1). */
+  usableMoveRatio: number;
+  /** German message if `choreoFromPoseTrack` refused the track, else null. */
+  error: string | null;
+}
+
+const JITTER_KEYS = [...ARM_KEYS, ...LEG_KEYS, "torsoLean"] as const;
+
+/** See TrackMetrics.jitterRawDeg; triples with a gap over maxGapMs or a null sample are skipped. */
+function angleJitter(samples: Sample[], aspect: number, maxGapMs: number): number | null {
+  let sum = 0,
+    n = 0;
+  let prev: { timeMs: number; angles: Angles }[] = [];
+  for (const s of samples) {
+    if (!s.landmarks) {
+      prev = [];
+      continue;
+    }
+    const cur = { timeMs: s.timeMs, angles: computeAngles(s.landmarks, { aspect }) };
+    const last = prev[prev.length - 1];
+    if (last && cur.timeMs - last.timeMs > maxGapMs) prev = [];
+    const [a, b] = prev.length >= 2 ? prev.slice(-2) : [];
+    if (a && b) {
+      for (const k of JITTER_KEYS) {
+        const x = a.angles[k],
+          y = b.angles[k],
+          z = cur.angles[k];
+        if (x == null || y == null || z == null) continue;
+        sum += Math.abs(angleDiff(z, y) - angleDiff(y, x));
+        n++;
+      }
+    }
+    prev.push(cur);
+    if (prev.length > 2) prev.shift();
+  }
+  return n ? sum / n : null;
+}
+
+/**
+ * Measures a video import with the same options `choreoFromPoseTrack` gets: detection rate,
+ * angle jitter before and after smoothing and the share of grid points that got a move.
+ */
+export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackMetrics {
+  const start = opts.range?.startMs ?? 0;
+  const end = opts.range?.endMs ?? Infinity;
+  const maxGapMs = opts.maxGapMs ?? 250;
+  const trimmed = track.samples
+    .filter((s) => s.timeMs >= start && s.timeMs <= end)
+    .map((s) => ({ timeMs: s.timeMs - start, landmarks: s.landmarks }));
+  const detected = trimmed.filter((s) => s.landmarks !== null).length;
+  const durationMs = Number.isFinite(end)
+    ? end - start
+    : (trimmed[trimmed.length - 1]?.timeMs ?? 0);
+  const step = (60000 / opts.bpm) * (opts.beatsPerMove ?? 2);
+  const moveSlots =
+    step > 0 && Number.isFinite(step)
+      ? beatSlots(opts.beatOffsetMs ?? 0, step, durationMs).length
+      : 0;
+
+  let moves = 0;
+  let error: string | null = null;
+  try {
+    moves = choreoFromPoseTrack(track, opts).moves.length;
+  } catch (e) {
+    error = e instanceof Error ? e.message : String(e);
+  }
+  return {
+    samples: trimmed.length,
+    detectionRatio: trimmed.length ? detected / trimmed.length : 0,
+    jitterRawDeg: angleJitter(trimmed, track.aspect, maxGapMs),
+    jitterSmoothDeg: angleJitter(
+      smoothTrack(trimmed, opts.filter, maxGapMs),
+      track.aspect,
+      maxGapMs,
+    ),
+    moveSlots,
+    moves,
+    usableMoveRatio: moveSlots ? moves / moveSlots : 0,
+    error,
+  };
 }

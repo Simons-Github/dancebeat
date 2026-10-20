@@ -5,6 +5,7 @@ import { AddSongDialog } from "@/components/AddSongDialog";
 import { VideoChoreoPanel } from "@/components/add-song/VideoChoreoPanel";
 import type { VideoImportResult } from "@/lib/library/videoImport";
 import type { PoseModel } from "@/lib/mediapipe";
+import { parsePoseTrackFile } from "@/lib/poseTrackFile";
 import type { Song } from "@/lib/types";
 import {
   fakeEstimator,
@@ -100,6 +101,30 @@ describe("VideoChoreoPanel im Dialog „Song hinzufügen“", () => {
     expect(summary).toHaveTextContent(`${song.choreo.moves.length} Moves`);
     expect(song.choreo.moves.every((m) => m.iconId === "video")).toBe(true);
     expect(revokeUrl).toHaveBeenCalledWith(BLOB_URL);
+  });
+
+  it("zeigt im Dev-Modus die Diagnose und exportiert die Rohdaten", async () => {
+    setup([figureEstimator()]);
+    await prepare();
+    fireEvent.change(screen.getByLabelText("Beat-Phase (ms)"), { target: { value: "100" } });
+    fireEvent.click(analyzeButton());
+
+    const diag = await screen.findByRole("region", { name: "Diagnose (Dev)" }, { timeout: 4000 });
+    expect(diag).toHaveTextContent(/Moves \d+ von \d+ Rasterpunkten/);
+    expect(diag).toHaveTextContent("BPM 120, Beat-Phase 100 ms");
+    await waitFor(() => expect(diag).toHaveTextContent(/Analyse \d+\.\d s/));
+
+    createUrl.mockClear();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Rohdaten exportieren" }));
+    expect(click).toHaveBeenCalledTimes(1);
+    click.mockRestore();
+    const blob = (createUrl.mock.calls[0] as unknown as [Blob])[0];
+    const file = parsePoseTrackFile(await blob.text());
+    expect(file.video).toBe("tanz.mp4");
+    expect(file.range).toEqual({ startMs: 0, endMs: 6000 });
+    expect(file.mirror).toBe(true);
+    expect(file.track.samples.length).toBeGreaterThan(0);
   });
 
   it("BPM-Änderung rechnet ohne neue Analyse neu, Bereichsänderung macht sie ungültig", async () => {

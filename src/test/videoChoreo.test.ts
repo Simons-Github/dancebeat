@@ -9,6 +9,7 @@ import {
   smoothTrack,
   suggestGoldMoves,
   toSquareSpace,
+  trackMetrics,
   type PoseTrack,
 } from "@/lib/videoChoreo";
 
@@ -359,5 +360,38 @@ describe("suggestGoldMoves", () => {
     expect(count(3)).toBe(2);
     expect(count(24)).toBe(3);
     expect(count(80)).toBe(4);
+  });
+});
+
+describe("trackMetrics", () => {
+  it("zählt Erkennung, Rasterpunkte und Moves wie choreoFromPoseTrack", () => {
+    // Samples up to 7986 ms at 120 BPM, a move every 2 beats: grid 0, 1000, …, 7000.
+    const track = makeTrack({ edit: (t, lm) => (t >= 1800 && t < 3300 ? null : lm) });
+    const m = trackMetrics(track, opts);
+    expect(m.samples).toBe(track.samples.length);
+    expect(m.detectionRatio).toBeGreaterThan(0.8);
+    expect(m.detectionRatio).toBeLessThan(0.95);
+    expect(m.moveSlots).toBe(8);
+    expect(m.moves).toBe(choreoFromPoseTrack(track, opts).moves.length);
+    expect(m.moves).toBe(6); // the gap costs the moves at 2000 and 3000 ms
+    expect(m.usableMoveRatio).toBeCloseTo(6 / 8, 10);
+    expect(m.error).toBeNull();
+  });
+
+  it("misst Rauschen als Zittern, und die Glättung senkt es", () => {
+    const clean = trackMetrics(makeTrack(), opts);
+    const noisy = trackMetrics(makeTrack({ noise: 0.01, seed: 3 }), opts);
+    expect(clean.jitterRawDeg).not.toBeNull();
+    expect(noisy.jitterRawDeg!).toBeGreaterThan(clean.jitterRawDeg! * 5);
+    expect(noisy.jitterSmoothDeg!).toBeLessThan(noisy.jitterRawDeg! * 0.5);
+  });
+
+  it("meldet einen unbrauchbaren Abschnitt, statt zu werfen", () => {
+    const empty = makeTrack({ edit: () => null });
+    const m = trackMetrics(empty, opts);
+    expect(m.detectionRatio).toBe(0);
+    expect(m.moves).toBe(0);
+    expect(m.jitterRawDeg).toBeNull();
+    expect(m.error).toBe("Im Video wurde zu selten eine Person erkannt.");
   });
 });
