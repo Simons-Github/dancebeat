@@ -1,19 +1,29 @@
 /**
  * Parameter search for the video import (Etappe 8g-3): runs `trackMetrics` over raw pose-track
  * exports for every point of a parameter grid. Pure logic; the CLI is tune-video-choreo.ts.
+ * The ranking uses the hold-out error; the move placement (Etappe 8g-4c) does not change it and is
+ * compared by the column "Bew. °/s" (pose motion at the moves, lower = clearer poses).
  */
 import type { PoseTrackFile } from "../src/lib/poseTrackFile.ts";
 import { importOptions } from "../src/lib/poseTrackFile.ts";
-import { DEFAULT_ONE_EURO, trackMetrics, type TrackMetrics } from "../src/lib/videoChoreo.ts";
+import {
+  DEFAULT_ONE_EURO,
+  MOVE_PLACEMENTS,
+  trackMetrics,
+  type MovePlacement,
+  type TrackMetrics,
+} from "../src/lib/videoChoreo.ts";
 
 export interface TuningParams {
   minCutoff: number;
   beta: number;
   maxGapMs: number;
   beatsPerMove: number;
+  /** Move placement (Etappe 8g-4c); compared via TrackMetrics.moveMotionDegPerS, not the score. */
+  placement: MovePlacement;
 }
 
-export type TuningGrid = { [K in keyof TuningParams]: number[] };
+export type TuningGrid = { [K in keyof TuningParams]: TuningParams[K][] };
 
 /** What choreoFromPoseTrack uses today; marked in the report. */
 export const CURRENT: TuningParams = {
@@ -21,6 +31,7 @@ export const CURRENT: TuningParams = {
   beta: DEFAULT_ONE_EURO.beta,
   maxGapMs: 250,
   beatsPerMove: 2,
+  placement: "grid",
 };
 
 export const DEFAULT_GRID: TuningGrid = {
@@ -28,6 +39,7 @@ export const DEFAULT_GRID: TuningGrid = {
   beta: [2, 5, 10, 20, 40],
   maxGapMs: [150, 250, 400],
   beatsPerMove: [2],
+  placement: ["grid"],
 };
 
 export function gridPoints(grid: TuningGrid): TuningParams[] {
@@ -36,7 +48,8 @@ export function gridPoints(grid: TuningGrid): TuningParams[] {
     for (const beta of grid.beta)
       for (const maxGapMs of grid.maxGapMs)
         for (const beatsPerMove of grid.beatsPerMove)
-          out.push({ minCutoff, beta, maxGapMs, beatsPerMove });
+          for (const placement of grid.placement)
+            out.push({ minCutoff, beta, maxGapMs, beatsPerMove, placement });
   return out;
 }
 
@@ -44,7 +57,8 @@ export const sameParams = (a: TuningParams, b: TuningParams) =>
   a.minCutoff === b.minCutoff &&
   a.beta === b.beta &&
   a.maxGapMs === b.maxGapMs &&
-  a.beatsPerMove === b.beatsPerMove;
+  a.beatsPerMove === b.beatsPerMove &&
+  a.placement === b.placement;
 
 /**
  * Ranking value in degrees: the hold-out error (see TrackMetrics.holdoutDeg). On synthetic tracks
@@ -70,6 +84,7 @@ export function tuneFile(file: PoseTrackFile, points: TuningParams[]): TuningRow
       filter: { minCutoff: params.minCutoff, beta: params.beta },
       maxGapMs: params.maxGapMs,
       beatsPerMove: params.beatsPerMove,
+      movePlacement: params.placement,
     });
     return { params, metrics, score: score(metrics) };
   });
@@ -97,7 +112,7 @@ export function overall(results: TuningRow[][]): { params: TuningParams; score: 
 const f2 = (v: number | null) => (v === null ? "–" : v.toFixed(2));
 const pct = (v: number) => `${Math.round(v * 100)} %`;
 const paramText = (p: TuningParams) =>
-  `minCutoff ${p.minCutoff}, beta ${p.beta}, maxGap ${p.maxGapMs}, Beats/Move ${p.beatsPerMove}`;
+  `minCutoff ${p.minCutoff}, beta ${p.beta}, maxGap ${p.maxGapMs}, Beats/Move ${p.beatsPerMove}, ${p.placement}`;
 const mark = (p: TuningParams) => (sameParams(p, CURRENT) ? " ← aktuell" : "");
 
 /** Plain-text report for one file: header figures and the best `top` rows plus the current one. */
@@ -109,7 +124,7 @@ export function formatFileReport(file: PoseTrackFile, rows: TuningRow[], top = 1
       ? `Proben ${any.samples}, Erkennung ${pct(any.detectionRatio)}, Zittern roh ${f2(any.jitterRawDeg)}°, BPM ${file.bpm}`
       : "Keine Daten.",
     "",
-    "Rang | Holdout | Zittern | Moves         | Parameter",
+    "Rang | Holdout | Zittern | Moves         | Bew. °/s | Parameter",
   ];
   const current = rows.findIndex((r) => sameParams(r.params, CURRENT));
   rows.forEach((r, i) => {
@@ -119,7 +134,7 @@ export function formatFileReport(file: PoseTrackFile, rows: TuningRow[], top = 1
       ? r.metrics.error
       : `${m.moves}/${m.moveSlots} (${pct(m.usableMoveRatio)})`;
     lines.push(
-      `${String(i + 1).padStart(4)} | ${f2(r.score).padStart(7)} | ${f2(m.jitterSmoothDeg).padStart(7)} | ${moves.padEnd(13)} | ${paramText(r.params)}${mark(r.params)}`,
+      `${String(i + 1).padStart(4)} | ${f2(r.score).padStart(7)} | ${f2(m.jitterSmoothDeg).padStart(7)} | ${moves.padEnd(13)} | ${f2(m.moveMotionDegPerS).padStart(8)} | ${paramText(r.params)}${mark(r.params)}`,
     );
   });
   return lines.join("\n");
@@ -150,4 +165,17 @@ export function parseList(text: string, name: string): number[] {
     throw new Error(`--${name}: erwartet positive Zahlen, durch Kommas getrennt (z. B. 1,2,4).`);
   }
   return values;
+}
+
+/** "grid,holds" → ["grid", "holds"]; throws on an unknown placement. */
+export function parsePlacements(text: string): MovePlacement[] {
+  const values = text.split(",").map((s) => s.trim());
+  const valid = (v: string): v is MovePlacement =>
+    (MOVE_PLACEMENTS as readonly string[]).includes(v);
+  if (!values.length || !values.every(valid)) {
+    throw new Error(
+      `--placement: erwartet ${MOVE_PLACEMENTS.join(" oder ")}, durch Kommas getrennt (z. B. grid,holds).`,
+    );
+  }
+  return values.filter(valid);
 }

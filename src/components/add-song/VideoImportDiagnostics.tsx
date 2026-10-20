@@ -69,6 +69,11 @@ export function VideoImportDiagnostics({ file, analysisMs }: VideoImportDiagnost
         </li>
         <li>Holdout-Fehler {deg(m.holdoutDeg)}</li>
         <li>
+          Bewegung an den Moves{" "}
+          {m.moveMotionDegPerS === null ? "–" : `${m.moveMotionDegPerS.toFixed(1)} °/s`}
+          {file.movePlacement && ` (${file.movePlacement})`}
+        </li>
+        <li>
           BPM {file.bpm}, Beat-Phase {file.beatPhaseMs} ms
         </li>
         {file.model && <li>Modell {file.model}</li>}

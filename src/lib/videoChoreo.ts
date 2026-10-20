@@ -31,6 +31,20 @@ export interface OneEuroParams {
 
 export const DEFAULT_ONE_EURO: OneEuroParams = { minCutoff: 1, beta: 10, dCutoff: 1 };
 
+/**
+ * Where the video import puts the moves: "grid" every `beatsPerMove` beats, "holds" on the beat
+ * with the stillest pose within each window of `beatsPerMove` beats (Etappe 8g-4c).
+ */
+export const MOVE_PLACEMENTS = ["grid", "holds"] as const;
+export type MovePlacement = (typeof MOVE_PLACEMENTS)[number];
+
+/**
+ * Minimum distance between two moves: a playability limit that keeps the order strict and allows
+ * one-beat spacing up to 200 BPM. Overlapping judging windows (±MOVE_WINDOW_MS) are fine, as the
+ * scorer tracks the best deviation per move. Shared by the editor and the hold-point placement.
+ */
+export const MIN_MOVE_GAP_MS = 300;
+
 export interface VideoChoreoOptions {
   title: string;
   bpm: number;
@@ -45,6 +59,15 @@ export interface VideoChoreoOptions {
   mirror?: boolean;
   /** Beats between two scored moves. Default 2. */
   beatsPerMove?: number;
+  /**
+   * "grid" (default): a move every `beatsPerMove` beats. "holds": windows of k beats, k =
+   * `beatsPerMove` rounded to a whole number (at least 1); each window starts on a grid point
+   * offset + n · k beats inside [0, duration], so there are as many windows as grid points with
+   * step k beats. Per window the beat with the least pose motion, at least max(MIN_MOVE_GAP_MS,
+   * one beat) after the previous move; without a measurable beat the window's grid point if
+   * usable. At most one move per window, about as many as the grid.
+   */
+  movePlacement?: MovePlacement;
   /** Target spacing of stored frames. Default 100. */
   frameIntervalMs?: number;
   /** [accent, secondary]. Default: first song palette. */
@@ -259,6 +282,82 @@ function beatSlots(offset: number, step: number, durationMs: number): number[] {
   return out;
 }
 
+/**
+ * Pose motion around `t` in degrees per second: mean |angle change| of the arm and leg angles
+ * between `frameAt(t - w)` and `frameAt(t + w)`, divided by 2w. Only angles present on both sides
+ * count; null if fewer than MIN_LIMB_ANGLES do, or if t ± w leaves the frames (`frameAt` would
+ * clamp and the change would cover less than 2w). Low values mean a held, readable pose.
+ */
+export function poseMotionAt(frames: Frame[], t: number, w: number): number | null {
+  const first = frames[0],
+    last = frames[frames.length - 1];
+  if (!first || !last || t - w < first.timeMs || t + w > last.timeMs) return null;
+  const a = frameAt(frames, t - w);
+  const b = frameAt(frames, t + w);
+  if (!a || !b || !(w > 0)) return null;
+  let sum = 0,
+    n = 0;
+  for (const k of [...ARM_KEYS, ...LEG_KEYS]) {
+    const x = a.angles[k],
+      y = b.angles[k];
+    if (x == null || y == null) continue;
+    sum += Math.abs(angleDiff(y, x));
+    n++;
+  }
+  return n >= MIN_LIMB_ANGLES ? sum / n / ((2 * w) / 1000) : null;
+}
+
+/**
+ * Hold-point placement (see VideoChoreoOptions.movePlacement): beats are grouped into windows of
+ * `beatsPerWindow` beats; window n starts at grid point offset + n · beatsPerWindow beats, and
+ * only windows starting inside [0, durationMs] count (the same points as beatSlots with that
+ * step). Per window the usable beat with the least motion wins (ties: the earlier one), skipping
+ * beats closer than max(MIN_MOVE_GAP_MS, one beat) to the previous move. If no beat of a window is
+ * measurable (e.g. at the track edges), its grid point is taken when usable and spaced.
+ */
+function holdTimes(
+  frames: Frame[],
+  offset: number,
+  beatMs: number,
+  beatsPerWindow: number,
+  durationMs: number,
+  usable: (t: number) => boolean,
+): number[] {
+  const w = beatMs / 4;
+  const minGap = Math.max(MIN_MOVE_GAP_MS, beatMs);
+  const out: number[] = [];
+  let window: number | null = null;
+  let best: { t: number; motion: number } | null = null;
+  let fallback: number | null = null;
+  const flush = () => {
+    const t = best ? best.t : fallback;
+    if (t !== null) out.push(t);
+    best = null;
+    fallback = null;
+  };
+  // First window whose grid point lies at or after 0; m is the global beat index.
+  const firstWindow = Math.ceil(-offset / (beatMs * beatsPerWindow));
+  const firstBeat = Math.max(firstWindow * beatsPerWindow, Math.ceil(-offset / beatMs));
+  for (let m = firstBeat; offset + m * beatMs <= durationMs; m++) {
+    const t = offset + m * beatMs;
+    const win = Math.floor(m / beatsPerWindow);
+    if (win !== window) {
+      flush();
+      window = win;
+    }
+    const prev = out[out.length - 1];
+    // Small tolerance: beats exactly one beat apart must not fail on rounding.
+    if (prev !== undefined && t - prev < minGap - 1e-6) continue;
+    if (!usable(t)) continue;
+    if (m === win * beatsPerWindow) fallback = t;
+    const motion = poseMotionAt(frames, t, w);
+    if (motion === null) continue;
+    if (!best || motion < best.motion) best = { t, motion };
+  }
+  flush();
+  return out;
+}
+
 /** Builds a choreography from a raw video pose track. Throws (German message) if unusable. */
 export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions): Choreography {
   const interval = opts.frameIntervalMs ?? 100;
@@ -308,17 +407,25 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
     const f = frames.reduce((a, b) => (Math.abs(b.timeMs - t) < Math.abs(a.timeMs - t) ? b : a));
     return Math.abs(f.timeMs - t) <= interval ? f : null;
   };
-  const moves: Move[] = [];
-  for (const t of beatSlots(offset, step, durationMs)) {
+  const usable = (t: number) => {
     const f = nearest(t);
-    if (!f || !isUsablePose(f)) continue;
-    moves.push({ timeMs: t, label: "Move", iconId: "video", gold: false });
-  }
+    return f !== null && isUsablePose(f);
+  };
+  const beatMs = 60000 / opts.bpm;
+  const times =
+    opts.movePlacement === "holds"
+      ? holdTimes(frames, offset, beatMs, Math.max(1, Math.round(beatsPerMove)), durationMs, usable)
+      : beatSlots(offset, step, durationMs).filter(usable);
+  const moves: Move[] = times.map((t) => ({
+    timeMs: t,
+    label: "Move",
+    iconId: "video",
+    gold: false,
+  }));
   if (moves.length < 2) throw new Error("Zu wenige auswertbare Moves im gewählten Abschnitt.");
 
   // Beat phase goes into choreo.offsetMs (play time = audio − offsetMs): beat pulse and sync
   // test expect moves on k · beat. Times shift back by the phase, the audio alignment stays.
-  const beatMs = 60000 / opts.bpm;
   const phase = round(((offset % beatMs) + beatMs) % beatMs, 1);
   const shifted = frames
     .map((f) => ({ ...f, timeMs: round(f.timeMs - phase, 1) }))
@@ -371,6 +478,12 @@ export interface TrackMetrics {
   moves: number;
   /** moves / moveSlots (0..1). */
   usableMoveRatio: number;
+  /**
+   * Mean pose motion at the moves in degrees per second (`poseMotionAt` with a quarter beat on
+   * each side, on the built choreography). Lower = moves sit on clearer, held poses. null if the
+   * build failed or no move was measurable.
+   */
+  moveMotionDegPerS: number | null;
   /** German message if `choreoFromPoseTrack` refused the track, else null. */
   error: string | null;
 }
@@ -443,7 +556,8 @@ function holdoutError(
 
 /**
  * Measures a video import with the same options `choreoFromPoseTrack` gets: detection rate,
- * angle jitter before and after smoothing and the share of grid points that got a move.
+ * angle jitter before and after smoothing, the share of grid points that got a move and the pose
+ * motion at the moves.
  */
 export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackMetrics {
   const start = opts.range?.startMs ?? 0;
@@ -463,9 +577,16 @@ export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackM
       : 0;
 
   let moves = 0;
+  let moveMotionDegPerS: number | null = null;
   let error: string | null = null;
   try {
-    moves = choreoFromPoseTrack(track, opts).moves.length;
+    const choreo = choreoFromPoseTrack(track, opts);
+    moves = choreo.moves.length;
+    const w = 60000 / choreo.bpm / 4;
+    const motions = choreo.moves
+      .map((m) => poseMotionAt(choreo.frames, m.timeMs, w))
+      .filter((v): v is number => v !== null);
+    if (motions.length) moveMotionDegPerS = motions.reduce((a, b) => a + b, 0) / motions.length;
   } catch (e) {
     error = e instanceof Error ? e.message : String(e);
   }
@@ -482,6 +603,7 @@ export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackM
     moveSlots,
     moves,
     usableMoveRatio: moveSlots ? moves / moveSlots : 0,
+    moveMotionDegPerS,
     error,
   };
 }

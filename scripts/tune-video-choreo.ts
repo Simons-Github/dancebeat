@@ -1,6 +1,7 @@
 // Parameter search for the video import (run: `bun run tune-video <a.posetrack.json> …`).
 // The files come from "Rohdaten exportieren" in the dev-mode video import; they stay local.
-// Options (comma lists): --min-cutoff, --beta, --max-gap, --beats-per-move, --top.
+// Options (comma lists): --min-cutoff, --beta, --max-gap, --beats-per-move, --placement
+// (grid,holds; compare the column "Bew. °/s"), --top.
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -13,6 +14,7 @@ import {
   gridPoints,
   overall,
   parseList,
+  parsePlacements,
   tuneFile,
 } from "./tuning.ts";
 
@@ -23,6 +25,7 @@ const { values, positionals } = parseArgs({
     beta: { type: "string" },
     "max-gap": { type: "string" },
     "beats-per-move": { type: "string" },
+    placement: { type: "string" },
     top: { type: "string" },
   },
 });
@@ -41,6 +44,10 @@ const points = gridPoints({
   beta: list("beta", DEFAULT_GRID.beta),
   maxGapMs: list("max-gap", DEFAULT_GRID.maxGapMs),
   beatsPerMove: list("beats-per-move", DEFAULT_GRID.beatsPerMove),
+  placement:
+    typeof values.placement === "string"
+      ? parsePlacements(values.placement)
+      : DEFAULT_GRID.placement,
 });
 const top = list("top", [10])[0] ?? 10;
 

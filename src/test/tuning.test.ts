@@ -6,11 +6,13 @@ import type { Landmark } from "@/lib/types";
 
 import {
   CURRENT,
+  DEFAULT_GRID,
   formatFileReport,
   formatOverall,
   gridPoints,
   overall,
   parseList,
+  parsePlacements,
   sameParams,
   tuneFile,
 } from "../../scripts/tuning";
@@ -63,6 +65,7 @@ describe("tuning", () => {
       beta: [5, 10, 20],
       maxGapMs: [250],
       beatsPerMove: [2],
+      placement: ["grid"],
     });
     expect(points).toHaveLength(6);
     expect(points.some((p) => sameParams(p, CURRENT))).toBe(true);
@@ -74,6 +77,7 @@ describe("tuning", () => {
       beta: [10],
       maxGapMs: [250],
       beatsPerMove: [2],
+      placement: ["grid"],
     });
     const rows = tuneFile(noisyFile(0.02, 5), points);
     expect(rows[0]!.params.minCutoff).toBe(1);
@@ -87,6 +91,7 @@ describe("tuning", () => {
       beta: [10],
       maxGapMs: [250],
       beatsPerMove: [2],
+      placement: ["grid"],
     });
     const a = noisyFile(0.01, 1, "a.mp4");
     const b = noisyFile(0.02, 2, "b.mp4");
@@ -101,6 +106,38 @@ describe("tuning", () => {
     );
     expect(report).toContain("← aktuell");
     expect(formatOverall(ranking)).toContain("← aktuell");
+  });
+
+  it("vergleicht die Move-Platzierung und zeigt die Bewegung an den Moves", () => {
+    expect(CURRENT.placement).toBe("grid");
+    expect(DEFAULT_GRID.placement).toEqual(["grid"]);
+    const points = gridPoints({
+      minCutoff: [1],
+      beta: [10],
+      maxGapMs: [250],
+      beatsPerMove: [2],
+      placement: ["grid", "holds"],
+    });
+    expect(points.map((p) => p.placement)).toEqual(["grid", "holds"]);
+    expect(sameParams(points[0]!, points[1]!)).toBe(false);
+    const file = noisyFile(0.002, 3);
+    const rows = tuneFile(file, points);
+    const grid = rows.find((r) => r.params.placement === "grid")!.metrics;
+    const holds = rows.find((r) => r.params.placement === "holds")!.metrics;
+    // The waving arm is still on odd beats (500, 1500, … ms), the grid sits on even ones.
+    expect(holds.moveMotionDegPerS!).toBeLessThan(grid.moveMotionDegPerS!);
+    expect(holds.moves).toBe(grid.moves);
+    const report = formatFileReport(file, rows);
+    expect(report).toContain("Bew. °/s");
+    expect(report).toContain(grid.moveMotionDegPerS!.toFixed(2));
+    expect(report).toContain("Beats/Move 2, holds");
+    expect(report).toMatch(/Beats\/Move 2, grid ← aktuell/);
+  });
+
+  it("lehnt ungültige Platzierungen ab", () => {
+    expect(parsePlacements("grid, holds")).toEqual(["grid", "holds"]);
+    expect(() => parsePlacements("grid,raster")).toThrow("--placement");
+    expect(() => parsePlacements("")).toThrow("--placement");
   });
 
   it("lehnt ungültige Listen ab", () => {

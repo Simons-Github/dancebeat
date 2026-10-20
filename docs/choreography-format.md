@@ -102,12 +102,27 @@ Choreografie im Format v1:
    Visibility wird auf 2 Stellen **abgerundet**, damit kein unsicherer Punkt über die Schwelle
    rutscht. Ab 0.99 entfällt sie (`[x, y]` = voll sichtbar). `lowVisibility` steht, wenn nicht
    beide Schultern und beide Hüften sichtbar sind. Drei Minuten ergeben etwa 1,3 MB JSON.
-6. Moves alle `beatsPerMove` Beats (Standard 2) ab `beatOffsetMs`. Ein Rasterpunkt entfällt,
-   wenn der Frame dort fehlt, `lowVisibility` hat oder weniger als 4 Arm- und Beinwinkel trägt.
+6. Moves nach `movePlacement` (Etappe 8g-4c). Ein Kandidat entfällt, wenn der Frame dort
+   fehlt, `lowVisibility` hat oder weniger als 4 Arm- und Beinwinkel trägt.
+   - `"grid"` (Standard, „Fester Takt“): Moves alle `beatsPerMove` Beats (Standard 2) ab
+     `beatOffsetMs`.
+   - `"holds"` („Haltepunkte“): Die Beats werden in Fenster zu k Beats geteilt, k =
+     `beatsPerMove` gerundet, mindestens 1. Jedes Fenster beginnt an einem Rasterpunkt
+     `beatOffsetMs + n · k Beats` im Abschnitt (bei ganzzahligem `beatsPerMove` genau die
+     Rasterpunkte von `"grid"`); Beats vor dem ersten Rasterpunkt gehören zu keinem Fenster. Je
+     Fenster gewinnt der Beat mit der geringsten Bewegung (`poseMotionAt`: mittlere
+     Winkeländerung der Arm- und Beinwinkel in °/s zwischen ±¼ Beat, mindestens 4 Winkel auf
+     beiden Seiten, beide Zeitpunkte innerhalb der Frames; bei Gleichstand der frühere). Beats
+     näher als max(300 ms, 1 Beat) am vorigen Move entfallen. Ist kein Beat eines Fensters
+     messbar (etwa am Rand), gilt sein Rasterpunkt, wenn er brauchbar ist und den Abstand hält.
+     Höchstens ein Move je Fenster, etwa so viele wie beim festen Takt (weniger, wenn
+     Rasterpunkte unbrauchbar sind oder über 200 BPM der Mindestabstand greift).
+
    `label` ist „Move“, `iconId` ist „video“. Die Beat-Phase (`beatOffsetMs` modulo Beatlänge)
    landet in `offsetMs`; Frames und Moves rücken um sie nach vorn (Frames vor 0 entfallen). So
    liegen die Moves auf `k · Beatlänge`, wie Beat-Puls und Sync-Test es erwarten, und die Lage
    zum Audio bleibt gleich.
+
 7. Gold-Vorschlag: 2–4 Moves (etwa jeder achte) mit der größten Winkeländerung zum vorigen Move,
    mit Mindestabstand über den Song verteilt.
 

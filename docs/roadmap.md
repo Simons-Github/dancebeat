@@ -7,19 +7,19 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status                                  | Empfohlenes Modell                                                    |
-| -------------------------------------------- | --------------------------------------- | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                                      | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅                                      | Sonnet                                                                |
-| 3. Gameplay                                  | ✅ (Gerätetest offen)                   | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ✅                                      | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)                   | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)                   | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)                   | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3, 8g-4a, 8g-4b ✅) | Opus                                                                  |
-| 9. Typen und Lint                            | ✅                                      | –                                                                     |
-| 10. Spotify                                  | ✅ (Gerätetest offen)                   | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳                                      | je nach Punkt                                                         |
+| Etappe                                       | Status                             | Empfohlenes Modell                                                    |
+| -------------------------------------------- | ---------------------------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                                 | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                                 | Sonnet                                                                |
+| 3. Gameplay                                  | ✅ (Gerätetest offen)              | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ✅                                 | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)              | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)              | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)              | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3, 8g-4a–c ✅) | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                                 | –                                                                     |
+| 10. Spotify                                  | ✅ (Gerätetest offen)              | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                                 | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
 
@@ -488,7 +488,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c umgesetzt)
 
 Aufteilung:
 
@@ -682,9 +682,24 @@ Aufteilung:
             und an Android (Dev-Diagnose „Analyse … s“)
       - [ ] Speicher und Abstürze mit „Genau“ (langer Abschnitt, mehrere Personen)
       - [ ] Erkennungsquote und Holdout-Fehler im Vergleich (Rohdaten beider Modelle exportieren)
+  - **8g-4c Haltepunkt-Moves – umgesetzt, Gerätetest offen.** Im Video-Import wählt „Moves“
+    zwischen „Fester Takt“ (Standard, alle 2 Beats) und „Haltepunkte“ (`movePlacement: "holds"`
+    in `choreoFromPoseTrack`): je Fenster von 2 Beats der Beat mit der ruhigsten Pose
+    (`poseMotionAt`, ±¼ Beat), mindestens max(300 ms, 1 Beat) Abstand, höchstens ein Move je Fenster,
+    etwa so viele wie beim festen Takt. Die Wahl rechnet ohne neue Analyse neu. Neue Kennzahl `moveMotionDegPerS` (Diagnose,
+    Spalte „Bew. °/s“ und `--placement=grid,holds` im Tuning-Skript), Dev-Rohdaten mit
+    optionalem `movePlacement`. Details:
+    [architecture.md](architecture.md#haltepunkt-moves-etappe-8g-4c),
+    [choreography-format.md](choreography-format.md#video-import). Tests `videoChoreo.test.ts`
+    (Haltepunkte statt Raster, Anzahl, Mindestabstand bei 240 BPM, Beat-Phase 600 und −400 ms, Randbeats, Standard unverändert,
+    Kennzahl), `tuning.test.ts`, `poseTrackFile.test.ts`, `video-choreo-panel.test.tsx`. Kein
+    Formatwechsel. Standard bleibt „Fester Takt“ bis zur Messung mit dem Testset (8g-1).
+    - **Gerätetest 8g-4c (offen):**
+      - [ ] Fühlen sich Moves mit „Haltepunkte“ im Spiel besser an als mit „Fester Takt“
+            (gleiches Video, gleicher Abschnitt)?
   - **8g-4 weitere Verbesserungen, nur nach Messung (offen):** Standard bleibt „lite“, bis die
-    Messungen aus 8g-4b vorliegen; „heavy“ nur, wenn „full“ nicht reicht. Moves auf markanten
-    Haltepunkten statt starr alle 2 Beats; Hinweis zum Selfie-Schalter bei Mirrored-Videos.
+    Messungen aus 8g-4b vorliegen; „heavy“ nur, wenn „full“ nicht reicht. Hinweis zum
+    Selfie-Schalter bei Mirrored-Videos.
 
 Ursprüngliche Schritte:
 

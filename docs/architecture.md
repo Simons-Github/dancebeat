@@ -619,6 +619,25 @@ Live-Erkennung der Kamera bleibt immer bei „lite“.
 - Standard bleibt „lite“, bis Messungen am Gerät (Dauer, Speicher, Erkennungsquote) etwas
   anderes nahelegen.
 
+### Haltepunkt-Moves (Etappe 8g-4c)
+
+Unter „Modell“ wählt „Moves“ die Platzierung (`movePlacement` in `VideoChoreoOptions` und
+`VideoImportOptions`): „Fester Takt“ (`"grid"`, Standard, alle 2 Beats) oder „Haltepunkte“
+(`"holds"`, je Fenster von 2 Beats der Beat, an dem die Pose am ruhigsten ist; Regeln in
+[choreography-format.md](choreography-format.md#video-import)). Höchstens ein Move je
+Fenster, etwa so viele wie beim festen Takt.
+
+- Die Wahl rechnet nur aus der vorhandenen Analyse neu, wie Spiegeln und Zielperson; sie macht
+  das Ergebnis nicht veraltet. Während der Analyse ist sie gesperrt, gespeichert wird sie
+  nicht. Die Zusammenfassung nennt sie („Moves: Haltepunkte.“).
+- Kennzahl `moveMotionDegPerS` in `trackMetrics`: mittlere Bewegung an den Moves in °/s
+  (`poseMotionAt`, ±¼ Beat). Niedriger = Moves auf klareren, gehaltenen Posen. Die Dev-Diagnose
+  zeigt sie als „Bewegung an den Moves“.
+- Dev-Rohdaten enthalten `movePlacement` (optional, alte Exporte ohne Feld = „grid“),
+  `importOptions` gibt es weiter.
+- Standard bleibt „Fester Takt“, bis Messungen mit dem Testset (8g-1) und das Spielgefühl am
+  Gerät etwas anderes nahelegen.
+
 ### Zielperson (Etappe 8f)
 
 Tanzen mehrere Personen im Video, wählt man nach der Analyse, wessen Bewegungen übernommen
@@ -682,7 +701,7 @@ wird:
 - „Rohdaten exportieren“ lädt `*.posetrack.json` herunter (`src/lib/poseTrackFile.ts`, Format
   `dancebeat-pose-track` v1, mit zod geprüft): die Spur der Zielperson und die Einstellungen
   des Dialogs (BPM, Beat-Phase in Videozeit, Bereich, Spiegeln, Dateiname, seit 8g-4b optional
-  das Pose-Modell). Die Datei enthält
+  das Pose-Modell, seit 8g-4c optional die Move-Platzierung). Die Datei enthält
   nur Landmarks, keine Bilder, und gehört nicht zur Bibliothek. `importOptions` rechnet sie in
   dieselben Optionen um, die `buildVideoChoreo` an `choreoFromPoseTrack` gibt. So lässt sich
   das Feintuning ohne neuen MediaPipe-Lauf wiederholen.
@@ -695,8 +714,10 @@ Logik in `scripts/tuning.ts`) rechnet für jede Datei ein Raster aus One-Euro-`m
 eine Tabelle nach Holdout-Fehler aus (Zittern, Moves je Rasterpunkte, Parameter; die aktuellen
 Standardwerte sind markiert). Bei mehreren Dateien folgt die mittlere Wertung über alle Videos;
 Einstellungen, die an einem Video scheitern, fallen dort heraus. Raster per Komma-Liste
-änderbar: `--min-cutoff`, `--beta`, `--max-gap`, `--beats-per-move`, dazu `--top` (Zeilen je
-Tabelle, Standard 10). Die Rohdaten bleiben lokal und kommen nicht ins Repo. Laufzeit etwa 2 s je
+änderbar: `--min-cutoff`, `--beta`, `--max-gap`, `--beats-per-move`, `--placement` (`grid`,
+`holds`; Standard `grid`), dazu `--top` (Zeilen je Tabelle, Standard 10). Die Spalte „Bew. °/s“
+zeigt `moveMotionDegPerS`; die Platzierung ändert den Holdout-Fehler nicht und wird über diese
+Spalte verglichen. Die Rohdaten bleiben lokal und kommen nicht ins Repo. Laufzeit etwa 2 s je
 Minute Video beim Standardraster. Neue Standardwerte vor dem Übernehmen im Spiel gegenprüfen.
 
 ## Choreografie-Editor (Etappe 8d-1)

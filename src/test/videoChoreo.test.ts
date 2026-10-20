@@ -5,7 +5,9 @@ import { ChoreographySchema } from "@/lib/schema";
 import type { AngleKey, Angles, Frame, Landmark, Move } from "@/lib/types";
 import {
   choreoFromPoseTrack,
+  MIN_MOVE_GAP_MS,
   OneEuroFilter,
+  poseMotionAt,
   smoothTrack,
   suggestGoldMoves,
   toSquareSpace,
@@ -410,5 +412,145 @@ describe("trackMetrics", () => {
     expect(m.jitterRawDeg).toBeNull();
     expect(m.holdoutDeg).toBeNull();
     expect(m.error).toBe("Im Video wurde zu selten eine Person erkannt.");
+  });
+});
+
+/** Arms swing with period 2 s: still at 500, 1500, … ms (odd beats at 120 BPM), fastest on even beats. */
+const oddHolds = (t: number): FigureParams => {
+  const v = 60 * Math.sin((2 * Math.PI * t) / 2000);
+  return { la: 90 + v, ra: 90 - v, le: 30, re: 20, ll: 10, rl: 10 };
+};
+
+/** Arms held still from 150 to 600 ms of every second, a smooth swing in between. */
+const heldBlock = (t: number): FigureParams => {
+  const s = t % 1000;
+  const x = s >= 150 && s < 600 ? 0 : s >= 600 ? (s - 600) / 550 : (s + 400) / 550;
+  const v = 80 * Math.sin(Math.PI * x) ** 2;
+  return { la: 60 + v, ra: 120 - v, le: 30, re: 20, ll: 10, rl: 10 };
+};
+
+describe("Haltepunkt-Moves (movePlacement)", () => {
+  const base = { ...opts, mirror: false, beatsPerMove: 2 };
+
+  it("setzt Moves auf die Beats mit stehender Pose, das Raster bleibt auf geraden Beats", () => {
+    const track = makeTrack({ pose: oddHolds });
+    const grid = choreoFromPoseTrack(track, base);
+    const holds = choreoFromPoseTrack(track, { ...base, movePlacement: "holds" });
+    expect(grid.moves.map((m) => m.timeMs)).toEqual([0, 1000, 2000, 3000, 4000, 5000, 6000, 7000]);
+    expect(holds.moves.map((m) => m.timeMs)).toEqual([
+      500, 1500, 2500, 3500, 4500, 5500, 6500, 7500,
+    ]);
+    // Same windows: as many moves as the grid on a fully usable track.
+    expect(holds.moves).toHaveLength(grid.moves.length);
+    expect(holds.moves.filter((m) => m.gold).length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("ohne Option bleibt alles beim festen Raster", () => {
+    const track = makeTrack({ pose: oddHolds });
+    expect(choreoFromPoseTrack(track, { ...base, movePlacement: "grid" })).toEqual({
+      ...choreoFromPoseTrack(track, base),
+      id: expect.any(String),
+    });
+  });
+
+  it("hält den Mindestabstand ein, auch bei 240 BPM", () => {
+    // Windows of 2 beats (500 ms); still on 250 and 500 ms of every second. Without the gap rule
+    // the picks 250 and 500 would be 250 ms apart.
+    const track = makeTrack({ pose: heldBlock });
+    const fast = { ...base, bpm: 240 };
+    const grid = choreoFromPoseTrack(track, fast);
+    const holds = choreoFromPoseTrack(track, { ...fast, movePlacement: "holds" });
+    const t = holds.moves.map((m) => m.timeMs);
+    expect(t.every((x, i) => i === 0 || x - t[i - 1]! >= MIN_MOVE_GAP_MS)).toBe(true);
+    expect(t.slice(0, 4)).toEqual([250, 750, 1250, 1750]);
+    expect(holds.moves).toHaveLength(grid.moves.length);
+    // Every move still sits on a beat.
+    for (const x of t) expect(x % 250).toBeCloseTo(0, 5);
+  });
+
+  it("rundet nicht ganzzahlige Beats pro Move auf ganze Fenster", () => {
+    const track = makeTrack({ pose: oddHolds });
+    const holds = choreoFromPoseTrack(track, {
+      ...base,
+      beatsPerMove: 2.4,
+      movePlacement: "holds",
+    });
+    expect(holds.moves.map((m) => m.timeMs)).toEqual([
+      500, 1500, 2500, 3500, 4500, 5500, 6500, 7500,
+    ]);
+  });
+
+  it("nimmt bei verschobener Beat-Phase keine Beats vor dem ersten Rasterpunkt", () => {
+    const beatMs = 500;
+    for (const beatOffsetMs of [600, -400]) {
+      const track = makeTrack({ pose: oddHolds });
+      const o = { ...base, beatOffsetMs };
+      const grid = choreoFromPoseTrack(track, o);
+      const holds = choreoFromPoseTrack(track, { ...o, movePlacement: "holds" });
+      expect(holds.moves.length).toBeLessThanOrEqual(grid.moves.length);
+      for (const m of holds.moves) {
+        expect(m.timeMs).toBeGreaterThanOrEqual(0);
+        expect(m.timeMs % beatMs).toBeCloseTo(0, 5);
+      }
+      // First window starts at the first grid point (video time 600 resp. 100): nothing before.
+      expect(holds.moves[0]!.timeMs + holds.offsetMs).toBeGreaterThanOrEqual(
+        grid.moves[0]!.timeMs + grid.offsetMs,
+      );
+      const m = trackMetrics(track, { ...o, movePlacement: "holds" });
+      expect(m.usableMoveRatio).toBeLessThanOrEqual(1);
+      expect(m.moves).toBe(holds.moves.length);
+    }
+  });
+
+  it("bevorzugt bei gleichmäßiger Bewegung keine Randbeats", () => {
+    // Constant arm speed: no beat is stiller than another. Clamped edge frames used to make the
+    // first and last beat look stiller.
+    const steady = (t: number): FigureParams => ({
+      la: 30 + (15 * t) / 1000,
+      ra: 150 - (15 * t) / 1000,
+      le: 30,
+      re: 20,
+      ll: 10,
+      rl: 10,
+    });
+    const track = makeTrack({ pose: steady, durationMs: 7600, stepMs: 50 });
+    const holds = choreoFromPoseTrack(track, { ...base, movePlacement: "holds" });
+    const t = holds.moves.map((m) => m.timeMs);
+    // Windows [0, 500], …, [7000, 7500]; the frames end at 7600, so 7500 + 125 ms is outside.
+    expect(t[0]).toBe(500);
+    expect(t[t.length - 1]).toBe(7000);
+    expect(t).toHaveLength(8);
+    const { frames } = holds;
+    expect(poseMotionAt(frames, 0, 125)).toBeNull();
+    expect(poseMotionAt(frames, 7500, 125)).toBeNull();
+    expect(poseMotionAt(frames, 7000, 125)).not.toBeNull();
+  });
+
+  it("poseMotionAt misst Grad pro Sekunde und braucht genug Winkel", () => {
+    const track = makeTrack({ pose: oddHolds });
+    const { frames } = choreoFromPoseTrack(track, base);
+    expect(poseMotionAt(frames, 1500, 125)!).toBeLessThan(2);
+    // Shoulders change at 60 · 2π / 2 s ≈ 188 °/s on even beats; 2 of 8 limb angles move.
+    expect(poseMotionAt(frames, 2000, 125)!).toBeGreaterThan(30);
+    const armsOnly = frames.map((f) => ({
+      ...f,
+      angles: { leftShoulder: f.angles.leftShoulder!, rightShoulder: f.angles.rightShoulder! },
+    }));
+    expect(poseMotionAt(armsOnly, 2000, 125)).toBeNull();
+  });
+
+  it("trackMetrics: Bewegung an den Moves ist mit Haltepunkten niedriger, null bei Fehler", () => {
+    const track = makeTrack({ pose: oddHolds });
+    const grid = trackMetrics(track, base);
+    const holds = trackMetrics(track, { ...base, movePlacement: "holds" });
+    expect(grid.moveMotionDegPerS).not.toBeNull();
+    expect(holds.moveMotionDegPerS!).toBeLessThan(grid.moveMotionDegPerS! / 5);
+    expect(holds.moves).toBe(grid.moves);
+    const empty = trackMetrics(makeTrack({ edit: () => null }), {
+      ...base,
+      movePlacement: "holds",
+    });
+    expect(empty.moveMotionDegPerS).toBeNull();
+    expect(empty.error).not.toBeNull();
   });
 });

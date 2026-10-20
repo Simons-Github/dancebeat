@@ -323,6 +323,55 @@ describe("VideoChoreoPanel", () => {
   });
 });
 
+describe("VideoChoreoPanel: Moves", () => {
+  it("startet mit „Fester Takt“, „Haltepunkte“ rechnet ohne neue Analyse neu", async () => {
+    const est = figureEstimator();
+    const onChange = vi.fn<(r: VideoImportResult | null) => void>();
+    render(<VideoChoreoPanel bpm={120} onChange={onChange} createEstimator={() => est} />);
+    fireEvent.change(screen.getByLabelText("Tanzvideo"), {
+      target: { files: [new File(["v"], "tanz.mp4", { type: "video/mp4" })] },
+    });
+    const video = screen.getByLabelText<HTMLVideoElement>("Videovorschau");
+    patchVideoElement(video, { durationMs: 6000 });
+    fireEvent.loadedMetadata(video);
+    const grid = screen.getByRole("button", { name: "Fester Takt" });
+    const holds = screen.getByRole("button", { name: "Haltepunkte" });
+    expect(grid).toHaveAttribute("aria-pressed", "true");
+    expect(holds).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText(/Haltepunkte: Moves auf Beats/)).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Video analysieren" }));
+    const summary = await screen.findByText(/Moves, davon/, {}, { timeout: 4000 });
+    expect(summary).toHaveTextContent("Moves: Fester Takt.");
+    const latest = () => onChange.mock.calls.at(-1)?.[0] ?? null;
+    await waitFor(() => expect(latest()).not.toBeNull());
+    const before = latest()!;
+    const detects = vi.mocked(est.detect).mock.calls.length;
+
+    fireEvent.click(holds);
+    expect(holds).toHaveAttribute("aria-pressed", "true");
+    await waitFor(() => expect(latest()).not.toBe(before));
+    const after = latest()!;
+    expect(after).not.toBeNull();
+    expect(vi.mocked(est.detect).mock.calls.length).toBe(detects);
+    expect(screen.queryByText(/Bitte das Video neu analysieren/)).not.toBeInTheDocument();
+    expect(after.choreo.moves.map((m) => m.timeMs)).not.toEqual(
+      before.choreo.moves.map((m) => m.timeMs),
+    );
+    expect(after.choreo.frames).toEqual(before.choreo.frames);
+    const now = screen.getByText(/Moves, davon/);
+    expect(now).toHaveTextContent("Moves: Haltepunkte.");
+    expect(now).toHaveTextContent(`${after.stats.moves} Moves`);
+
+    createUrl.mockClear();
+    const click = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => {});
+    fireEvent.click(screen.getByRole("button", { name: "Rohdaten exportieren" }));
+    click.mockRestore();
+    const blob = (createUrl.mock.calls[0] as unknown as [Blob])[0];
+    expect(parsePoseTrackFile(await blob.text()).movePlacement).toBe("holds");
+  });
+});
+
 describe("VideoChoreoPanel: Zielperson", () => {
   function renderPanel(est: FakeEstimator) {
     const onChange = vi.fn<(r: VideoImportResult | null) => void>();

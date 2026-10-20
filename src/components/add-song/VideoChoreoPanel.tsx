@@ -37,6 +37,7 @@ import { drawPersonPicker } from "@/lib/overlay";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import { formatStartOffsetSeconds } from "@/lib/sync";
 import { DEFAULT_INTERVAL_MS } from "@/lib/videoAnalysis";
+import { MOVE_PLACEMENTS, type MovePlacement } from "@/lib/videoChoreo";
 import {
   defaultTarget,
   hasMultiplePersons,
@@ -73,6 +74,11 @@ const BEAT_HAND_HINT = "Bitte die Beat-Phase von Hand eintragen.";
 /** Pose models offered for the analysis; live camera tracking always uses "lite". */
 const MODEL_CHOICES = ["lite", "full"] as const satisfies readonly PoseModel[];
 const MODEL_LABELS: Record<PoseModel, string> = { lite: "Schnell", full: "Genau" };
+/** Move placement; rebuilt from the existing analysis, like the target person. */
+const PLACEMENT_LABELS: Record<MovePlacement, string> = {
+  grid: "Fester Takt",
+  holds: "Haltepunkte",
+};
 
 /** Where the automatic beat phase comes from; null = typed by hand. */
 type BeatSource = { kind: "music" } | { kind: "video"; envelope: OnsetEnvelope };
@@ -146,6 +152,7 @@ export function VideoChoreoPanel({
   /** Model of the next analysis, and the one the last started analysis used. */
   const [model, setModel] = useState<PoseModel>("lite");
   const [analyzedModel, setAnalyzedModel] = useState<PoseModel | null>(null);
+  const [placement, setPlacement] = useState<MovePlacement>("grid");
   /** Dev diagnostics only: duration of the last finished analysis. */
   const [analysisMs, setAnalysisMs] = useState<number | null>(null);
   const analysisToken = useRef(0);
@@ -225,6 +232,7 @@ export function VideoChoreoPanel({
         range: analyzed,
         beatPhaseMs: phaseMs,
         mirror: !selfie,
+        movePlacement: placement,
         durationMs,
         now: 0, // buildNewSong sets the timestamps
       });
@@ -233,7 +241,7 @@ export function VideoChoreoPanel({
       const message = e instanceof Error ? e.message : "Aus dem Video ließ sich kein Tanz bauen.";
       return { ok: false as const, message };
     }
-  }, [target, analyzed, stale, bpmValid, phaseMs, bpm, selfie, durationMs]);
+  }, [target, analyzed, stale, bpmValid, phaseMs, bpm, selfie, placement, durationMs]);
   const result = built?.ok ? built.result : null;
 
   // Dev diagnostics: the exact input of buildVideoChoreo, as a raw-data file for tuning.
@@ -248,10 +256,11 @@ export function VideoChoreoPanel({
             range: analyzed,
             mirror: !selfie,
             ...(analyzedModel && { model: analyzedModel }),
+            movePlacement: placement,
             track: target,
           })
         : null,
-    [result, target, analyzed, phaseMs, videoFile, bpm, selfie, analyzedModel],
+    [result, target, analyzed, phaseMs, videoFile, bpm, selfie, analyzedModel, placement],
   );
 
   useEffect(() => {
@@ -670,6 +679,30 @@ export function VideoChoreoPanel({
             </p>
           </div>
 
+          <div className="flex flex-col gap-2">
+            <span id={`${id}-placement`} className="text-base font-medium">
+              Moves
+            </span>
+            <div role="group" aria-labelledby={`${id}-placement`} className="flex gap-2">
+              {MOVE_PLACEMENTS.map((p) => (
+                <Button
+                  key={p}
+                  type="button"
+                  aria-pressed={placement === p}
+                  variant={placement === p ? "default" : "secondary"}
+                  disabled={busy}
+                  onClick={() => setPlacement(p)}
+                  className={`${BTN} flex-1 px-2`}
+                >
+                  {PLACEMENT_LABELS[p]}
+                </Button>
+              ))}
+            </div>
+            <p className={HINT}>
+              Haltepunkte: Moves auf Beats, an denen die Pose kurz steht (etwa gleich viele Moves).
+            </p>
+          </div>
+
           <div className="flex flex-col gap-3" aria-live="polite">
             {!busy && (
               <Button
@@ -712,6 +745,7 @@ export function VideoChoreoPanel({
                 {result.stats.moves} Moves, davon {result.stats.gold} Gold Moves, Person in{" "}
                 {Math.round(result.stats.detectionRatio * 100)} % der Bilder erkannt.
                 {analyzedModel && ` Modell: ${MODEL_LABELS[analyzedModel]}.`}
+                {` Moves: ${PLACEMENT_LABELS[placement]}.`}
               </p>
             )}
             {import.meta.env.DEV && diagnosticsFile && (

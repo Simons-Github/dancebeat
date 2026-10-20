@@ -7,7 +7,7 @@ import { z } from "zod";
 
 import { SHIPPED_MODELS } from "./mediapipe";
 import { LandmarkSchema } from "./schema";
-import type { PoseTrack, VideoChoreoOptions } from "./videoChoreo";
+import { MOVE_PLACEMENTS, type PoseTrack, type VideoChoreoOptions } from "./videoChoreo";
 
 export const POSE_TRACK_FORMAT = "dancebeat-pose-track";
 export const POSE_TRACK_VERSION = 1;
@@ -25,6 +25,8 @@ export const PoseTrackFileSchema = z.object({
   mirror: z.boolean(),
   /** Pose model of the analysis (Etappe 8g-4b). Missing in older exports (they used "lite"). */
   model: z.enum(SHIPPED_MODELS).optional(),
+  /** Move placement chosen in the dialog (Etappe 8g-4c). Missing in older exports ("grid"). */
+  movePlacement: z.enum(MOVE_PLACEMENTS).optional(),
   track: z.object({
     aspect: z.number().positive(),
     samples: z.array(
@@ -59,6 +61,7 @@ export function importOptions(file: PoseTrackFile): { track: PoseTrack; opts: Vi
       range: file.range,
       beatOffsetMs: file.beatPhaseMs - file.range.startMs,
       mirror: file.mirror,
+      ...(file.movePlacement && { movePlacement: file.movePlacement }),
       now: file.exportedAt,
     },
   };

@@ -49,6 +49,30 @@ describe("poseTrackFile", () => {
     expect(() => parsePoseTrackFile(JSON.stringify({ ...withModel, model: "heavy" }))).toThrow();
   });
 
+  it("speichert die Move-Platzierung und gibt sie an die Import-Optionen weiter", () => {
+    const withHolds = parsePoseTrackFile(
+      JSON.stringify(buildPoseTrackFile({ ...input, movePlacement: "holds" })),
+    );
+    expect(withHolds.movePlacement).toBe("holds");
+    expect(importOptions(withHolds).opts.movePlacement).toBe("holds");
+    const old = parsePoseTrackFile(JSON.stringify(buildPoseTrackFile(input)));
+    expect(old.movePlacement).toBeUndefined();
+    expect(importOptions(old).opts).not.toHaveProperty("movePlacement");
+    expect(() =>
+      parsePoseTrackFile(JSON.stringify({ ...withHolds, movePlacement: "raster" })),
+    ).toThrow();
+    const { track: t, opts } = importOptions(withHolds);
+    const dialog = buildVideoChoreo({
+      ...input,
+      movePlacement: "holds",
+      title: "tanz.mp4",
+      now: input.exportedAt,
+    });
+    expect(choreoFromPoseTrack(t, opts).moves.map((m) => m.timeMs)).toEqual(
+      dialog.choreo.moves.map((m) => m.timeMs),
+    );
+  });
+
   it("lehnt fremde Dateien ab", () => {
     expect(() => parsePoseTrackFile('{"format":"dancebeat-choreo"}')).toThrow();
     expect(() => parsePoseTrackFile("kein json")).toThrow();

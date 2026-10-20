@@ -6,7 +6,7 @@
  */
 import { ChoreographySchema } from "../schema";
 import type { Choreography } from "../types";
-import { choreoFromPoseTrack, type PoseTrack } from "../videoChoreo";
+import { choreoFromPoseTrack, type MovePlacement, type PoseTrack } from "../videoChoreo";
 
 /** Shortest usable section. Shorter ones rarely give the two moves a choreography needs. */
 export const VIDEO_RANGE_MIN_MS = 2000;
@@ -76,6 +76,8 @@ export interface VideoImportOptions {
   beatPhaseMs: number;
   /** See VideoChoreoOptions.mirror. Default true. */
   mirror?: boolean;
+  /** See VideoChoreoOptions.movePlacement. Default "grid". */
+  movePlacement?: MovePlacement;
   colors?: [string, string];
   /** Video duration for the range check; null/omitted skips the end check. */
   durationMs?: number | null;
@@ -117,6 +119,7 @@ export function buildVideoChoreo(opts: VideoImportOptions): VideoImportResult {
     range,
     beatOffsetMs: opts.beatPhaseMs - range.startMs,
     ...(opts.mirror !== undefined && { mirror: opts.mirror }),
+    ...(opts.movePlacement !== undefined && { movePlacement: opts.movePlacement }),
     ...(opts.colors && { colors: opts.colors }),
     ...(opts.now !== undefined && { now: opts.now }),
   });

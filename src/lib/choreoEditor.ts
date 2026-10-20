@@ -1,6 +1,6 @@
 import { appliesPlaybackRate } from "./audio/rate";
 import type { Choreography, Move, Song } from "./types";
-import { poseUsableAt, suggestGoldMoves } from "./videoChoreo";
+import { MIN_MOVE_GAP_MS, poseUsableAt, suggestGoldMoves } from "./videoChoreo";
 
 /**
  * Pure, immutable edit operations for the choreography editor (stages 8d-1 and 8d-2a). No React,
@@ -16,12 +16,8 @@ export const OFFSET_SHIFT_LIMIT_MS = 10_000;
 /** Tempo choices offered by the editor. 1 means "no field" (`playbackRate` is removed). */
 export const TEMPO_OPTIONS = [0.75, 1, 1.25] as const;
 
-/**
- * Minimum distance between two moves: a playability limit that keeps the order strict and allows
- * one-beat spacing up to 200 BPM. Overlapping judging windows (±MOVE_WINDOW_MS) are fine, as the
- * scorer tracks the best deviation per move.
- */
-export const MIN_MOVE_GAP_MS = 300;
+/** Minimum distance between two moves (defined next to the video import, which uses it too). */
+export { MIN_MOVE_GAP_MS };
 
 /** Length of one beat in ms. */
 export const beatLengthMs = (bpm: number) => 60_000 / bpm;
