@@ -623,7 +623,57 @@ Videozeit = Audiozeit gilt exakt statt nur angenommen.
   wie eine sehr lange Audiodatei viel Speicher brauchen.
 - Nach dem Ausschalten ist das Dateifeld leer (es wird neu eingehängt); die zuvor gewählte
   Audiodatei gilt weiter und steht als „Musik: <Name>“ darunter.
-- Nicht enthalten: das Video im Spiel als Vorlage zeigen (Rest von „Video behalten“).
+- Das Video im Spiel als Vorlage zeigen: siehe
+  [Tanzvideo im Spiel](#tanzvideo-im-spiel-etappe-8h-2a).
+
+### Tanzvideo im Spiel (Etappe 8h-2a)
+
+Ist die Musik eines Songs ein Tanzvideo (8h-1), zeigt das Spiel das Video stumm im Platz des
+Coachs statt der Strichfigur.
+
+- **Erkennung ohne Formatwechsel:** nur bei Quelle `local`; der Spielscreen lädt den Blob über
+  `songRepository.getAudio(blobId)` und zeigt ihn, wenn `blob.type` mit `video/` beginnt
+  (IndexedDB behält den Typ). Kein neues Feld am Song, keine Version. Eine Audiodatei
+  (`audio/*`) behält den Coach.
+- Eigenes `<video muted playsInline preload="auto">` mit eigener Objekt-URL, die beim Verlassen
+  des Spiels und beim Songwechsel freigegeben wird. Die Musik läuft weiter über das gemeinsame
+  Audio-Element; das Video hat keinen Ton. State ändert sich nur beim Laden und bei einem
+  Fehler, nie pro Frame.
+- **Zielzeit:** `Videozeit = Spielzeit + choreo.offsetMs` (`videoTargetMs`, nie negativ). Das
+  Video folgt der Choreografie, nicht der Audioposition: Gezeigt werden soll die Bewegung, die
+  gerade bewertet wird, wie beim Coach. Latenz und `syncOffsetMs` verschieben die Choreografie
+  gegen die Musik; das Video wandert mit. Bei Video-Importen ist `choreo.offsetMs`
+  Bereichsstart plus Beat-Phase, das Video steht also an der analysierten Stelle. Die
+  Wiedergaberate ist `effectivePlaybackRate(song)`.
+- **Nachführen** (`videoSyncStep`, `src/lib/game/videoSync.ts`, reine Logik) in der
+  vorhandenen rAF-Schleife über Refs: In der Phase „playing“ läuft das Video von selbst und
+  wird nur bei mehr als 150 ms Abweichung (`VIDEO_SYNC_TOLERANCE_MS`) per Seek korrigiert. In
+  allen anderen Phasen (Vorbereitung, Countdown, Pause, blocked, Ende) ist es pausiert und steht
+  auf der Zielzeit, ebenfalls mit Seek nur über der Toleranz. Seeks werden gedrosselt: keiner,
+  solange einer läuft (`video.seeking`), und frühestens 500 ms nach dem letzten
+  (`VIDEO_SEEK_COOLDOWN_MS`, gemessen am rAF-Zeitstempel, der nur drosselt und nie Spielzeit
+  ist). Am Videoende (`video.ended`, auch bei unbekannter Länge) wird nie `play()` gerufen, es
+  würde zurückspulen; vor dem Videostart (Ziel 0) wartet es auf dem ersten Bild.
+- **Seek-Vorlauf:** Ein Handy braucht nach einem Seek oft länger als die Toleranz zum
+  Dekodieren und landet sonst jedes Mal hinter dem Ziel (Ruckeln alle 500 ms). Die Schleife misst
+  deshalb die Dauer des letzten Seeks (vom Setzen von `currentTime` bis `seeking` wieder aus ist,
+  rAF-Zeitstempel) und zielt während „playing“ um diese Dauer voraus (`seekLeadMs`, höchstens
+  1000 ms, `MAX_SEEK_LEAD_MS`; außerhalb von „playing“ 0).
+- **play() mit Rückhalt:** kein zweiter Aufruf, solange ein `play()`-Promise offen ist; nach
+  einer Ablehnung frühestens nach 2 s erneut (`VIDEO_PLAY_RETRY_MS`), bei einem Phasenwechsel
+  sofort. Bis dahin steht das Standbild. `playbackRate` und `defaultPlaybackRate` folgen der
+  Rate.
+- **Nicht gespiegelt:** `mirrorChoreo` tauscht nur links und rechts in den Daten; der Coach
+  entspricht dem Originalbild, das Video also auch. Gespiegelt wird nur das Kamerabild.
+- **Layout:** Kasten unten links für Querformat-Videos, `object-contain` auf dunklem Grund,
+  `rounded-2xl`; Hochformat `w-[min(64vw,50dvh)] h-[min(36vw,28dvh)]`, Querformat
+  `w-[min(40vw,75dvh)] h-[min(23vw,42dvh)]` (so hoch wie der Coach, breiter). Hochkant-Videos
+  erscheinen darin schmal.
+- **Fallback:** Fehler-Ereignis des Videos (Codec, defekte Datei) → wieder der Coach, einmalig.
+  Lädt der Blob nicht, bleibt es beim Coach.
+- **Einstellung** „Tanzvideo zeigen“ (`danceVideo`, Standard an; alte gespeicherte Einstellungen
+  bleiben gültig) in den Einstellungen unter Anzeige und im Pausenmenü; dort nur, wenn der Song
+  ein Video hat. Aus: Coach wie bisher.
 
 ### Modellwahl Schnell / Genau (Etappe 8g-4b)
 

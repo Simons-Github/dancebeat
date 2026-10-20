@@ -57,6 +57,16 @@ describe("settings", () => {
     expect(getSettings().haptics).toBe(false);
   });
 
+  it("shows the dance video by default; old settings without the key stay valid", () => {
+    expect(DEFAULT_SETTINGS.danceVideo).toBe(true);
+    store({ mirror: false });
+    expect(getSettings()).toEqual({ ...DEFAULT_SETTINGS, mirror: false });
+    store({ danceVideo: "aus" });
+    expect(getSettings().danceVideo).toBe(true);
+    store({ danceVideo: false });
+    expect(getSettings().danceVideo).toBe(false);
+  });
+
   it("clamps volume and latency into their ranges", () => {
     store({ volume: 7, latencyMs: -9000 });
     expect(getSettings().volume).toBe(1);

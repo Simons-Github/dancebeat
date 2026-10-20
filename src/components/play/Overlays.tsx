@@ -124,12 +124,14 @@ export function PauseMenu({
   cameraError,
   skeleton,
   beatPulse,
+  danceVideo = null,
   onResume,
   onRestart,
   onQuit,
   onRetryCamera,
   onSkeleton,
   onBeatPulse,
+  onDanceVideo,
 }: {
   reason: PauseReason | null;
   canResume: boolean;
@@ -137,12 +139,15 @@ export function PauseMenu({
   /** null: no skeleton (movement mode), the switch is hidden. */
   skeleton: boolean | null;
   beatPulse: boolean;
+  /** null: the song has no dance video, the switch is hidden. */
+  danceVideo?: boolean | null;
   onResume: () => void;
   onRestart: () => void;
   onQuit: () => void;
   onRetryCamera: () => void;
   onSkeleton: (v: boolean) => void;
   onBeatPulse: (v: boolean) => void;
+  onDanceVideo?: (v: boolean) => void;
 }) {
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => first.current?.focus(), []);
@@ -193,6 +198,14 @@ export function PauseMenu({
             </Label>
             <Switch id="toggle-pulse" checked={beatPulse} onCheckedChange={onBeatPulse} />
           </div>
+          {danceVideo !== null && onDanceVideo && (
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="toggle-dance-video" className="text-base">
+                Tanzvideo zeigen
+              </Label>
+              <Switch id="toggle-dance-video" checked={danceVideo} onCheckedChange={onDanceVideo} />
+            </div>
+          )}
         </div>
       </div>
     </Layer>

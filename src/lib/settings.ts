@@ -22,6 +22,7 @@ const D = {
   lastSongId: "",
   autoStart: true,
   haptics: true,
+  danceVideo: true,
 };
 
 /**
@@ -52,6 +53,8 @@ export const SettingsSchema = z.object({
   autoStart: z.boolean().catch(D.autoStart),
   /** Vibrate on PERFECT and Gold Move hits (where `navigator.vibrate` exists; not on iOS). */
   haptics: z.boolean().catch(D.haptics),
+  /** In play, show the stored dance video instead of the stick-figure coach (songs with one). */
+  danceVideo: z.boolean().catch(D.danceVideo),
 });
 
 export type Settings = z.output<typeof SettingsSchema>;

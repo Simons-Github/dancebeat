@@ -371,6 +371,13 @@ export function SettingsScreen() {
             onChange={(beatPulse) => save({ beatPulse })}
           />
           <SwitchRow
+            id="dance-video"
+            label="Tanzvideo zeigen"
+            hint="Bei Songs mit Tanzvideo läuft das Video stumm statt der Strichfigur mit."
+            checked={settings.danceVideo}
+            onChange={(danceVideo) => save({ danceVideo })}
+          />
+          <SwitchRow
             id="mirror"
             label="Kamerabild spiegeln"
             hint="Nur die Anzeige wird gespiegelt, die Bewertung ändert sich nicht."

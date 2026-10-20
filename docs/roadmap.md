@@ -7,19 +7,19 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status                       | Empfohlenes Modell                                                    |
-| -------------------------------------------- | ---------------------------- | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                           | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅                           | Sonnet                                                                |
-| 3. Gameplay                                  | ✅ (Gerätetest offen)        | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ✅                           | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)        | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)        | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)        | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2–4d, 8h-1 ✅) | Opus                                                                  |
-| 9. Typen und Lint                            | ✅                           | –                                                                     |
-| 10. Spotify                                  | ✅ (Gerätetest offen)        | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳                           | je nach Punkt                                                         |
+| Etappe                                       | Status                              | Empfohlenes Modell                                                    |
+| -------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                                  | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                                  | Sonnet                                                                |
+| 3. Gameplay                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ✅                                  | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)               | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)               | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)               | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2–4d, 8h-1, 8h-2a ✅) | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                                  | –                                                                     |
+| 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
 
@@ -488,7 +488,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1 umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1, 8h-2a umgesetzt)
 
 Aufteilung:
 
@@ -716,7 +716,7 @@ Aufteilung:
   - **8g-4 weitere Verbesserungen, nur nach Messung (offen):** Standard bleibt „lite“, bis die
     Messungen aus 8g-4b vorliegen; „heavy“ nur, wenn „full“ nicht reicht.
 
-- **8h „Video behalten“ – 8h-1 umgesetzt.**
+- **8h „Video behalten“ – 8h-1 und 8h-2a umgesetzt.**
   - **8h-1 Musik aus dem Tanzvideo – umgesetzt, Gerätetest offen.** Schalter „Musik aus dem
     Tanzvideo“ im Tab Datei, sobald „Aus Video“ gewählt ist (an, wenn noch keine Audiodatei
     gewählt war). Dann ist die Videodatei die Audiodatei des Songs (`local`-Blob, kein
@@ -734,8 +734,29 @@ Aufteilung:
             Spiel, Sync-Test und Editor-Vorschau ab; Moves treffen die Musik ohne Korrektur
       - [ ] Speicher: 100–250-MB-Video speichern, Bibliothek bleibt bedienbar, Anzeige in den
             Einstellungen stimmt
-  - **8h-2 Video im Spiel zeigen (offen):** das gespeicherte Video stumm und synchron zur
-    Spielzeit als Vorlage neben oder statt des Coachs; braucht ein Feld am Song (Formatwechsel).
+  - **8h-2a Tanzvideo im Spiel zeigen – umgesetzt, Gerätetest offen.** Ist die Musik ein
+    Tanzvideo (`local`-Blob mit Typ `video/*`), läuft es stumm im Platz des Coachs, ohne
+    Formatwechsel. Zielzeit Spielzeit + `choreo.offsetMs` (folgt der Choreografie, nicht dem
+    Ton), Korrektur per Seek erst ab 150 ms Abweichung, gedrosselt; außerhalb von „playing“
+    pausiert und auf der Zielzeit. Nicht gespiegelt, bei Fehler zurück zum Coach. Einstellung
+    „Tanzvideo zeigen“ (Standard an) in den Einstellungen und im Pausenmenü. Details:
+    [architecture.md](architecture.md#tanzvideo-im-spiel-etappe-8h-2a). Tests
+    `videoSync.test.ts`, `game-screen.test.tsx`, `settings.test.ts`.
+    - Playwright (390×844 und 844×390, erzeugtes 20-s-Testvideo 640×360 mit Klicks, Song über
+      Tab Datei mit dem MP4 als Audiodatei, `?sim=1`): Video unten links statt des Coachs
+      (ca. 250×140 bzw. 292×164 px), läuft 1 s pro s ohne Sprünge, steht in der Pause,
+      Schalter im Pausenmenü bringt den Coach zurück und speichert `danceVideo: false`;
+      Konsole ohne Fehler und Warnungen. Das Dev-Abzeichen „SIMULATION“ überdeckt im Hochformat
+      den rechten Rand des Videos (nur Dev).
+    - **Gerätetest 8h-2a (offen):**
+      - [ ] iPhone (Safari) und Android (Chrome): Video läuft flüssig neben der Musik aus
+            demselben Blob, startet mit dem Countdown-Ende, steht in der Pause
+      - [ ] Sichtbare Abweichung oder Sprünge (Seeks) zwischen Video, Coach-Timing und Musik,
+            auch bei Tempo 0.75× / 1.25×; kein wiederholtes Ruckeln durch Nachspringen
+      - [ ] Akku und Wärme bei einem ganzen Song mit Kamera und Video
+  - **8h-2b (offen):** Video getrennt speichern, wenn die Musik eine eigene Datei ist (braucht
+    ein Feld am Song, also Formatwechsel); Video in Editor-Vorschau und Sync-Test; Option für
+    ein größeres Video-Layout.
 
 Ursprüngliche Schritte:
 

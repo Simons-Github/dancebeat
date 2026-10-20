@@ -17,7 +17,13 @@ vi.mock("@/hooks/useSongLibrary", () => ({
   useSongLibrary: () => ({ songs: library.songs, loading: false }),
 }));
 /** In-memory repository over library.songs (the game stores the best result through it). */
-const repo = vi.hoisted(() => ({ failSave: false, hangSave: false, missing: false }));
+const repo = vi.hoisted(() => ({
+  failSave: false,
+  hangSave: false,
+  missing: false,
+  /** What `getAudio` returns for the song's blob (8h-2a: a video blob shows the dance video). */
+  blob: undefined as Blob | undefined,
+}));
 vi.mock("@/lib/library/repository", () => ({
   songRepository: {
     get: async (id: string) => (repo.missing ? undefined : library.songs.find((s) => s.id === id)),
@@ -27,6 +33,7 @@ vi.mock("@/lib/library/repository", () => ({
       library.songs = library.songs.map((s) => (s.id === song.id ? song : s));
       return song;
     },
+    getAudio: async () => repo.blob,
   },
 }));
 
@@ -169,7 +176,7 @@ beforeEach(() => {
     opts: null,
   });
   scene.estimators = [];
-  Object.assign(repo, { failSave: false, hangSave: false, missing: false });
+  Object.assign(repo, { failSave: false, hangSave: false, missing: false, blob: undefined });
 });
 
 afterEach(() => {
@@ -686,5 +693,149 @@ describe("Spielscreen mit (Fake-)Kamera", () => {
     expect(tracks.every((t) => t.stop.mock.calls.length > 0)).toBe(true);
     expect(scene.estimators.every((e) => e.closed)).toBe(true);
     expect(audio.calls).toContain("destroy");
+  });
+});
+
+describe("Spielscreen mit Tanzvideo (8h-2a)", () => {
+  let created: string[];
+  let revoked: string[];
+  /** Fake media element state: play() starts it (or is refused), currentTime records seeks. */
+  const media = { paused: true, time: 0, refuse: false, seeks: [] as number[] };
+  const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+
+  beforeEach(() => {
+    created = [];
+    revoked = [];
+    // jsdom has no object URLs.
+    URL.createObjectURL = () => {
+      const url = `blob:video-${created.length}`;
+      created.push(url);
+      return url;
+    };
+    URL.revokeObjectURL = (url: string) => void revoked.push(url);
+    Object.assign(media, { paused: true, time: 0, refuse: false, seeks: [] });
+    vi.spyOn(HTMLMediaElement.prototype, "paused", "get").mockImplementation(() => media.paused);
+    vi.spyOn(HTMLMediaElement.prototype, "currentTime", "get").mockImplementation(() => media.time);
+    vi.spyOn(HTMLMediaElement.prototype, "currentTime", "set").mockImplementation((v: number) => {
+      media.time = v;
+      media.seeks.push(v);
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "play").mockImplementation(() => {
+      if (media.refuse) return Promise.reject(new DOMException("refused", "NotAllowedError"));
+      media.paused = false;
+      return Promise.resolve();
+    });
+    vi.spyOn(HTMLMediaElement.prototype, "pause").mockImplementation(() => {
+      media.paused = true;
+    });
+  });
+  afterEach(() => {
+    URL.createObjectURL = original.create;
+    URL.revokeObjectURL = original.revoke;
+  });
+
+  const videoEl = () => screen.queryByLabelText("Tanzvideo");
+
+  it("zeigt das Video statt des Coachs, stumm und ungespiegelt; beim Verlassen ist die URL frei", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    const v = videoEl() as HTMLVideoElement;
+    expect(v.tagName).toBe("VIDEO");
+    expect(v.muted).toBe(true);
+    expect(v.getAttribute("src")).toBe("blob:video-0");
+    expect(screen.queryByRole("img", { name: "Coach" })).toBeNull();
+    const play = vi.mocked(HTMLMediaElement.prototype.play);
+    await advance(4000);
+    expect(phase()).toBe("countdown");
+    expect(play).not.toHaveBeenCalled();
+    await advance(1100);
+    expect(phase()).toBe("playing");
+    expect(play).toHaveBeenCalled();
+    cleanup();
+    expect(revoked).toEqual(["blob:video-0"]);
+  });
+
+  it("Audiodatei als Musik: Coach bleibt, kein Video", async () => {
+    repo.blob = new Blob(["x"], { type: "audio/mpeg" });
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    expect(videoEl()).toBeNull();
+    expect(screen.getByRole("img", { name: "Coach" })).toBeInTheDocument();
+    expect(created).toEqual([]);
+  });
+
+  it("Schalter im Pausenmenü wechselt zurück zum Coach und wird gespeichert", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    const toggle = screen.getByRole("switch", { name: "Tanzvideo zeigen" });
+    expect(toggle).toBeChecked();
+    fireEvent.click(toggle);
+    await advance(10);
+    expect(videoEl()).toBeNull();
+    expect(screen.getByRole("img", { name: "Coach" })).toBeInTheDocument();
+    expect(JSON.parse(localStorage.getItem("dancebeat.settings")!)).toMatchObject({
+      danceVideo: false,
+    });
+  });
+
+  it("ohne Video kein Schalter im Pausenmenü", async () => {
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(screen.queryByRole("switch", { name: "Tanzvideo zeigen" })).toBeNull();
+  });
+
+  it("Ladefehler des Videos: zurück zum Coach", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    const v = videoEl();
+    expect(v).not.toBeNull();
+    await act(async () => void v!.dispatchEvent(new Event("error")));
+    expect(videoEl()).toBeNull();
+    expect(screen.getByRole("img", { name: "Coach" })).toBeInTheDocument();
+  });
+
+  it("ruft play() nicht in jedem Frame auf, sobald das Video läuft", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    expect(phase()).toBe("playing");
+    await advance(1000);
+    expect(vi.mocked(HTMLMediaElement.prototype.play)).toHaveBeenCalledTimes(1);
+    expect(media.paused).toBe(false);
+  });
+
+  it("verweigertes play(): neuer Versuch erst nach der Wartezeit", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    media.refuse = true;
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    expect(phase()).toBe("playing");
+    const play = vi.mocked(HTMLMediaElement.prototype.play);
+    expect(play).toHaveBeenCalledTimes(1);
+    await advance(1500);
+    expect(play).toHaveBeenCalledTimes(1);
+    await advance(1000);
+    expect(play).toHaveBeenCalledTimes(2);
+  });
+
+  it("Neustart aus dem Pausenmenü spult das Video zurück und hält es an", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    await advance(1000);
+    expect(media.time).toBeGreaterThan(0.5); // seconds
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    await advance(20);
+    expect(media.paused).toBe(true);
+    fireEvent.click(screen.getByRole("button", { name: "Neustart" }));
+    await advance(100);
+    expect(phase()).toBe("countdown");
+    expect(media.seeks.at(-1)).toBe(0);
+    expect(media.paused).toBe(true);
   });
 });

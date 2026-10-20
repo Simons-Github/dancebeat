@@ -34,6 +34,7 @@ import { coachPose, coachView, flashSchedule, moveFigures, piktoLayout } from "@
 import { recordResultSafely } from "@/lib/game/results";
 import { disarmAutoStart, setLastResult } from "@/lib/game/session";
 import { simulatedAngles, type SimOptions } from "@/lib/game/simulatedPlayer";
+import { seekLeadMs, videoSyncStep, videoTargetMs } from "@/lib/game/videoSync";
 import { songRepository } from "@/lib/library/repository";
 import {
   MotionMeter,
@@ -108,6 +109,7 @@ export function GameScreen({
   const ytHostRef = useRef<HTMLDivElement>(null);
   const isYouTube = song.source.type === "youtube";
   const pulseRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   // Latest toggles for the loops, without restarting them.
   const showSkeleton = useRef(settings.skeleton);
   showSkeleton.current = settings.skeleton;
@@ -142,6 +144,41 @@ export function GameScreen({
   useDeviceMotion(motion, onMotion);
 
   useEffect(() => setSfxVolume(settings.volume), [settings.volume]);
+
+  // Dance video (Etappe 8h-2a): a local source whose blob is a video (8h-1, "Musik aus dem
+  // Tanzvideo") is also shown, muted, in the coach slot. Its own element and object URL; the
+  // music keeps playing through the shared audio element. State changes only on load and error.
+  const videoBlobId = song.source.type === "local" ? song.source.blobId : null;
+  const [video, setVideo] = useState<{ blobId: string; url: string } | null>(null);
+  const [videoFailedUrl, setVideoFailedUrl] = useState<string | null>(null);
+  useEffect(() => {
+    if (!videoBlobId) return;
+    let cancelled = false;
+    let url: string | null = null;
+    void songRepository
+      .getAudio(videoBlobId)
+      .then((blob) => {
+        if (cancelled || !blob?.type.startsWith("video/")) return;
+        url = URL.createObjectURL(blob);
+        setVideo({ blobId: videoBlobId, url });
+      })
+      .catch(() => {
+        // No picture then; the coach stays. The music reports its own load errors.
+      });
+    return () => {
+      cancelled = true;
+      if (url) URL.revokeObjectURL(url);
+    };
+  }, [videoBlobId]);
+  const videoUrl =
+    video && video.blobId === videoBlobId && video.url !== videoFailedUrl ? video.url : null;
+  const showVideo = videoUrl !== null && settings.danceVideo;
+  // Leaving the video (setting off, song change, unmount): stop decoding right away.
+  useEffect(() => {
+    if (!showVideo) return;
+    const el = videoRef.current;
+    return () => el?.pause();
+  }, [showVideo]);
   // The stored camera is read once, then the camera starts (no restart when settings load).
   useEffect(() => setCameraId(getSettings().cameraId), []);
 
@@ -312,11 +349,82 @@ export function GameScreen({
     let raf = 0;
     let lastSim = -Infinity;
     let gold = false;
+    // Video sync bookkeeping (wall time from the rAF timestamp, never game time).
+    let videoEl: HTMLVideoElement | null = null;
+    let lastSeekAt = -Infinity;
+    let seekIssuedAt: number | null = null;
+    let seekLag = 0;
+    let playPending = false;
+    let refusedAt = -Infinity;
+    let lastPhase: string | null = null;
+    /** rAF timestamp of the latest frame (a refusal settles between frames). */
+    let lastFrameAt = 0;
     const colors = { accent: choreo.accentColor, secondary: choreo.secondaryColor };
-    const loop = () => {
+    const loop = (frameNow?: number) => {
       raf = requestAnimationFrame(loop);
       const ctl = controllerRef.current;
       const t = timeMs();
+      const v = videoRef.current;
+      if (v) {
+        // The rAF timestamp only throttles seeks and play retries and measures the seek lag;
+        // the video position always comes from `t`.
+        const now = typeof frameNow === "number" && Number.isFinite(frameNow) ? frameNow : 0;
+        if (v !== videoEl) {
+          // New element (setting toggled back on): its own bookkeeping.
+          videoEl = v;
+          lastSeekAt = refusedAt = -Infinity;
+          seekIssuedAt = null;
+          seekLag = 0;
+          playPending = false;
+        }
+        const phase = ctl?.state.phase ?? "preparing";
+        if (phase !== lastPhase) {
+          // A new phase (e.g. "Weiter" after a refusal) may try play() right away.
+          lastPhase = phase;
+          refusedAt = -Infinity;
+        }
+        if (seekIssuedAt !== null && !v.seeking) {
+          seekLag = now - seekIssuedAt;
+          seekIssuedAt = null;
+        }
+        if (v.playbackRate !== rate) v.playbackRate = rate;
+        if (v.defaultPlaybackRate !== rate) v.defaultPlaybackRate = rate;
+        const step = videoSyncStep({
+          currentMs: v.currentTime * 1000,
+          targetMs: videoTargetMs(t, choreo.offsetMs),
+          phase,
+          paused: v.paused,
+          seeking: v.seeking,
+          msSinceSeek: now - lastSeekAt,
+          ...(Number.isFinite(v.duration) ? { durationMs: v.duration * 1000 } : {}),
+          ended: v.ended,
+          playPending,
+          msSinceRefusal: now - refusedAt,
+          seekLeadMs: seekLeadMs(seekLag, phase === "playing"),
+        });
+        if (step.seekMs !== null) {
+          lastSeekAt = now;
+          seekIssuedAt = now;
+          v.currentTime = step.seekMs / 1000;
+        }
+        if (step.pause) v.pause();
+        if (step.play) {
+          // Muted inline video may autoplay; a refusal leaves the still picture until the retry.
+          playPending = true;
+          const el = v;
+          void Promise.resolve(v.play()).then(
+            () => {
+              if (el === videoEl) playPending = false;
+            },
+            () => {
+              if (el !== videoEl) return;
+              playPending = false;
+              refusedAt = lastFrameAt;
+            },
+          );
+        }
+        lastFrameAt = now;
+      }
       if (
         import.meta.env.DEV &&
         sim &&
@@ -460,6 +568,8 @@ export function GameScreen({
         cameraError={noCamera ? null : camera.error}
         skeleton={motion ? null : settings.skeleton}
         beatPulse={settings.beatPulse}
+        danceVideo={videoUrl ? settings.danceVideo : null}
+        onDanceVideo={(v) => saveSettings({ danceVideo: v })}
         onResume={() => controllerRef.current?.resume()}
         onRestart={() => controllerRef.current?.restart()}
         onQuit={quit}
@@ -560,6 +670,18 @@ export function GameScreen({
                   ? "pointer-events-auto fixed inset-0 z-40 m-auto size-[max(200px,min(80vw,48dvh))] ring-4 ring-gold landscape:size-[max(200px,min(45vw,60dvh))]"
                   : "pointer-events-none absolute bottom-0 left-0 z-20 size-[max(200px,min(38vw,28dvh))] landscape:size-[max(200px,min(26vw,42dvh))]",
               )}
+            />
+          ) : showVideo ? (
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              muted
+              playsInline
+              preload="auto"
+              aria-label="Tanzvideo"
+              // Broken or unplayable: back to the coach (one state change).
+              onError={() => setVideoFailedUrl(videoUrl)}
+              className="pointer-events-none absolute bottom-0 left-0 h-[min(36vw,28dvh)] w-[min(64vw,50dvh)] max-w-full rounded-2xl bg-black/70 object-contain landscape:h-[min(23vw,42dvh)] landscape:w-[min(40vw,75dvh)]"
             />
           ) : (
             <canvas
