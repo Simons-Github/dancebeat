@@ -16,6 +16,7 @@ vi.mock("@/lib/beat", async (orig) => ({
 afterEach(() => {
   cleanup();
   analyze.mockReset();
+  sessionStorage.clear();
 });
 
 const ID = "dQw4w9WgXcQ";
@@ -34,6 +35,15 @@ async function openYouTube() {
   fireEvent.mouseDown(tab);
   fireEvent.click(tab);
 }
+
+async function openSpotify() {
+  const tab = await screen.findByRole("tab", { name: "Spotify" });
+  fireEvent.mouseDown(tab);
+  fireEvent.click(tab);
+}
+
+const TRACK = "4uLU6hMCjMI75M1A2tKUQC";
+const NOT_CONNECTED = /Noch nicht mit Spotify verbunden/;
 
 function chooseFile(label: string, file: File) {
   fireEvent.change(screen.getByLabelText(label), { target: { files: [file] } });
@@ -214,5 +224,75 @@ describe("AddSongDialog", () => {
       type: "url",
       url: "https://example.com/a.mp3",
     });
+  });
+
+  it("fügt einen Spotify-Song aus einem Link hinzu", async () => {
+    const { onAdd, onAdded } = setup();
+    await openSpotify();
+    fireEvent.change(await screen.findByLabelText("Spotify-Song-Link oder URI"), {
+      target: { value: `https://open.spotify.com/intl-de/track/${TRACK}?si=abc` },
+    });
+    fireEvent.change(screen.getByLabelText("Titel"), { target: { value: "Spotify-Lied" } });
+    expect(submitButton()).toBeEnabled();
+    fireEvent.click(submitButton());
+
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
+    const [song, audio] = onAdd.mock.calls[0]!;
+    expect(song.source).toEqual({ type: "spotify", trackUri: `spotify:track:${TRACK}` });
+    expect(song.title).toBe("Spotify-Lied");
+    expect(audio).toBeUndefined();
+    await waitFor(() => expect(onAdded).toHaveBeenCalledWith(song));
+  });
+
+  it("markiert einen ungültigen Spotify-Link und sperrt Speichern", async () => {
+    const { onAdd } = setup();
+    await openSpotify();
+    fireEvent.change(screen.getByLabelText("Titel"), { target: { value: "X" } });
+    const field = await screen.findByLabelText("Spotify-Song-Link oder URI");
+    fireEvent.change(field, { target: { value: `https://open.spotify.com/album/${TRACK}` } });
+    expect(field).toHaveAttribute("aria-invalid", "true");
+    expect(screen.getByText(/kein gültiger Spotify-Song/)).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
+    fireEvent.click(submitButton());
+    expect(onAdd).not.toHaveBeenCalled();
+  });
+
+  it("zeigt ohne Spotify-Token den Hinweis „Noch nicht mit Spotify verbunden“", async () => {
+    setup();
+    await openSpotify();
+    expect(await screen.findByRole("status")).toHaveTextContent(NOT_CONNECTED);
+  });
+
+  it("zeigt mit gültigem Spotify-Token keinen Verbindungshinweis", async () => {
+    sessionStorage.setItem(
+      "dancebeat.spotify.token",
+      JSON.stringify({
+        accessToken: "a",
+        refreshToken: "r",
+        expiresAt: Date.now() + 3_600_000,
+        clientId: "0123456789abcdef0123456789abcdef",
+      }),
+    );
+    setup();
+    await openSpotify();
+    expect(await screen.findByLabelText("Spotify-Song-Link oder URI")).toBeInTheDocument();
+    expect(screen.queryByText(NOT_CONNECTED)).toBeNull();
+  });
+
+  it("zeigt den Spotify-Hinweis nicht auf den anderen Tabs", async () => {
+    setup();
+    await openYouTube();
+    expect(await screen.findByLabelText("YouTube-Link oder Video-ID")).toBeInTheDocument();
+    expect(screen.queryByText(NOT_CONNECTED)).toBeNull();
+  });
+
+  it("hält den Spotify-Link getrennt vom YouTube-Link", async () => {
+    setup();
+    await openYouTube();
+    fireEvent.change(screen.getByLabelText("YouTube-Link oder Video-ID"), {
+      target: { value: ID },
+    });
+    await openSpotify();
+    expect(await screen.findByLabelText("Spotify-Song-Link oder URI")).toHaveValue("");
   });
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
 import { useReducedMotion } from "framer-motion";
-import { ArrowLeft, Home, Pause } from "lucide-react";
+import { ArrowLeft, Home, Pause, Settings } from "lucide-react";
 
 import { Hud } from "@/components/play/Hud";
 import {
@@ -400,7 +400,22 @@ export function GameScreen({
               ? "Die Musik ist abgebrochen"
               : "Die Musik konnte nicht geladen werden"
         }
-        actions={toLibrary}
+        actions={
+          song.source.type === "spotify" ? (
+            <>
+              {/* Most Spotify failures (not connected, session expired) are fixed there. */}
+              <Button asChild size="lg" className={GAME_BTN}>
+                <Link to="/settings">
+                  <Settings aria-hidden />
+                  Zu den Einstellungen
+                </Link>
+              </Button>
+              {toLibrary}
+            </>
+          ) : (
+            toLibrary
+          )
+        }
       >
         <p className="text-base">{audio.error}</p>
       </MessageOverlay>

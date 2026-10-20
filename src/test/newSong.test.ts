@@ -5,6 +5,7 @@ import { analyzeAudio, DECODE_ERROR_MESSAGE } from "@/lib/beat";
 import { buildChoreoFile, parseChoreoFile } from "@/lib/library/choreoFile";
 import {
   buildNewSong,
+  parseSpotifyTrackUri,
   parseYouTubeId,
   validateAudioUrl,
   validateNewSongFields,
@@ -45,6 +46,52 @@ describe("parseYouTubeId", () => {
     "javascript:alert(1)",
   ])("rejects %j", (input) => {
     expect(parseYouTubeId(input)).toBeNull();
+  });
+});
+
+const TRACK = "4uLU6hMCjMI75M1A2tKUQC";
+const TRACK_URI = `spotify:track:${TRACK}`;
+
+describe("parseSpotifyTrackUri", () => {
+  it.each([
+    TRACK_URI,
+    `  ${TRACK_URI}  `,
+    `https://open.spotify.com/track/${TRACK}`,
+    `https://open.spotify.com/track/${TRACK}?si=abc123&utm_source=copy-link`,
+    `https://open.spotify.com/track/${TRACK}/`,
+    `https://open.spotify.com/intl-de/track/${TRACK}`,
+    `https://open.spotify.com/intl-pt-BR/track/${TRACK}?si=x`,
+    `https://play.spotify.com/track/${TRACK}`,
+    `open.spotify.com/track/${TRACK}`,
+    `https://OPEN.SPOTIFY.COM/track/${TRACK}`,
+  ])("akzeptiert %s", (input) => {
+    expect(parseSpotifyTrackUri(input)).toBe(TRACK_URI);
+  });
+
+  it.each([
+    "",
+    "   ",
+    TRACK,
+    `spotify:album:${TRACK}`,
+    `spotify:playlist:${TRACK}`,
+    `spotify:track:${TRACK}1`,
+    `spotify:track:${TRACK.slice(1)}`,
+    `spotify:track:${TRACK.slice(1)}_`,
+    `https://open.spotify.com/album/${TRACK}`,
+    `https://open.spotify.com/playlist/${TRACK}`,
+    `https://open.spotify.com/artist/${TRACK}`,
+    `https://open.spotify.com/track/${TRACK}1`,
+    `https://open.spotify.com/track/${TRACK.slice(2)}`,
+    "https://open.spotify.com/track/",
+    `https://open.spotify.com/embed/track/${TRACK}`,
+    `https://example.com/track/${TRACK}`,
+    `https://open.spotify.com.evil.com/track/${TRACK}`,
+    `https://evil.com/open.spotify.com/track/${TRACK}`,
+    `ftp://open.spotify.com/track/${TRACK}`,
+    `spotify://track/${TRACK}`,
+    "javascript:alert(1)",
+  ])("lehnt %j ab", (input) => {
+    expect(parseSpotifyTrackUri(input)).toBeNull();
   });
 });
 
@@ -108,6 +155,27 @@ describe("buildNewSong", () => {
       choreo: { type: "auto" },
     });
     expect(yt.source).toEqual({ type: "youtube", videoId: ID });
+  });
+
+  it("baut einen schema-gültigen Spotify-Song mit der Track-URI", () => {
+    const song = buildNewSong({
+      ...base,
+      source: { kind: "spotify", trackUri: TRACK_URI },
+      choreo: { type: "auto" },
+    });
+    expect(SongSchema.safeParse(song).success).toBe(true);
+    expect(song.source).toEqual({ type: "spotify", trackUri: TRACK_URI });
+    expect(song.choreo.moves.length).toBeGreaterThan(4);
+  });
+
+  it("lehnt eine ungültige Spotify-URI über das Schema ab", () => {
+    expect(() =>
+      buildNewSong({
+        ...base,
+        source: { kind: "spotify", trackUri: "spotify:track:kurz" },
+        choreo: { type: "auto" },
+      }),
+    ).toThrow();
   });
 
   it("rejects invalid data via the schema", () => {
@@ -187,6 +255,20 @@ describe("validateNewSongFields", () => {
     expect(validateNewSongFields({ ...ok, kind: "url", link: "nope" }).link).toMatch(/https/);
     expect(validateNewSongFields({ ...ok, bpm: NaN, durationS: NaN, imported: true })).toEqual({});
     expect(validateNewSongFields({ ...ok, kind: "file", link: "" })).toEqual({});
+  });
+  it("prüft das Spotify-Feld mit deutscher Meldung", () => {
+    const spotify = { ...ok, kind: "spotify" as const };
+    expect(validateNewSongFields({ ...spotify, link: TRACK_URI })).toEqual({});
+    expect(
+      validateNewSongFields({ ...spotify, link: `https://open.spotify.com/track/${TRACK}?si=1` }),
+    ).toEqual({});
+    for (const link of ["", ID, `https://open.spotify.com/album/${TRACK}`]) {
+      expect(validateNewSongFields({ ...spotify, link }).link).toBe(
+        "Das ist kein gültiger Spotify-Song. Bitte einen Song-Link (open.spotify.com/track/…) oder eine Spotify-URI eingeben.",
+      );
+    }
+    // A Spotify link is not a valid YouTube link and vice versa.
+    expect(validateNewSongFields({ ...ok, link: TRACK_URI }).link).toMatch(/YouTube/);
   });
 });
 

@@ -385,6 +385,32 @@ describe("Spielscreen (Simulationsmodus)", () => {
     expect(screen.getByRole("link", { name: "Zur Bibliothek" })).toBeInTheDocument();
   });
 
+  it("Audio nicht ladbar ohne Spotify: kein Link zu den Einstellungen", async () => {
+    audio.loadFails = true;
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    expect(screen.getByText("Die Musik konnte nicht geladen werden")).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "Zu den Einstellungen" })).toBeNull();
+  });
+
+  it("Spotify-Song nicht ladbar: Meldung, Link zu den Einstellungen und zur Bibliothek", async () => {
+    library.songs = [
+      {
+        ...library.songs[0]!,
+        source: { type: "spotify", trackUri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" },
+      },
+    ];
+    audio.loadFails = true;
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    expect(audio.calls).toContain("load");
+    expect(screen.getByText("Die Musik konnte nicht geladen werden")).toBeInTheDocument();
+    expect(screen.getByText("Die Audiodatei konnte nicht dekodiert werden.")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Zu den Einstellungen" })).toHaveAttribute(
+      "href",
+      "/settings",
+    );
+    expect(screen.getByRole("link", { name: "Zur Bibliothek" })).toBeInTheDocument();
+  });
+
   it("Musik bricht im Spiel ab: Spiel stoppt, Meldung und Weg zurück", async () => {
     await renderAt(`/play/${SONG_ID}?sim=1`);
     await advance(5100);

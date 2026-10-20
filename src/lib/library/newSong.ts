@@ -46,6 +46,32 @@ export function parseYouTubeId(input: string): string | null {
   return candidate && VIDEO_ID.test(candidate) ? candidate : null;
 }
 
+const SPOTIFY_TRACK_ID = /^[A-Za-z0-9]{22}$/;
+const SPOTIFY_HOSTS = new Set(["open.spotify.com", "play.spotify.com"]);
+
+/**
+ * Turns a Spotify song link (open.spotify.com/track/…, also with /intl-xx/ and query) or a
+ * `spotify:track:` URI into the track URI; null for anything else (albums, playlists, bare IDs).
+ */
+export function parseSpotifyTrackUri(input: string): string | null {
+  const text = input.trim();
+  const uri = /^spotify:track:([A-Za-z0-9]{22})$/.exec(text);
+  if (uri) return `spotify:track:${uri[1]}`;
+  if (!text) return null;
+  let url: URL;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `https://${text}`);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== "https:" && url.protocol !== "http:") return null;
+  if (!SPOTIFY_HOSTS.has(url.hostname.toLowerCase())) return null;
+  const parts = url.pathname.split("/").filter(Boolean);
+  if (parts[0]?.startsWith("intl-")) parts.shift();
+  const id = parts[0] === "track" ? parts[1] : undefined;
+  return id && SPOTIFY_TRACK_ID.test(id) ? `spotify:track:${id}` : null;
+}
+
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
 /** Accepts https addresses (http only for localhost, for development). Returns the normalized URL or a German error. */
@@ -66,7 +92,10 @@ export function validateAudioUrl(
 }
 
 export type NewSongSource =
-  { kind: "file" } | { kind: "url"; url: string } | { kind: "youtube"; videoId: string };
+  | { kind: "file" }
+  | { kind: "url"; url: string }
+  | { kind: "youtube"; videoId: string }
+  | { kind: "spotify"; trackUri: string };
 
 export type NewSongChoreo =
   | { type: "auto" }
@@ -86,6 +115,19 @@ export interface NewSongInput {
   choreo: NewSongChoreo;
 }
 
+function sourceSpec(source: NewSongSource): SourceSpec {
+  switch (source.kind) {
+    case "file":
+      return { type: "local", blobId: crypto.randomUUID() };
+    case "url":
+      return { type: "url", url: source.url };
+    case "youtube":
+      return { type: "youtube", videoId: source.videoId };
+    case "spotify":
+      return { type: "spotify", trackUri: source.trackUri };
+  }
+}
+
 /**
  * Builds a validated Song. Auto: generated moves from bpm and duration. Import: the file's moves
  * and timing (its bpm, sync and start offsets) are kept, title/artist/difficulty come from the
@@ -96,12 +138,7 @@ export interface NewSongInput {
 export function buildNewSong(input: NewSongInput, now = Date.now()): Song {
   const title = input.title.trim();
   const artist = input.artist.trim();
-  const source: SourceSpec =
-    input.source.kind === "file"
-      ? { type: "local", blobId: crypto.randomUUID() }
-      : input.source.kind === "url"
-        ? { type: "url", url: input.source.url }
-        : { type: "youtube", videoId: input.source.videoId };
+  const source = sourceSpec(input.source);
 
   let song: Song;
   if (input.choreo.type === "import") {
@@ -161,9 +198,9 @@ export function buildNewSong(input: NewSongInput, now = Date.now()): Song {
 }
 
 export interface NewSongFields {
-  kind: "file" | "url" | "youtube";
+  kind: "file" | "url" | "youtube" | "spotify";
   title: string;
-  /** Raw text of the link / address field (url and youtube only). */
+  /** Raw text of the link / address field (url, youtube and spotify only). */
   link: string;
   bpm: number;
   durationS: number;
@@ -185,6 +222,10 @@ export function validateNewSongFields(f: NewSongFields): FieldErrors {
   if (f.kind === "youtube" && parseYouTubeId(f.link) === null) {
     errors.link =
       "Das ist kein gültiger YouTube-Link. Bitte Link oder 11-stellige Video-ID eingeben.";
+  }
+  if (f.kind === "spotify" && parseSpotifyTrackUri(f.link) === null) {
+    errors.link =
+      "Das ist kein gültiger Spotify-Song. Bitte einen Song-Link (open.spotify.com/track/…) oder eine Spotify-URI eingeben.";
   }
   if (f.kind === "url") {
     const r = validateAudioUrl(f.link);

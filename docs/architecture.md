@@ -128,7 +128,7 @@ umgesetzt). Ein Fehler des Elements nach dem Laden hält die Uhr an und löst `o
   verfügbar.“).
 
 **Spotify** (`SpotifySource`, Web Playback SDK; Anmeldung siehe
-[Spotify-Anmeldung](#spotify-anmeldung-etappe-10a); Etappe 10b-1, im Spiel erst ab 10b-2):
+[Spotify-Anmeldung](#spotify-anmeldung-etappe-10a); Etappe 10b-1, im Spiel seit 10b-2):
 
 - Laden: Token prüfen (`getSpotifyToken`), SDK-Skript `sdk.scdn.co` mit Timeout 15 s
   (`SPOTIFY_SCRIPT_TIMEOUT_MS`) und `onerror`, Fehlschlag nicht zwischengespeichert. Danach
@@ -320,7 +320,7 @@ die IndexedDB-Implementierung; eine Server-Variante kann dieselbe Schnittstelle 
 
 ### Song hinzufügen und Choreografie exportieren
 
-- `AddSongDialog` (Tabs Datei, URL, YouTube) baut den Song über die reine Funktion
+- `AddSongDialog` (Tabs Datei, URL, YouTube, Spotify) baut den Song über die reine Funktion
   `buildNewSong` (`src/lib/library/newSong.ts`, endet mit `SongSchema.parse`) und speichert ihn
   über `useSongLibrary.save`. Lokale Songs bekommen eine frische `blobId`; das Repository legt die
   Datei in derselben Transaktion unter dieser ID ab.
@@ -366,7 +366,12 @@ Sync-Test und Choreografie-Editor (Karte „Vorschau“, Etappe 8d-2b) laden die
 (YouTube-Skript und -Player, Audio-URL) beim Öffnen und nennen sie dort ebenfalls.
 
 Der Dialog „Song hinzufügen“ ruft selbst nichts ab, nennt aber schon beim Anlegen den Host der
-Audio-URL bzw. youtube-nocookie.com als spätere Gegenstelle.
+Audio-URL bzw. youtube-nocookie.com als spätere Gegenstelle, im Tab Spotify sdk.scdn.co,
+accounts.spotify.com und api.spotify.com. Der Spotify-Link wird mit `parseSpotifyTrackUri`
+(`newSong.ts`) zur URI `spotify:track:<ID>`: nur Songs (open.spotify.com bzw.
+play.spotify.com `/track/…`, auch mit `/intl-xx/`, oder die URI selbst), keine Alben, Playlists
+oder nackten IDs. Fehlt die Spotify-Verbindung (`spotifyStatus()`), zeigt der Tab einen Hinweis;
+anlegen geht trotzdem. BPM und Länge wie bei URL und YouTube von Hand.
 
 **Pose-Erkennung ohne externe Abrufe (Etappe 7b-1):** MediaPipe-WASM-Laufzeit und Pose-Modell
 kommen von der eigenen Adresse der App (`<base>mediapipe/wasm/…`,
@@ -416,13 +421,14 @@ der Hinweis „Premium nötig“, die angesprochenen Hosts und der Status.
   Bitte in den Einstellungen neu verbinden.“ geworfen. `spotifyStatus()`: `disconnected`,
   `connected`, `expired`.
 - `SpotifySource` holt den Token nur noch über `getSpotifyToken()` (auch im `getOAuthToken`
-  des SDK). Abspielen im Spiel, Sync-Test und Editor folgt mit 10b/10c.
+  des SDK). Abspielen im Spiel seit 10b-2; Sync-Test und Editor folgen mit 10c.
 
-Alle Abrufe außer Spotify sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
+Alle Abrufe sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
 (`src/components/setup/PrivacyNote.tsx`; W12): immer „Kamerabilder verlassen dein Gerät nie“
 und dass die Erkennung vollständig auf dem Gerät läuft, bei YouTube-Songs zusätzlich YouTube
 (Skript von youtube.com, Video über youtube-nocookie.com), bei URL-Songs der Hostname der
-Adresse; beide mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Der Sync-Test
+Adresse, bei Spotify-Songs Spotify (Skript von sdk.scdn.co, accounts.spotify.com,
+api.spotify.com); jeweils mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Der Sync-Test
 (`/sync/$songId`) startet keine Kamera; er nennt per `PrivacyNote camera={false}` nur den Abruf
 der Songquelle (YouTube bzw. Host der Audio-URL, bei lokalen Dateien nichts). Spotify-Songs
 lädt er nicht (folgt mit Etappe 10). Ebenso die Vorschau im Choreografie-Editor (`/edit/$songId`,

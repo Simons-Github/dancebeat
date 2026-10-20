@@ -15,6 +15,9 @@ function sourceSentence(source: SourceSpec | undefined): string | null {
   if (source.type === "youtube") {
     return "Die Musik kommt von YouTube (Skript von youtube.com, Video über youtube-nocookie.com); YouTube sieht dabei deine IP-Adresse.";
   }
+  if (source.type === "spotify") {
+    return "Die Musik kommt von Spotify (Skript von sdk.scdn.co, Anmeldung und Wiedergabe über accounts.spotify.com und api.spotify.com); Spotify sieht dabei deine IP-Adresse und welchen Song du spielst.";
+  }
   if (source.type === "url") {
     const origin = hostOf(source.url) ?? "der eingetragenen Adresse";
     return `Die Musik wird von ${origin} geladen; der Server sieht deine IP-Adresse.`;

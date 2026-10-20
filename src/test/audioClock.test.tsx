@@ -155,6 +155,46 @@ describe("useAudioClock", () => {
   });
 });
 
+describe("useAudioClock: Spotify", () => {
+  afterEach(() => {
+    api = null;
+  });
+
+  const spotifySong = (): Song => ({
+    ...makeSong(),
+    source: { type: "spotify", trackUri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" },
+  });
+
+  it("lädt die Spotify-Quelle und ist erst nach dem Laden bereit", async () => {
+    let done = () => {};
+    const src = fakeSource({
+      type: "spotify",
+      load: vi.fn(() => new Promise<void>((res) => (done = res))),
+    });
+    render(<Probe song={spotifySong()} opts={{ latencyMs: 0, volume: 0.4, create: () => src }} />);
+    await flush();
+    expect(src.load).toHaveBeenCalledTimes(1);
+    expect(api!.state).toBe("loading");
+    expect(src.setVolume).not.toHaveBeenCalled();
+    await act(async () => done());
+    expect(api!.state).toBe("ready");
+    expect(api!.error).toBe("");
+    expect(src.setVolume).toHaveBeenCalledWith(0.4);
+  });
+
+  it("ein Ladefehler der Spotify-Quelle setzt den Fehlerzustand mit Meldung", async () => {
+    const src = fakeSource({
+      type: "spotify",
+      load: vi.fn(async () => Promise.reject(new Error("Bitte zuerst mit Spotify verbinden."))),
+    });
+    render(<Probe song={spotifySong()} opts={{ latencyMs: 0, volume: 1, create: () => src }} />);
+    await flush();
+    expect(src.load).toHaveBeenCalledTimes(1);
+    expect(api!.state).toBe("error");
+    expect(api!.error).toBe("Bitte zuerst mit Spotify verbinden.");
+  });
+});
+
 describe("useAudioClock: Laufzeitfehler", () => {
   afterEach(() => {
     api = null;

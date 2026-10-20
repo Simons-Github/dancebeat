@@ -669,11 +669,7 @@ class YouTubeSource implements AudioSource {
   }
 }
 
-// ---------- Spotify (login and token: ./spotifyAuth.ts) ----------
-export function parseSpotifyUri(input: string) {
-  const m = input.match(/track[/:]([A-Za-z0-9]{22})/);
-  return m ? `spotify:track:${m[1]}` : null;
-}
+// ---------- Spotify (login and token: ./spotifyAuth.ts; links: parseSpotifyTrackUri) ----------
 
 export const SPOTIFY_SDK_URL = "https://sdk.scdn.co/spotify-player.js";
 /** SDK script or `onSpotifyWebPlaybackSDKReady` not within this time: give up, the next try reloads. */

@@ -25,12 +25,14 @@ import {
   DURATION_MIN_S,
   TITLE_MAX,
   buildNewSong,
+  parseSpotifyTrackUri,
   parseYouTubeId,
   validateAudioUrl,
   validateNewSongFields,
   type NewSongChoreo,
   type NewSongSource,
 } from "@/lib/library/newSong";
+import { spotifyStatus, type SpotifyStatus } from "@/lib/audio/spotifyAuth";
 import { StorageFullError, requestPersistentStorage } from "@/lib/library/storage";
 import type { VideoImportResult } from "@/lib/library/videoImport";
 import type { PoseModel } from "@/lib/mediapipe";
@@ -49,7 +51,7 @@ const TAB = "h-11 flex-1 text-base";
 
 const AUDIO_ACCEPT = "audio/mpeg,audio/mp4,audio/x-m4a,audio/wav,audio/ogg,.mp3,.m4a,.wav,.ogg";
 
-type Kind = "file" | "url" | "youtube";
+type Kind = "file" | "url" | "youtube" | "spotify";
 type Difficulty = 1 | 2 | 3;
 type AnalysisState =
   | { status: "idle" }
@@ -69,7 +71,7 @@ interface AddSongDialogProps {
 const stripExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
 
 /**
- * Add-song button plus dialog: audio file, direct URL or YouTube; choreography generated,
+ * Add-song button plus dialog: audio file, direct URL, YouTube or Spotify; choreography generated,
  * imported from a file or built from a dance video.
  */
 export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialogProps) {
@@ -82,6 +84,9 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   const [musicBeat, setMusicBeat] = useState<OnsetEnvelope | null>(null);
   const [urlLink, setUrlLink] = useState("");
   const [youtubeLink, setYoutubeLink] = useState("");
+  const [spotifyLink, setSpotifyLink] = useState("");
+  /** Read from sessionStorage when the Spotify tab opens (null: not checked yet). */
+  const [spotifyState, setSpotifyState] = useState<SpotifyStatus | null>(null);
   const [durationClamped, setDurationClamped] = useState(false);
   const [title, setTitle] = useState("");
   const [artist, setArtist] = useState("");
@@ -124,6 +129,8 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     };
     setUrlLink("");
     setYoutubeLink("");
+    setSpotifyLink("");
+    setSpotifyState(null);
     setDurationClamped(false);
     setKind("file");
     setFile(null);
@@ -149,8 +156,14 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     setOpen(next);
   };
 
-  const link = kind === "youtube" ? youtubeLink : urlLink;
-  const setLink = kind === "youtube" ? setYoutubeLink : setUrlLink;
+  const link = kind === "youtube" ? youtubeLink : kind === "spotify" ? spotifyLink : urlLink;
+  const setLink =
+    kind === "youtube" ? setYoutubeLink : kind === "spotify" ? setSpotifyLink : setUrlLink;
+
+  // A missing connection does not block adding (it can be made later), but is pointed out.
+  useEffect(() => {
+    if (open && kind === "spotify") setSpotifyState(spotifyStatus());
+  }, [open, kind]);
   const useImport = choreoMode === "import";
   const useVideo = choreoMode === "video";
   const bpmNum = bpm.trim() === "" ? NaN : Number(bpm);
@@ -250,10 +263,14 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       const r = validateAudioUrl(link);
       if (!r.ok) return;
       source = { kind: "url", url: r.url };
-    } else {
+    } else if (kind === "youtube") {
       const videoId = parseYouTubeId(link);
       if (!videoId) return;
       source = { kind: "youtube", videoId };
+    } else {
+      const trackUri = parseSpotifyTrackUri(link);
+      if (!trackUri) return;
+      source = { kind: "spotify", trackUri };
     }
     setBusy(true);
     setError(null);
@@ -442,6 +459,9 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
               <TabsTrigger value="youtube" className={TAB}>
                 YouTube
               </TabsTrigger>
+              <TabsTrigger value="spotify" className={TAB}>
+                Spotify
+              </TabsTrigger>
             </TabsList>
             <TabsContent value="file" className="mt-0 flex flex-col gap-4">
               <div className="flex flex-col gap-2">
@@ -488,6 +508,23 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 "https://youtu.be/…",
                 "text",
                 "Das Video wird beim Spielen über youtube-nocookie.com geladen.",
+              )}
+              {timing}
+            </TabsContent>
+            <TabsContent value="spotify" className="mt-0 flex flex-col gap-4">
+              {linkField(
+                "Spotify-Song-Link oder URI",
+                "https://open.spotify.com/track/…",
+                "text",
+                "Braucht Spotify Premium. Beim Spielen spricht dein Gerät mit sdk.scdn.co, accounts.spotify.com und api.spotify.com.",
+              )}
+              {(spotifyState === "disconnected" || spotifyState === "expired") && (
+                <p role="status" className={HINT}>
+                  {spotifyState === "expired"
+                    ? "Die Spotify-Anmeldung ist abgelaufen."
+                    : "Noch nicht mit Spotify verbunden."}{" "}
+                  Zum Spielen in den Einstellungen unter „Spotify“ verbinden.
+                </p>
               )}
               {timing}
             </TabsContent>

@@ -18,7 +18,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d, 8e, 8f ✅)  | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
-| 10. Spotify                                  | ⏳ (10a, 10b-1 ✅)         | Opus                                                                  |
+| 10. Spotify                                  | ⏳ (10a, 10b ✅)           | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
@@ -642,7 +642,7 @@ Ursprüngliche Schritte:
 
 Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 
-### 10. Spotify (zuletzt) ⏳ (10a, 10b-1 umgesetzt)
+### 10. Spotify (zuletzt) ⏳ (10a, 10b-1, 10b-2 umgesetzt)
 
 - Vorher am Handy prüfen, ob das Web Playback SDK mobil überhaupt läuft (offen, Gerätetest; vor
   10b klären, sonst Spotify auf Desktop-Browser beschränken).
@@ -658,8 +658,7 @@ Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 - CSP `connect-src` um `accounts.spotify.com` und `api.spotify.com` erweitert.
 - Details: [architecture.md](architecture.md#spotify-anmeldung-etappe-10a).
 
-**10b-1 SpotifySource gehärtet ✅** (W6-Rest; Gerätetest mit echtem Konto offen, im Spiel erst
-mit 10b-2 erreichbar)
+**10b-1 SpotifySource gehärtet ✅** (W6-Rest; Gerätetest mit echtem Konto offen)
 
 - `startOffsetMs` über `position_ms` im play-Aufruf; Fortsetzen nach Pause per `resume()` statt
   Neustart; `play()` löst erst bei Wiedergabe auf, Ablehnung (`autoplay_failed`, 8 s ohne
@@ -677,12 +676,25 @@ mit 10b-2 erreichbar)
         (bekanntes SDK-Rennen)? Falls ja, einmal verzögert wiederholen
   - [ ] Reihenfolge `autoplay_failed` und Player-Zustand auf iOS (stumme Wiedergabe)
 
-**10b-2 Spotify im Spiel ⏳**
+**10b-2 Spotify im Spiel ✅** (Gerätetest mit echtem Konto offen)
 
-- Player-Initialisierung (`load()`) im Klick-Handler (iOS/Safari); `useAudioClock` lädt Spotify
-  bisher gar nicht.
-- Spotify-Song im Dialog „Song hinzufügen“ (`parseSpotifyUri`), Datenschutzhinweis in der
-  Aufstellhilfe (sdk.scdn.co, accounts/api.spotify.com).
+- `useAudioClock` lädt Spotify wie die anderen Quellen im Effekt. Abweichung vom Plan „`load()`
+  im Klick-Handler“: Das SDK braucht die Geste nur für `activateElement()`, und das ruft
+  `play()` auf. Lehnt der Browser den Start nach dem Countdown ab (iOS), holt der Tipp auf „Zum
+  Starten tippen“ ihn im Tipp nach. Die Quelle existiert in der Aufstellhilfe noch nicht, ein
+  Laden dort hätte einen geteilten Player über Routen gebraucht.
+- Tab „Spotify“ in „Song hinzufügen“ (`parseSpotifyTrackUri` in `newSong.ts`, ersetzt das
+  ungenutzte `parseSpotifyUri`), Hinweis bei fehlender Verbindung. Datenschutzhinweis in der
+  Aufstellhilfe nennt sdk.scdn.co, accounts.spotify.com und api.spotify.com.
+- Fehler beim Laden oder Abspielen eines Spotify-Songs: Overlay mit „Zu den Einstellungen“
+  (dort verbinden bzw. neu verbinden) und „Zur Bibliothek“.
+- **Gerätetest 10b-2 (offen):**
+  - [ ] Desktop-Chrome mit Premium: Song anlegen, Aufstellhilfe, Spiel startet nach dem
+        Countdown, Piktos passen zur Musik, Pause/Weiter/Neustart, Ende → Ergebnis
+  - [ ] iPhone/Android: läuft das SDK überhaupt (sonst Spotify auf Desktop beschränken)? Start
+        nach „Zum Starten tippen“
+  - [ ] Konsole: keine CSP-Verstöße durch das SDK (die Policy regelt nur `connect-src`)
+  - [ ] Ohne Verbindung bzw. mit abgelaufener Anmeldung: Overlay mit „Zu den Einstellungen“
 
 **10c Sync-Test und Editor-Vorschau mit Spotify ⏳**
 
@@ -697,7 +709,7 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
 | ID  | Befund                                                                          | Etappe |
 | --- | ------------------------------------------------------------------------------- | ------ |
-| W6  | Spotify: Code erledigt (10a, 10b-1), Gerätetest mit echtem Konto offen          | 10b-2  |
+| W6  | Spotify: Code erledigt (10a, 10b), Gerätetest mit echtem Konto offen            | 10b    |
 | W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                          | 3b     |
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)          | 3b     |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                        | 11     |

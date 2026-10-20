@@ -79,6 +79,21 @@ describe("Aufstellhilfe", () => {
     );
   });
 
+  it("nennt bei Spotify-Song die Spotify-Hosts und was Spotify sieht", async () => {
+    library.songs = [
+      {
+        ...library.songs[0]!,
+        source: { type: "spotify", trackUri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" },
+      },
+    ];
+    await renderAt("/setup/song-1");
+    const note = await screen.findByText(/Kamerabilder verlassen dein Gerät nie/);
+    expect(note).toHaveTextContent(
+      "Die Musik kommt von Spotify (Skript von sdk.scdn.co, Anmeldung und Wiedergabe über accounts.spotify.com und api.spotify.com); Spotify sieht dabei deine IP-Adresse und welchen Song du spielst.",
+    );
+    expect(note).not.toHaveTextContent("YouTube");
+  });
+
   it("nennt bei URL-Song den Hostnamen", async () => {
     library.songs = [
       {

@@ -104,20 +104,19 @@ export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
       setError(message);
       setState("error");
     });
-    // Spotify must load inside a click handler (stage 10); everything else may load now.
-    if (song.source.type !== "spotify") {
-      s.load()
-        .then(() => {
-          if (cancelled) return;
-          s.setVolume(latest.current.volume);
-          setState("ready");
-        })
-        .catch((e: unknown) => {
-          if (cancelled) return;
-          setError(e instanceof Error ? e.message : String(e));
-          setState("error");
-        });
-    } else setState("ready");
+    // Every source loads without a gesture. Spotify needs one only for `activateElement()`, which
+    // its play() calls; a refused start is retried by the tap on "Zum Starten tippen".
+    s.load()
+      .then(() => {
+        if (cancelled) return;
+        s.setVolume(latest.current.volume);
+        setState("ready");
+      })
+      .catch((e: unknown) => {
+        if (cancelled) return;
+        setError(e instanceof Error ? e.message : String(e));
+        setState("error");
+      });
     return () => {
       cancelled = true;
       s.destroy();
