@@ -729,6 +729,14 @@ Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
   - [ ] Sync-Test mit Spotify: Taps ergeben einen plausiblen Offset (Streuung notieren)
   - [ ] Editor: „Ab Move N abspielen“ springt an die richtige Stelle, Klick passt zur Musik
   - [ ] Stopp und erneuter Start setzen fort bzw. springen korrekt
+- **Gerätetest-Befund 10c (Desktop, 2026-10-20):** Verbinden, Song anlegen und Sync-Test liefen.
+  Danach startete der Song weder im Spiel noch erneut im Sync-Test („Spotify konnte den Song
+  nicht starten.“); nach „Neu verbinden“ (lädt die Seite neu) ging es genau einmal. Ursache:
+  Jeder Screen legte einen eigenen Player an und trennte ihn beim Verlassen; ein neuer Player in
+  derselben Seite ließ sich nicht mehr starten. **Behoben:** ein geteilter Player pro
+  Seitenaufruf, Fehlermeldung mit HTTP-Status. Gerätetest offen:
+  - [ ] Sync-Test → Spiel → Sync-Test → Editor-Vorschau ohne Neuladen: jedes Mal startet der Song
+  - [ ] Beim Wechsel des Screens hört die Musik des vorigen Screens auf
 
 ### 11. Nice-to-have ⏳
 

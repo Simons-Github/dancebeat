@@ -136,6 +136,15 @@ umgesetzt). Ein Fehler des Elements nach dem Laden hält die Uhr an und löst `o
   `authentication_error`, `initialization_error` oder `playback_error` vor `ready` lehnen `load()`
   ab, danach lösen sie `onError` aus, ebenso `not_ready` („Die Verbindung zu Spotify ist
   abgebrochen.“). `destroy()` während des Ladens beendet `load()` still.
+- Ein Player pro Seitenaufruf (`SharedSpotifyPlayer`): Spiel, Sync-Test und Editor-Vorschau
+  teilen ihn. `load()` übernimmt ihn (`acquire`), Ereignisse gehen nur an die aktuelle Quelle;
+  `destroy()` hält nur die eigene Wiedergabe an (und nur, solange kein anderer Screen den Player
+  übernommen hat) und gibt ihn zurück (`release`), trennt ihn aber nie. Grund (Gerätetest 10c):
+  Ein zweiter `Spotify.Player`, der nach `disconnect()` in derselben Seite entstand, ließ sich über
+  die Web API nicht mehr starten; nur der erste Screen nach einem Neuladen spielte. Scheitert das
+  Verbinden, wird der Player verworfen und der nächste Screen versucht es neu.
+- Lehnt die Web API den Start ab, nennt die Meldung den HTTP-Status („Spotify konnte den Song
+  nicht starten (HTTP 404).“): 401 Anmeldung, 403 Premium oder Einschränkung, 404 Gerät unbekannt.
 - Erster Start: `PUT /v1/me/player/play?device_id=…` mit `uris` und `position_ms`; ein `seek` vor
   dem Start (Start-Offset) wird gemerkt und so mitgeschickt. Spätere Starts nach einer Pause
   setzen per `seek` und `resume()` fort, statt den Song neu zu starten. Ein `seek`, das während

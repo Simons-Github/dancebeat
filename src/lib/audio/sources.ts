@@ -727,7 +727,128 @@ function statePositionMs(s: Spotify.PlaybackState) {
   return s.position + (s.paused ? 0 : Math.max(0, Date.now() - s.timestamp));
 }
 
-class SpotifySource implements AudioSource {
+/** What the shared player forwards to the source that currently uses it. */
+interface SpotifyOwner {
+  playerReady(deviceId: string): void;
+  playerNotReady(): void;
+  playerError(type: Spotify.ErrorTypes): void;
+  autoplayFailed(): void;
+  stateChanged(s: Spotify.PlaybackState | null): void;
+}
+
+/**
+ * One Spotify player per page load, shared by game, sync test and editor preview. A second
+ * `Spotify.Player` created in the same page after `disconnect()` could no longer be started
+ * through the Web API (device test 10c: only the first screen after a page load played; a reload
+ * via "Neu verbinden" fixed it once). So screens never disconnect it: a source takes it over with
+ * `acquire` (the previous user loses it) and gives it back with `release`. Events go only to the
+ * current owner.
+ */
+class SharedSpotifyPlayer {
+  player: Spotify.Player | null = null;
+  deviceId = "";
+  /** Device usable right now (false after `not_ready` until the SDK reconnects). */
+  ready = false;
+  private owner: SpotifyOwner | null = null;
+  /** First `ready` of the current player; reset when connecting fails. */
+  private connecting: Promise<void> | null = null;
+
+  /** Takes over the player for `owner`; resolves once it is ready the first time. */
+  acquire(owner: SpotifyOwner, volume: number): Promise<void> {
+    this.owner = owner;
+    if (this.player) void this.player.setVolume(volume).catch(() => {});
+    this.connecting ??= this.connect(volume).catch((e: unknown) => {
+      // Not cached: the next screen tries again with a new player.
+      const player = this.player;
+      this.player = null;
+      this.connecting = null;
+      this.ready = false;
+      try {
+        player?.disconnect();
+      } catch {
+        /* */
+      }
+      throw e;
+    });
+    return this.connecting;
+  }
+
+  owns(owner: SpotifyOwner) {
+    return this.owner === owner;
+  }
+
+  /** Gives the player back; it keeps its connection for the next screen. */
+  release(owner: SpotifyOwner) {
+    if (this.owner === owner) this.owner = null;
+  }
+
+  private async connect(volume: number) {
+    await loadSpotifySdk();
+    const sdk = window.Spotify;
+    if (!sdk?.Player) throw new Error("Spotify konnte nicht geladen werden.");
+    const player = new sdk.Player({
+      name: "DanceBeat",
+      // The SDK asks again before the token expires; a failed refresh surfaces as
+      // authentication_error.
+      getOAuthToken: (cb) => {
+        getSpotifyToken().then(cb, () => {});
+      },
+      volume,
+    });
+    this.player = player;
+    let loaded = false;
+    await new Promise<void>((res, rej) => {
+      let timer = 0;
+      const reject = (message: string) => {
+        if (loaded) return;
+        clearTimeout(timer);
+        rej(new Error(message));
+      };
+      timer = window.setTimeout(
+        () => reject("Spotify-Player lädt nicht. Prüfe deine Verbindung."),
+        SPOTIFY_READY_TIMEOUT_MS,
+      );
+      player.addListener("ready", ({ device_id }: Spotify.WebPlaybackInstance) => {
+        if (this.player !== player || this.ready) return;
+        this.deviceId = device_id;
+        this.ready = true;
+        if (loaded) {
+          this.owner?.playerReady(device_id);
+          return;
+        }
+        loaded = true;
+        clearTimeout(timer);
+        res();
+      });
+      player.addListener("not_ready", () => {
+        if (this.player !== player || !this.ready) return;
+        this.ready = false;
+        this.owner?.playerNotReady();
+      });
+      (Object.keys(SPOTIFY_ERRORS) as Spotify.ErrorTypes[]).forEach((type) => {
+        player.addListener(type, () => {
+          if (this.player !== player) return;
+          if (!loaded) reject(SPOTIFY_ERRORS[type]);
+          else this.owner?.playerError(type);
+        });
+      });
+      player.addListener("autoplay_failed", () => {
+        if (this.player === player) this.owner?.autoplayFailed();
+      });
+      player.addListener("player_state_changed", (s: Spotify.PlaybackState | null) => {
+        if (this.player === player) this.owner?.stateChanged(s);
+      });
+      const notConnected = () => reject("Spotify-Player konnte sich nicht verbinden.");
+      player.connect().then((ok) => {
+        if (!ok) notConnected();
+      }, notConnected);
+    });
+  }
+}
+
+let sharedSpotify: SharedSpotifyPlayer | null = null;
+
+class SpotifySource implements AudioSource, SpotifyOwner {
   type = "spotify" as const;
   lowPrecision = true;
   private player: Spotify.Player | null = null;
@@ -763,7 +884,6 @@ class SpotifySource implements AudioSource {
   private active = false;
   private endedSent = false;
   private volume = 1;
-  private loadTimer = 0;
   private settleLoad: (() => void) | null = null;
   private endedCb = () => {};
   private errorCb: (message: string) => void = () => {};
@@ -781,87 +901,62 @@ class SpotifySource implements AudioSource {
   private async connectPlayer() {
     // Throws a message for the UI when not connected or the session cannot be renewed.
     await getSpotifyToken();
-    await loadSpotifySdk();
-    // Destroyed while the SDK loaded (song switch, route left): no player.
+    // Destroyed while the token was checked (song switch, route left): no player.
     if (this.destroyed) return;
-    const sdk = window.Spotify;
-    if (!sdk?.Player) throw new Error("Spotify konnte nicht geladen werden.");
-    const player = new sdk.Player({
-      name: "DanceBeat",
-      // The SDK asks again before the token expires; a failed refresh surfaces as
-      // authentication_error.
-      getOAuthToken: (cb) => {
-        getSpotifyToken().then(cb, () => {});
-      },
-      volume: this.volume,
-    });
-    this.player = player;
+    const shared = (sharedSpotify ??= new SharedSpotifyPlayer());
     await new Promise<void>((res, rej) => {
-      const settle = () => {
-        clearTimeout(this.loadTimer);
-        this.settleLoad = null;
-      };
       // destroy() during the wait ends load() quietly, like the other sources.
       this.settleLoad = () => {
-        settle();
+        this.settleLoad = null;
         res();
       };
-      const reject = (message: string) => {
-        settle();
-        rej(new Error(message));
-      };
-      this.loadTimer = window.setTimeout(
-        () => reject("Spotify-Player lädt nicht. Prüfe deine Verbindung."),
-        SPOTIFY_READY_TIMEOUT_MS,
-      );
-      player.addListener("ready", ({ device_id }: Spotify.WebPlaybackInstance) => {
-        if (this.destroyed || this.ready) return;
-        this.deviceId = device_id;
-        this.ready = true;
-        if (this.loaded) {
-          // Reconnected after not_ready, possibly as a new device: the next play() starts the
-          // track again via the Web API from the current position.
-          this.unstart();
-          return;
-        }
-        this.loaded = true;
-        settle();
-        res();
-      });
-      player.addListener("not_ready", () => {
-        if (this.destroyed || !this.ready) return;
-        this.ready = false;
-        this.fail("Die Verbindung zu Spotify ist abgebrochen.");
-      });
-      (Object.keys(SPOTIFY_ERRORS) as Spotify.ErrorTypes[]).forEach((type) => {
-        player.addListener(type, () => {
+      shared.acquire(this, this.volume).then(
+        () => {
           if (this.destroyed) return;
-          if (!this.loaded) reject(SPOTIFY_ERRORS[type]);
-          else this.fail(SPOTIFY_ERRORS[type]);
-        });
-      });
-      // The browser refused to start audio without a gesture: a tap can retry it.
-      // Without a pending play() but while playing, it is silent playback: held like a pause.
-      player.addListener("autoplay_failed", () => {
-        if (this.destroyed) return;
-        const wasActive = this.active && !this.pending;
-        this.silent = true;
-        this.active = false;
-        clearInterval(this.poll);
-        this.clock.sync(this.clock.get(), false, true);
-        this.settlePlay(new PlayRefusedError(SPOTIFY_REFUSED));
-        if (wasActive) this.externalPauseCb();
-      });
-      player.addListener("player_state_changed", (s: Spotify.PlaybackState | null) =>
-        this.stateChanged(s),
+          this.settleLoad = null;
+          this.player = shared.player;
+          this.deviceId = shared.deviceId;
+          this.ready = shared.ready;
+          this.loaded = true;
+          res();
+        },
+        (e: unknown) => {
+          if (this.destroyed) return;
+          this.settleLoad = null;
+          rej(e instanceof Error ? e : new Error(String(e)));
+        },
       );
-      const notConnected = () => {
-        if (!this.destroyed && !this.loaded) reject("Spotify-Player konnte sich nicht verbinden.");
-      };
-      player.connect().then((ok) => {
-        if (!ok) notConnected();
-      }, notConnected);
     });
+  }
+  playerReady(deviceId: string) {
+    if (this.destroyed) return;
+    this.deviceId = deviceId;
+    this.ready = true;
+    // Reconnected after not_ready, possibly as a new device: the next play() starts the track
+    // again via the Web API from the current position.
+    this.unstart();
+  }
+  playerNotReady() {
+    if (this.destroyed || !this.ready) return;
+    this.ready = false;
+    this.fail("Die Verbindung zu Spotify ist abgebrochen.");
+  }
+  playerError(type: Spotify.ErrorTypes) {
+    if (!this.destroyed) this.fail(SPOTIFY_ERRORS[type]);
+  }
+  /**
+   * The browser refused to start audio without a gesture: a tap can retry it. Without a pending
+   * play() but while playing, it is silent playback: held like a pause.
+   */
+  autoplayFailed() {
+    if (this.destroyed) return;
+    const wasActive = this.active && !this.pending;
+    this.silent = true;
+    this.active = false;
+    clearInterval(this.poll);
+    this.clock.sync(this.clock.get(), false, true);
+    this.settlePlay(new PlayRefusedError(SPOTIFY_REFUSED));
+    if (wasActive) this.externalPauseCb();
   }
   /**
    * The track no longer plays on this device (moved away, reconnected): the next play() starts it
@@ -872,7 +967,7 @@ class SpotifySource implements AudioSource {
     this.started = false;
     this.trackSent = false;
   }
-  private stateChanged(s: Spotify.PlaybackState | null) {
+  stateChanged(s: Spotify.PlaybackState | null) {
     if (this.destroyed || !this.loaded) return;
     if (!s) {
       // Playback moved to another device (Spotify Connect): the clock holds like a pause.
@@ -1016,6 +1111,7 @@ class SpotifySource implements AudioSource {
     this.sentSeekMs = this.pendingSeekMs;
     const positionMs = Math.max(0, Math.round(this.pendingSeekMs ?? 0));
     let ok = false;
+    let status = 0;
     try {
       const token = await getSpotifyToken();
       if (this.pending !== pending) return;
@@ -1028,6 +1124,7 @@ class SpotifySource implements AudioSource {
         },
       );
       ok = r.ok;
+      status = r.status;
       if (ok && !this.destroyed) this.trackSent = true;
     } catch (e: unknown) {
       if (this.pending !== pending) return;
@@ -1045,7 +1142,8 @@ class SpotifySource implements AudioSource {
         void this.player?.pause().catch(() => {});
       return;
     }
-    if (!ok) this.settlePlay(new Error("Spotify konnte den Song nicht starten."));
+    // The status tells the cases apart (401 login, 403 Premium/restriction, 404 device unknown).
+    if (!ok) this.settlePlay(new Error(`Spotify konnte den Song nicht starten (HTTP ${status}).`));
   }
   pause() {
     this.active = false;
@@ -1087,16 +1185,17 @@ class SpotifySource implements AudioSource {
     this.externalPauseCb = cb;
   }
   destroy() {
+    // The shared player stays connected for the next screen; only this song's playback stops,
+    // and only while no other screen has taken the player over.
+    const owner = sharedSpotify?.owns(this) ?? false;
+    if (owner && this.player && this.ready && (this.started || this.trackSent || this.pending))
+      void this.player.pause().catch(() => {});
     this.destroyed = true;
     this.active = false;
     clearInterval(this.poll);
     this.settlePlay(new Error("Wiedergabe beendet."));
     this.settleLoad?.();
-    try {
-      this.player?.disconnect();
-    } catch {
-      /* */
-    }
+    sharedSpotify?.release(this);
     this.player = null;
   }
 }

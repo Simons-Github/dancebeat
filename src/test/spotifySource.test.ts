@@ -59,7 +59,7 @@ function state(paused: boolean, position: number, ended = false) {
 
 let now = 0;
 let mod: Sources;
-type FetchFn = (url: string, init?: RequestInit) => Promise<{ ok: boolean }>;
+type FetchFn = (url: string, init?: RequestInit) => Promise<{ ok: boolean; status?: number }>;
 let fetchMock: ReturnType<typeof vi.fn<FetchFn>>;
 
 const tick = () => vi.advanceTimersByTimeAsync(0);
@@ -212,12 +212,14 @@ describe("SpotifySource: load", () => {
     expect(message(done.error)).toBe("Spotify-Player konnte sich nicht verbinden.");
   });
 
-  it("destroy() während des Wartens beendet load still", async () => {
+  it("destroy() während des Wartens beendet load still, der geteilte Player verbindet weiter", async () => {
     const { src, done, player } = await created();
     src.destroy();
     await tick();
     expect(done.state).toBe("resolved");
-    expect(player?.disconnect).toHaveBeenCalled();
+    expect(player?.disconnect).not.toHaveBeenCalled();
+    player?.emit("ready", { device_id: "dev 1" });
+    await tick();
     expect(vi.getTimerCount()).toBe(0);
   });
 
@@ -276,11 +278,11 @@ describe("SpotifySource: erster Start", () => {
   });
 
   it("fetch mit ok:false lehnt mit eigener Meldung ab (kein PlayRefusedError)", async () => {
-    fetchMock.mockResolvedValue({ ok: false });
+    fetchMock.mockResolvedValue({ ok: false, status: 404 });
     const { src } = await loaded();
     const p = track(src.play());
     await tick();
-    expect(message(p.error)).toBe("Spotify konnte den Song nicht starten.");
+    expect(message(p.error)).toBe("Spotify konnte den Song nicht starten (HTTP 404).");
     expect(p.error).not.toBeInstanceOf(mod.PlayRefusedError);
   });
 
@@ -530,17 +532,83 @@ describe("SpotifySource: Poll und destroy", () => {
     expect(player.getCurrentState).toHaveBeenCalledTimes(2);
   });
 
-  it("destroy trennt den Player, lehnt offenes play ab und stoppt den Poll", async () => {
+  it("destroy pausiert statt zu trennen, lehnt offenes play ab und stoppt den Poll", async () => {
     const { src, player } = await started();
     src.pause();
     const p = track(src.play());
     await tick();
+    player.pause.mockClear();
     src.destroy();
     await tick();
-    expect(player.disconnect).toHaveBeenCalledTimes(1);
+    expect(player.disconnect).not.toHaveBeenCalled();
+    expect(player.pause).toHaveBeenCalledTimes(1);
     expect(p.state).toBe("rejected");
     await advance(mod.SPOTIFY_POLL_MS * 3);
     expect(player.getCurrentState).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
+  });
+});
+
+describe("SpotifySource: geteilter Player über Screens", () => {
+  it("die nächste Quelle übernimmt denselben Player und startet per PUT auf dasselbe Gerät", async () => {
+    const first = await started(1000);
+    first.src.destroy();
+    const second = mod.createSource(spSong());
+    const done = track(second.load());
+    await tick();
+    expect(done.state).toBe("resolved");
+    expect(FakeSpotifyPlayer.all).toHaveLength(1);
+    expect(first.player.disconnect).not.toHaveBeenCalled();
+    second.seek(2000);
+    const p = track(second.play());
+    await tick();
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+    expect(fetchMock.mock.calls[1]?.[0]).toContain("device_id=dev%201");
+    expect(putBody(1)).toEqual({ uris: [URI], position_ms: 2000 });
+    first.player.emit("player_state_changed", state(false, 2000));
+    await tick();
+    expect(p.state).toBe("resolved");
+  });
+
+  it("Ereignisse gehen nur an die aktuelle Quelle", async () => {
+    const first = await started();
+    const firstEnded = vi.fn();
+    first.src.onEnded(firstEnded);
+    first.src.destroy();
+    const second = mod.createSource(spSong());
+    const secondError = vi.fn();
+    second.onError(secondError);
+    void second.load();
+    await tick();
+    first.player.emit("player_state_changed", state(true, 0, true));
+    first.player.emit("playback_error", { message: "x" });
+    expect(firstEnded).not.toHaveBeenCalled();
+    expect(secondError).toHaveBeenCalledWith("Spotify konnte den Song nicht abspielen.");
+  });
+
+  it("räumt die alte Quelle spät auf, pausiert sie die neue Wiedergabe nicht", async () => {
+    const first = await started();
+    const second = mod.createSource(spSong());
+    void second.load();
+    await tick();
+    void second.play().catch(() => {});
+    await tick();
+    first.player.emit("player_state_changed", state(false, 0));
+    await tick();
+    first.player.pause.mockClear();
+    first.src.destroy();
+    expect(first.player.pause).not.toHaveBeenCalled();
+  });
+
+  it("scheitert das Verbinden, legt der nächste Versuch einen neuen Player an", async () => {
+    const { done, player } = await created();
+    player?.emit("account_error", { message: "x" });
+    await tick();
+    expect(done.state).toBe("rejected");
+    expect(player?.disconnect).toHaveBeenCalledTimes(1);
+    const again = mod.createSource(spSong());
+    void again.load().catch(() => {});
+    await tick();
+    expect(FakeSpotifyPlayer.all).toHaveLength(2);
   });
 });
