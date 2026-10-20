@@ -1,5 +1,13 @@
 import { mirrorChoreo } from "./choreo";
-import { angleDiff, ARM_KEYS, computeAngles, frameAt, isVisible, LEG_KEYS } from "./pose";
+import {
+  angleDiff,
+  ARM_KEYS,
+  computeAngles,
+  frameAt,
+  isVisible,
+  lerpAngle,
+  LEG_KEYS,
+} from "./pose";
 import { CHOREO_VERSION, ChoreographySchema } from "./schema";
 import type { Angles, Choreography, Frame, Landmark, Move } from "./types";
 import { SONG_PALETTES } from "@/theme";
@@ -349,6 +357,14 @@ export interface TrackMetrics {
    */
   jitterRawDeg: number | null;
   jitterSmoothDeg: number | null;
+  /**
+   * Hold-out error in degrees: every second sample is left out, the rest is smoothed, and the
+   * left-out raw angles are predicted by interpolating their neighbours. The raw noise adds about
+   * the same to every filter setting, so the setting closest to the true movement scores lowest;
+   * too little smoothing keeps the noise, too much cuts off real movement. Needs no ground truth.
+   * null without a predictable sample.
+   */
+  holdoutDeg: number | null;
   /** Grid points where a move could sit. */
   moveSlots: number;
   /** Moves the choreography got (0 if the build failed). */
@@ -391,6 +407,40 @@ function angleJitter(samples: Sample[], aspect: number, maxGapMs: number): numbe
   return n ? sum / n : null;
 }
 
+/** See TrackMetrics.holdoutDeg. */
+function holdoutError(
+  samples: Sample[],
+  aspect: number,
+  filter: Partial<OneEuroParams> | undefined,
+  maxGapMs: number,
+): number | null {
+  const kept = samples.filter((_, i) => i % 2 === 0);
+  // Twice the sample spacing: the gap limit must not split the thinned track.
+  const smoothed = smoothTrack(kept, filter, maxGapMs * 2);
+  let sum = 0,
+    n = 0;
+  for (let i = 1; i < samples.length - 1; i += 2) {
+    const s = samples[i]!;
+    const prev = smoothed[(i - 1) / 2],
+      next = smoothed[(i + 1) / 2];
+    if (!s.landmarks || !prev?.landmarks || !next?.landmarks) continue;
+    if (next.timeMs - prev.timeMs > maxGapMs * 2) continue;
+    const u = (s.timeMs - prev.timeMs) / (next.timeMs - prev.timeMs);
+    const a = computeAngles(prev.landmarks, { aspect });
+    const b = computeAngles(next.landmarks, { aspect });
+    const raw = computeAngles(s.landmarks, { aspect });
+    for (const k of JITTER_KEYS) {
+      const x = a[k],
+        y = b[k],
+        r = raw[k];
+      if (x == null || y == null || r == null) continue;
+      sum += Math.abs(angleDiff(lerpAngle(x, y, u), r));
+      n++;
+    }
+  }
+  return n ? sum / n : null;
+}
+
 /**
  * Measures a video import with the same options `choreoFromPoseTrack` gets: detection rate,
  * angle jitter before and after smoothing and the share of grid points that got a move.
@@ -428,6 +478,7 @@ export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackM
       track.aspect,
       maxGapMs,
     ),
+    holdoutDeg: holdoutError(trimmed, track.aspect, opts.filter, maxGapMs),
     moveSlots,
     moves,
     usableMoveRatio: moveSlots ? moves / moveSlots : 0,

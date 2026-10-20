@@ -621,14 +621,34 @@ wird:
 - Kennzahlen aus `trackMetrics` (`src/lib/videoChoreo.ts`), mit denselben Optionen wie der
   Import: Erkennungsquote, Moves gegenüber Rasterpunkten, Zittern roh und geglättet (mittlere
   Änderung der Winkeländerung von Probe zu Probe in Grad; echte Bewegung ist glatt und trägt
-  wenig bei, Erkennungsrauschen überwiegt), BPM und Beat-Phase sowie die Dauer der Analyse
-  (Uhrzeit, keine Spielzeit).
+  wenig bei, Erkennungsrauschen überwiegt), Holdout-Fehler (siehe unten), BPM und Beat-Phase
+  sowie die Dauer der Analyse (Uhrzeit, keine Spielzeit).
+- Holdout-Fehler: Jede zweite Probe wird weggelassen, der Rest geglättet, und die weggelassenen
+  Rohwinkel werden aus den Nachbarn vorhergesagt (mittlerer Fehler in Grad). Das Rauschen der
+  Rohwerte trägt bei jeder Filtereinstellung etwa gleich viel bei; deshalb liegt die Einstellung
+  mit dem kleinsten Wert nahe an der echten Bewegung, ohne dass es eine Wahrheit braucht. Zu
+  wenig Glättung behält das Rauschen, zu viel schneidet echte Bewegung ab. Auf synthetischen
+  Spuren lag die so gewählte Einstellung höchstens etwa 0,6° über der wirklich besten. Eine
+  einfachere Summe aus Zittern und Abweichung vom Rohwert wurde verworfen: Sie bevorzugte
+  starke Glättung auch bei schnellen Moves.
 - „Rohdaten exportieren“ lädt `*.posetrack.json` herunter (`src/lib/poseTrackFile.ts`, Format
   `dancebeat-pose-track` v1, mit zod geprüft): die Spur der Zielperson und die Einstellungen
   des Dialogs (BPM, Beat-Phase in Videozeit, Bereich, Spiegeln, Dateiname). Die Datei enthält
   nur Landmarks, keine Bilder, und gehört nicht zur Bibliothek. `importOptions` rechnet sie in
   dieselben Optionen um, die `buildVideoChoreo` an `choreoFromPoseTrack` gibt. So lässt sich
   das Feintuning ohne neuen MediaPipe-Lauf wiederholen.
+
+### Tuning-Skript (Etappe 8g-3)
+
+`bun run tune-video <a.posetrack.json> [b.posetrack.json …]` (`scripts/tune-video-choreo.ts`,
+Logik in `scripts/tuning.ts`) rechnet für jede Datei ein Raster aus One-Euro-`minCutoff`
+(Standard 0,5/1/2/4), `beta` (2/5/10/20/40) und `maxGapMs` (150/250/400) durch und gibt je Video
+eine Tabelle nach Holdout-Fehler aus (Zittern, Moves je Rasterpunkte, Parameter; die aktuellen
+Standardwerte sind markiert). Bei mehreren Dateien folgt die mittlere Wertung über alle Videos;
+Einstellungen, die an einem Video scheitern, fallen dort heraus. Raster per Komma-Liste
+änderbar: `--min-cutoff`, `--beta`, `--max-gap`, `--beats-per-move`, dazu `--top` (Zeilen je
+Tabelle, Standard 10). Die Rohdaten bleiben lokal und kommen nicht ins Repo. Laufzeit etwa 2 s je
+Minute Video beim Standardraster. Neue Standardwerte vor dem Übernehmen im Spiel gegenprüfen.
 
 ## Choreografie-Editor (Etappe 8d-1)
 

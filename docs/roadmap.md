@@ -16,7 +16,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2 ✅)        | Opus                                                                  |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3 ✅)  | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ✅ (Gerätetest offen)      | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
@@ -481,7 +481,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2 umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3 umgesetzt)
 
 Aufteilung:
 
@@ -621,7 +621,7 @@ Aufteilung:
     - [ ] Tracking über Kreuzungen und kurze Verdeckungen: die Choreografie bleibt bei der
           gewählten Person (im Editor oder Spiel prüfen)
     - [ ] Dauer der Analyse mit `numPoses` 3 gegenüber vorher (1) für denselben Abschnitt
-- **8g Qualität mit echten Tanzvideos – 8g-2 umgesetzt.** Ziel: aus YouTube-Videos (lokal per
+- **8g Qualität mit echten Tanzvideos – 8g-2 und 8g-3 umgesetzt.** Ziel: aus YouTube-Videos (lokal per
   yt-dlp als MP4) zuverlässig gute Choreografien für Party-Klassiker, K-Pop Mirrored, Zumba und
   TikTok-Trends. Erst messen, dann gezielt verbessern.
   - **8g-1 Testset (offen, kein Code):** 4 Referenzvideos lokal außerhalb des Repos (fester
@@ -633,9 +633,13 @@ Aufteilung:
     [architecture.md](architecture.md#diagnose-im-dev-modus-etappe-8g-2). Tests
     `videoChoreo.test.ts` (Kennzahlen), `poseTrackFile.test.ts` (Format, gleiche Moves wie der
     Dialog), `video-choreo-panel.test.tsx` (Diagnose und Export). Kein Formatwechsel.
-  - **8g-3 Tuning-Skript (offen):** `scripts/tune-video-choreo.ts` liest Rohdaten-Dateien,
-    probiert One-Euro-Parameter, `maxGapMs` und `beatsPerMove` und gibt je Video eine
-    Kennzahlen-Tabelle aus. Danach neue Standardwerte mit Begründung.
+  - **8g-3 Tuning-Skript – umgesetzt.** `bun run tune-video <dateien>` probiert One-Euro-
+    Parameter und `maxGapMs` (wahlweise `beatsPerMove`) und ordnet nach Holdout-Fehler, je Video
+    und gemittelt. Details:
+    [architecture.md](architecture.md#tuning-skript-etappe-8g-3). Tests `tuning.test.ts`,
+    Holdout in `videoChoreo.test.ts`. **Offen:** Lauf mit den echten Rohdaten aus 8g-1, danach
+    neue Standardwerte mit Begründung in
+    [choreography-format.md](choreography-format.md#video-import).
   - **8g-4 Verbesserungen, nur nach Messung (offen):** Modell „full“/„heavy“ mit Auswahl
     „Schnell / Genau“; Bruchteil-BPM (0,1 BPM, Schema erlaubt das schon); Moves auf markanten
     Haltepunkten statt starr alle 2 Beats; Hinweis zum Selfie-Schalter bei Mirrored-Videos.

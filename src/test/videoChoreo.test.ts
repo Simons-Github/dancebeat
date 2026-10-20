@@ -386,12 +386,29 @@ describe("trackMetrics", () => {
     expect(noisy.jitterSmoothDeg!).toBeLessThan(noisy.jitterRawDeg! * 0.5);
   });
 
+  it("Holdout-Fehler: Glättung hilft bei Rauschen, zu starke schadet bei sauberen schnellen Moves", () => {
+    const noisy = makeTrack({ noise: 0.02, seed: 4, stepMs: 50 });
+    const smooth = trackMetrics(noisy, opts).holdoutDeg!;
+    const none = trackMetrics(noisy, { ...opts, filter: { minCutoff: 1000 } }).holdoutDeg!;
+    expect(smooth).toBeLessThan(none);
+
+    const fast = (t: number) => ({ ...wave(t), la: 90 + 70 * Math.sin((2 * Math.PI * t) / 500) });
+    const clean = makeTrack({ pose: fast, stepMs: 50 });
+    const light = trackMetrics(clean, { ...opts, filter: { minCutoff: 1000 } }).holdoutDeg!;
+    const heavy = trackMetrics(clean, {
+      ...opts,
+      filter: { minCutoff: 0.05, beta: 0 },
+    }).holdoutDeg!;
+    expect(heavy).toBeGreaterThan(light * 2);
+  });
+
   it("meldet einen unbrauchbaren Abschnitt, statt zu werfen", () => {
     const empty = makeTrack({ edit: () => null });
     const m = trackMetrics(empty, opts);
     expect(m.detectionRatio).toBe(0);
     expect(m.moves).toBe(0);
     expect(m.jitterRawDeg).toBeNull();
+    expect(m.holdoutDeg).toBeNull();
     expect(m.error).toBe("Im Video wurde zu selten eine Person erkannt.");
   });
 });

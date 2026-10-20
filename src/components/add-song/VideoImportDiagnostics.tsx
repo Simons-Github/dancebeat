@@ -67,6 +67,7 @@ export function VideoImportDiagnostics({ file, analysisMs }: VideoImportDiagnost
         <li>
           Zittern roh {deg(m.jitterRawDeg)}, geglättet {deg(m.jitterSmoothDeg)} pro Probe
         </li>
+        <li>Holdout-Fehler {deg(m.holdoutDeg)}</li>
         <li>
           BPM {file.bpm}, Beat-Phase {file.beatPhaseMs} ms
         </li>
