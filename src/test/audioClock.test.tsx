@@ -511,6 +511,26 @@ describe("Lautstärke bei ignoriertem media.volume (iOS)", () => {
     expect(ctor).not.toHaveBeenCalled();
   });
 
+  it.each([
+    [
+      "iPhone",
+      "Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15",
+      5,
+      true,
+    ],
+    [
+      "iPad (Desktop-UA)",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+      5,
+      true,
+    ],
+    ["Mac", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15", 0, false],
+    ["Android", "Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 Chrome/129", 5, false],
+  ])("%s: Erkennung auch, wenn volume den Wert zurückliest", (_, ua, touch, expected) => {
+    vi.stubGlobal("navigator", { userAgent: ua, maxTouchPoints: touch });
+    expect(mediaVolumeIgnored()).toBe(expected);
+  });
+
   it("ohne AudioContext bleibt es beim normalen Element", () => {
     ignoreMediaVolume();
     vi.stubGlobal("AudioContext", undefined);

@@ -158,8 +158,11 @@ wegzuwerfen. Die Soundeffekte (`src/lib/sfx.ts`) nutzen denselben `AudioContext`
 Browser `play()` trotzdem ab (z. B. nach Neuladen auf `/play`), zeigt das Spiel „Zum Starten
 tippen“ und ruft `play()` in diesem Tipp auf. Ob das auf iOS reicht, zeigt nur der Gerätetest.
 
-**Lautstärke auf iOS:** iOS Safari ignoriert `HTMLMediaElement.volume` (Setter ohne Wirkung,
-liest 1 zurück). `mediaVolumeIgnored()` prüft das einmal beim ersten Aufruf. Auf solchen Geräten
+**Lautstärke auf iOS:** iOS Safari ignoriert `HTMLMediaElement.volume`. `mediaVolumeIgnored()`
+prüft einmal beim ersten Aufruf: iPhone/iPod/iPad laut User-Agent (iPadOS: Mac-UA mit
+Touchpunkten) oder ein Wert, der sich nicht zurücklesen lässt. Das Zurücklesen allein reicht
+nicht: Ein iPhone 11 meldete 0,5 und spielte trotzdem mit voller Lautstärke (Gerätetest
+2026-10-20). Auf solchen Geräten
 gibt `claimSharedElement("local")` ein zweites gemeinsames Element zurück, das einmalig über
 `createMediaElementSource → GainNode → destination` am gemeinsamen `AudioContext` hängt;
 `setVolume` setzt dann den Gain (`musicGainFor`). `unlockAudio()` entsperrt beide Elemente in

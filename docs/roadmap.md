@@ -74,6 +74,9 @@ der `AudioContext` nach dem Start nicht, gilt der Start als blockiert („Zum St
 Gerätetest offen: Regler am iPhone mit Datei-Song hörbar? Übersteuerung weg? URL-Song nach einem
 Datei-Song in derselben Sitzung noch hörbar? Rückkehr aus Hintergrund/Sperrbildschirm → „Zum
 Starten tippen“ oder spielt? Sync-Test-Offset im Vergleich zu vorher?
+Gerätetest 2026-10-20 (iPhone 11): Regler ohne Wirkung, Hinweis fehlte. Das Gerät liest
+`volume` = 0,5 zurück, wendet es aber nicht an. **Nachgebessert:** Erkennung zusätzlich über den
+User-Agent (iPhone/iPod/iPad, iPadOS über Touchpunkte). Gerätetest offen.
 ✅ Demo-Ton am iPhone (Etappe 11f): Die Demo-Synthese übersteuerte (Kick, Bass und Hi-Hat
 zusammen über 1, hart geclippt), fast die ganze Energie lag im Tiefbass (Kick bis 40 Hz, Bass bei
 49/55 Hz), den Handy-Lautsprecher nicht wiedergeben, und die 8-kHz-Rechteck-Hi-Hat erzeugte

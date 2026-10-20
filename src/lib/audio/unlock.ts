@@ -69,17 +69,28 @@ export function sharedAudioContext(): AudioContext | null {
 }
 
 /**
- * True where the browser ignores `HTMLMediaElement.volume` (iOS Safari). Measured once on first
- * call (never at module level) and cached.
+ * iPhone, iPod or iPad (iPadOS reports a Mac user agent, but with touch points). Every browser
+ * there is WebKit and leaves the media volume to the hardware keys.
+ */
+function isAppleMobile(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+
+/**
+ * True where the browser ignores `HTMLMediaElement.volume` (iOS/iPadOS). Measured once on first
+ * call (never at module level) and cached. Reading the value back is not enough: an iPhone 11
+ * (device test 2026-10-20) reported the set 0.5 but still played at full volume.
  */
 export function mediaVolumeIgnored(): boolean {
   if (volumeIgnored !== null) return volumeIgnored;
   try {
     const probe = new Audio();
     probe.volume = 0.5;
-    volumeIgnored = probe.volume !== 0.5;
+    volumeIgnored = isAppleMobile() || probe.volume !== 0.5;
   } catch {
-    volumeIgnored = false;
+    volumeIgnored = isAppleMobile();
   }
   return volumeIgnored;
 }
