@@ -62,6 +62,17 @@ function setSong(moves: number, extra: Partial<Song> = {}) {
   repo.songs = [{ ...makeSong(choreo), id: SONG_ID, title: "Pink Pulse", ...extra }];
 }
 
+/** Frames every 500 ms from 0 to 4000 ms, moves only at 0, 2000 and 4000 ms (room to edit). */
+function setSparseSong() {
+  const base = makeChoreo(poses(9));
+  const moves = [0, 2000, 4000].map((t) => ({ timeMs: t, label: "", iconId: "x", gold: false }));
+  repo.songs = [
+    { ...makeSong({ ...base, offsetMs: 1000, moves }), id: SONG_ID, title: "Pink Pulse" },
+  ];
+}
+const timeGroup = () => screen.getByRole("group", { name: "Zeit" });
+const insertBtn = () => screen.getByRole("button", { name: "Move danach einfügen" });
+
 beforeEach(() => {
   setSong(3);
   repo.saved = [];
@@ -117,6 +128,69 @@ describe("Choreografie-Editor", () => {
     expect(cards()[1]).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByRole("button", { name: "Move löschen" })).toBeDisabled();
     expect(screen.getByText("Mindestens 2 Moves müssen bleiben.")).toBeInTheDocument();
+  });
+
+  it("Move-Zeit verschieben ändert die Anzeige, Speichern schreibt die Zeiten", async () => {
+    setSparseSong();
+    await renderAt(`/edit/${SONG_ID}`);
+    fireEvent.click(cards()[1]!);
+    const time = screen.getByTestId("selected-time");
+    expect(time).toHaveTextContent("00:03,0");
+    fireEvent.click(within(timeGroup()).getByRole("button", { name: "Move um 1 Beat später" }));
+    expect(time).toHaveTextContent("00:03,5");
+    fireEvent.click(within(timeGroup()).getByRole("button", { name: "Move um ½ Beat früher" }));
+    expect(time).toHaveTextContent("00:03,3");
+    expect(cards()[1]).toHaveAccessibleName("Move 2, 00:03,3");
+    expect(saveBtn()).toBeEnabled();
+
+    fireEvent.click(saveBtn());
+    await waitFor(() => expect(repo.saved).toHaveLength(1));
+    expect(repo.saved[0]!.choreo.moves.map((m) => m.timeMs)).toEqual([0, 2250, 4000]);
+  });
+
+  it("Move einfügen: neuer Move auf dem Beat, Auswahl folgt, wird gespeichert", async () => {
+    setSparseSong();
+    await renderAt(`/edit/${SONG_ID}`);
+    fireEvent.click(insertBtn());
+    expect(cards()).toHaveLength(4);
+    expect(cards()[1]).toHaveAttribute("aria-pressed", "true");
+    expect(cards()[1]).toHaveAccessibleName("Move 2, 00:02,0");
+    expect(screen.getByRole("heading", { name: "Move 2" })).toBeInTheDocument();
+    expect(screen.getByTestId("selected-time")).toHaveTextContent("00:02,0");
+
+    fireEvent.click(saveBtn());
+    await waitFor(() => expect(repo.saved).toHaveLength(1));
+    expect(repo.saved[0]!.choreo.moves.map((m) => m.timeMs)).toEqual([0, 1000, 2000, 4000]);
+  });
+
+  it("Zeit-Tasten und Einfügen gesperrt mit Hinweis, wenn kein Platz ist", async () => {
+    // Moves 500 ms apart: ½ beat leaves 250 ms (< 300), frames end at the last move.
+    await renderAt(`/edit/${SONG_ID}`);
+    const hint = screen.getByText(/^Gesperrt, wenn der Abstand zum Nachbar-Move/);
+    expect(timeGroup()).toHaveAttribute("aria-describedby", hint.id);
+    const buttons = [...within(timeGroup()).getAllByRole("button"), insertBtn()];
+    expect(buttons).toHaveLength(5);
+    for (const b of buttons) {
+      expect(b).toBeDisabled();
+      expect(b).toHaveAttribute("aria-describedby", hint.id);
+    }
+    expect(saveBtn()).toBeDisabled();
+  });
+
+  it("am Rand: nur die erlaubten Richtungen sind aktiv", async () => {
+    setSparseSong();
+    await renderAt(`/edit/${SONG_ID}`);
+    // First move at 0 ms: earlier is impossible, later is fine.
+    const group = timeGroup();
+    expect(within(group).getByRole("button", { name: "Move um 1 Beat früher" })).toBeDisabled();
+    expect(within(group).getByRole("button", { name: "Move um ½ Beat früher" })).toBeDisabled();
+    expect(within(group).getByRole("button", { name: "Move um 1 Beat später" })).toBeEnabled();
+    expect(insertBtn()).toBeEnabled();
+    expect(insertBtn()).not.toHaveAttribute("aria-describedby");
+    // Last move at the end of the frames: nothing to insert after it.
+    fireEvent.click(cards()[2]!);
+    expect(insertBtn()).toBeDisabled();
+    expect(within(group).getByRole("button", { name: "Move um 1 Beat früher" })).toBeEnabled();
   });
 
   it("Offset-Tasten und Tempo; Verwerfen setzt zurück", async () => {

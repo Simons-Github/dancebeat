@@ -16,7 +16,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d-1 ✅)        | Opus                                                                  |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d-1, 8d-2a ✅) | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ⏳                         | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
@@ -426,7 +426,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1 umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a umgesetzt)
 
 Aufteilung:
 
@@ -491,7 +491,23 @@ Aufteilung:
     - [ ] Hoch- und Querformat am Handy: Timeline wischbar, Knöpfe erreichbar, Safe Areas
     - [ ] Strichfiguren scharf (devicePixelRatio) und gut erkennbar, Gold sichtbar
     - [ ] Nach Offset- und Tempoänderung spielt der Song im Spiel wie erwartet
-- **8d-2 (offen):** Abspielen mit Audio-Vorschau, Move-Zeiten verschieben, Moves hinzufügen.
+- **8d-2a Move-Zeiten und Einfügen – umgesetzt, Gerätetest offen.** In der Karte „Move N“:
+  Gruppe „Zeit“ mit −1 Beat, −½ Beat, +½ Beat, +1 Beat und „Move danach einfügen“ (Auswahl
+  folgt dem neuen Move). Regeln: sortiert, mindestens 300 ms Abstand, innerhalb der Frames mit
+  brauchbarer Zielpose (wie beim Import), nicht vor Musikzeit 0; sonst gesperrt mit Hinweis.
+  Einfügen in der Mitte zum nächsten Move, gerastet auf das Beat-Raster der Choreografie-Zeit
+  (k · Beatlänge), nach dem letzten Move zwei Beats später. Details:
+  [choreography-format.md](choreography-format.md#editor).
+  - Logik `shiftMove`, `insertMoveAfter` (mit `canShiftMove`, `canInsertAfter`) in
+    `src/lib/choreoEditor.ts`; Tests in `choreoEditor.test.ts` und
+    `choreo-editor-screen.test.tsx`. Kein Formatwechsel.
+  - Playwright (390×844 und 844×390, beide Demos): ±½ Beat verschiebt Moves, Knöpfe sperren am
+    Nachbar-Move mit Hinweis, Einfügen landet auf dem Beat (auch bei 124 BPM) und wird ausgewählt,
+    Speichern und Neuladen behalten Moves und Zeiten, kein waagerechtes Scrollen, Konsole sauber.
+  - **Gerätetest 8d-2a (offen):**
+    - [ ] Zeit-Knöpfe und Einfügen im Hoch- und Querformat erreichbar, Hinweis lesbar
+    - [ ] Verschobene und eingefügte Moves treffen im Spiel die Musik
+- **8d-2b (offen):** Abspielen mit Audio-Vorschau.
 
 Ursprüngliche Schritte:
 

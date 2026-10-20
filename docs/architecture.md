@@ -449,6 +449,15 @@ Browser (`beforeunload`).
   (mindestens `MIN_MOVES` = 2), `toggleGold`, `suggestGold` (nutzt `suggestGoldMoves`),
   `shiftOffset` (ganze ms, ±10 s um den gespeicherten Wert, kein Move vor Musikzeit 0), `beatLengthMs`, `setTempo` (1× entfernt
   `playbackRate`), `supportsTempo` (nur Datei und URL), `isEdited` (Speichern/Verwerfen nur bei Änderungen), `prepareSave`.
+- Etappe 8d-2a: `shiftMove`/`canShiftMove` (Move um ½ oder 1 Beat verschieben) und
+  `insertMoveAfter`/`canInsertAfter` (Move nach dem gewählten einfügen, liefert den neuen Index),
+  geprüft über eine gemeinsame Hilfsfunktion: sortiert, `MIN_MOVE_GAP_MS` (300 ms,
+  Spielbarkeit; überlappende Bewertungsfenster sind unkritisch) zu beiden Nachbarn, innerhalb der Frames mit brauchbarer Zielpose
+  (`poseUsableAt` aus `videoChoreo.ts`, gleiche Regel wie der Import, Lookup per `frameAt` wie im
+  Scorer), nicht vor Musikzeit 0; Zeiten auf 0,1 ms gerundet. Eingefügt wird in der Mitte, gerastet
+  auf k · Beatlänge in Choreografie-Zeit. Ungültiges wird abgelehnt (gleiches Objekt); der Screen
+  sperrt die Knöpfe und nennt die Gründe. Die Pose eines Moves wird aus den Frames interpoliert,
+  neue Pose-Daten sind nicht nötig. `isEdited` vergleicht auch `label` und `iconId`.
 - Timeline: waagerecht scrollende Move-Karten mit Strichfigur der Referenzpose
   (`moveFigures` + `drawMoveFigure` auf Canvas, gezeichnet nur bei Änderung, kein rAF), Zeit in
   Musikzeit (`move.timeMs + offsetMs`, ohne Latenz und Sync-Offset), Gold-Markierung.

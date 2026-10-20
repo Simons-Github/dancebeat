@@ -188,6 +188,26 @@ function roundFrame(timeMs: number, lm: Landmark[], angles: Angles): Frame {
 
 const limbAngleCount = (a: Angles) => [...ARM_KEYS, ...LEG_KEYS].filter((k) => a[k] != null).length;
 
+/** Whether a frame is a reliable reference pose: torso visible and enough limb angles. */
+export const isUsablePose = (f: Frame) =>
+  !f.lowVisibility && limbAngleCount(f.angles) >= MIN_LIMB_ANGLES;
+
+/**
+ * Whether the target pose at `t` is reliable, with the same lookup the scorer uses (`frameAt`):
+ * the interpolated angles need enough limb angles, and no frame it is interpolated from may be
+ * marked `lowVisibility` (the interpolated frame drops that flag).
+ */
+export function poseUsableAt(frames: Frame[], t: number): boolean {
+  const f = frameAt(frames, t);
+  if (!f) return false;
+  // The frames `frameAt` interpolates between, or the edge frame it returns.
+  const i = frames.findIndex((x) => x.timeMs > t);
+  const used =
+    i < 0 ? [frames[frames.length - 1]] : i === 0 ? [frames[0]] : [frames[i - 1], frames[i]];
+  if (used.some((x) => x?.lowVisibility)) return false;
+  return limbAngleCount(f.angles) >= MIN_LIMB_ANGLES;
+}
+
 /**
  * Suggests gold moves: the moves with the largest change of target angles against the previous
  * move (sum of |angleDiff|), spread over the song by a minimum index spacing. Returns copies of
@@ -275,7 +295,7 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
   for (let n = Math.ceil(-offset / step); offset + n * step <= durationMs; n++) {
     const t = offset + n * step;
     const f = nearest(t);
-    if (!f || f.lowVisibility || limbAngleCount(f.angles) < MIN_LIMB_ANGLES) continue;
+    if (!f || !isUsablePose(f)) continue;
     moves.push({ timeMs: t, label: "Move", iconId: "video", gold: false });
   }
   if (moves.length < 2) throw new Error("Zu wenige auswertbare Moves im gewählten Abschnitt.");

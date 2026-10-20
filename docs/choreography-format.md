@@ -126,11 +126,22 @@ gilt Videozeit = Audiozeit. Für den Bereich `[start, ende]` und eine Beat-Phase
 
 ## Editor
 
-Der Choreografie-Editor (Etappe 8d-1, `/edit/$songId`) ändert nur `moves[].gold`, entfernt Moves
-(mindestens 2 bleiben), verschiebt `choreo.offsetMs` (ganze ms, höchstens ±10 s um den
+Der Choreografie-Editor (Etappen 8d-1 und 8d-2a, `/edit/$songId`) ändert `moves[].gold` und
+`moves[].timeMs`, entfernt Moves (mindestens 2 bleiben), fügt Moves ein, verschiebt `choreo.offsetMs` (ganze ms, höchstens ±10 s um den
 gespeicherten Wert, kein Move vor Musikzeit 0) und setzt das Song-Feld `playbackRate` (0,75 oder 1,25; bei 1× entfällt das
 Feld). Beim Speichern setzt er `choreo.updatedAt`, `updatedAt` des Songs setzt das Repository.
-Frames, Move-Zeiten und Labels bleiben unverändert. Kein Formatwechsel, keine neue Version.
+Für Move-Zeiten gilt (Verschieben um ½ oder 1 Beat, Einfügen): auf 0,1 ms gerundet (wie beim
+Video-Import, halbe Beats driften nicht), Moves bleiben nach `timeMs` sortiert, mindestens 300 ms
+Abstand zum Nachbar-Move (`MIN_MOVE_GAP_MS`, Grenze der Spielbarkeit, ein Beat Abstand bis
+200 BPM; Bewertungsfenster dürfen überlappen, der Scorer merkt sich die beste Abweichung pro Move), Zeit innerhalb der Frames
+(erste bis letzte Frame-Zeit), dort eine brauchbare Zielpose (gleiche Regel wie beim Import: kein
+`lowVisibility`-Frame und genug Gliedmaßen-Winkel in der per `frameAt` interpolierten Pose, die
+auch die Bewertung nutzt), nicht vor 0 und nicht vor Musikzeit 0 (`timeMs + offsetMs`). Verstöße
+werden abgelehnt, nicht begrenzt. Ein neuer Move liegt in der Mitte zum nächsten Move, gerastet
+auf das Beat-Raster der Choreografie-Zeit (k · Beatlänge; die Beat-Phase steckt in `offsetMs`),
+sonst ungerastet; nach dem letzten Move zwei Beats später. Er ist kein Gold Move, `label` ist
+leer, `iconId` ist „editor“. Frames und vorhandene Labels bleiben unverändert.
+Kein Formatwechsel, keine neue Version.
 
 ## Export-Datei
 

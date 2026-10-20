@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useBlocker, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Save, Sparkles, Star, Trash2, Undo2 } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Plus, Save, Sparkles, Star, Trash2, Undo2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -19,12 +19,16 @@ import {
   TEMPO_OPTIONS,
   beatLengthMs,
   canDeleteMove,
+  canInsertAfter,
+  canShiftMove,
   deleteMove,
   formatMoveTime,
+  insertMoveAfter,
   isEdited,
   moveAudioMs,
   prepareSave,
   setTempo,
+  shiftMove,
   shiftOffset,
   suggestGold,
   supportsTempo,
@@ -54,6 +58,14 @@ const OFFSET_STEPS = [
   { ms: 10, label: "+10", aria: "Offset um 10 ms erhöhen" },
   { ms: 100, label: "+100", aria: "Offset um 100 ms erhöhen" },
   { beats: 1, label: "+1 Beat", aria: "Offset um 1 Beat erhöhen" },
+] as const;
+
+/** Time steps for the selected move, in beats of the choreography. */
+const MOVE_STEPS = [
+  { beats: -1, label: "−1 Beat", aria: "Move um 1 Beat früher" },
+  { beats: -0.5, label: "−½ Beat", aria: "Move um ½ Beat früher" },
+  { beats: 0.5, label: "+½ Beat", aria: "Move um ½ Beat später" },
+  { beats: 1, label: "+1 Beat", aria: "Move um 1 Beat später" },
 ] as const;
 
 const formatRate = (r: number) => `${String(r).replace(".", ",")}×`;
@@ -89,8 +101,10 @@ function MoveCanvas({
 }
 
 /**
- * Choreography editor (stage 8d-1): works on a local copy of the song. Moves can be marked gold
- * or deleted, the gold suggestion applied, `choreo.offsetMs` shifted and the tempo chosen.
+ * Choreography editor (stages 8d-1, 8d-2a): works on a local copy of the song. Moves can be marked
+ * gold, shifted in time (half or whole beats), inserted after the selected move or deleted, the
+ * gold suggestion applied, `choreo.offsetMs` shifted and the tempo chosen. Shifts and insertions
+ * that break the timing rules (see `shiftMove`) are disabled, with a hint.
  * "Speichern" writes the copy via `onSave` and returns to the library; "Verwerfen" resets it
  * after a confirmation. No audio playback here.
  */
@@ -131,6 +145,9 @@ export function ChoreoEditorScreen({
   const beat = beatLengthMs(choreo.bpm);
   const goldCount = moves.filter((m) => m.gold).length;
   const tempoOk = supportsTempo(working);
+  const shiftOk = MOVE_STEPS.map((s) => canShiftMove(choreo, sel, s.beats * beat));
+  const insertOk = canInsertAfter(choreo, sel);
+  const timeBlocked = !insertOk || shiftOk.some((ok) => !ok);
 
   // Any navigation away (in-app link, browser or Android back) with unsaved changes asks first;
   // reloading or closing the tab triggers the browser's beforeunload warning.
@@ -150,6 +167,12 @@ export function ChoreoEditorScreen({
   };
   const editChoreo = (next: Song["choreo"]) => {
     if (next !== choreo) edit({ ...working, choreo: next });
+  };
+  const insertMove = () => {
+    const next = insertMoveAfter(choreo, sel);
+    if (next.choreo === choreo) return;
+    setSelected(next.index);
+    editChoreo(next.choreo);
   };
   const removeMove = () => {
     const next = deleteMove(choreo, sel);
@@ -292,6 +315,49 @@ export function ChoreoEditorScreen({
                   </p>
                   {move.label && <p className={HINT}>{move.label}</p>}
                 </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <p id={`${id}-zeit`} className="text-lg font-medium">
+                  Zeit
+                </p>
+                <div
+                  role="group"
+                  aria-labelledby={`${id}-zeit`}
+                  aria-describedby={timeBlocked ? `${id}-time` : undefined}
+                  className="flex flex-wrap gap-2"
+                >
+                  {MOVE_STEPS.map((s, i) => (
+                    <Button
+                      key={s.label}
+                      size="lg"
+                      variant="secondary"
+                      aria-label={s.aria}
+                      disabled={!shiftOk[i]}
+                      aria-describedby={shiftOk[i] ? undefined : `${id}-time`}
+                      onClick={() => editChoreo(shiftMove(choreo, sel, s.beats * beat))}
+                      className={cn(BTN, "px-4 tabular-nums")}
+                    >
+                      {s.label}
+                    </Button>
+                  ))}
+                </div>
+                <Button
+                  size="lg"
+                  variant="secondary"
+                  disabled={!insertOk}
+                  aria-describedby={insertOk ? undefined : `${id}-time`}
+                  onClick={insertMove}
+                  className={cn(BTN, "self-start")}
+                >
+                  <Plus aria-hidden />
+                  Move danach einfügen
+                </Button>
+                {timeBlocked && (
+                  <p id={`${id}-time`} className={HINT}>
+                    Gesperrt, wenn der Abstand zum Nachbar-Move unter 0,3 s fällt, die Aufnahme dort
+                    keine Pose hat oder der Move vor den Musikbeginn rutschen würde.
+                  </p>
+                )}
               </div>
               <div className="flex items-center justify-between gap-4">
                 <label htmlFor={`${id}-gold`} className="text-lg font-medium">
