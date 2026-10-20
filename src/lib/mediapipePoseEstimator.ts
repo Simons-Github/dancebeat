@@ -1,13 +1,20 @@
-import type { PoseLandmarker } from "@mediapipe/tasks-vision";
+import type { NormalizedLandmark, PoseLandmarker } from "@mediapipe/tasks-vision";
 
 import { createPoseLandmarker, type PoseModel } from "./mediapipe";
 import type { PoseDelegate, PoseEstimator } from "./poseEstimator";
 import type { Landmark } from "./types";
 
-/** MediaPipe Pose Landmarker in VIDEO mode. "lite" is the live model; GPU falls back to CPU. */
+const toLandmarks = (pose: NormalizedLandmark[]): Landmark[] =>
+  pose.map((q) => [q.x, q.y, q.visibility ?? 1] as Landmark);
+
+/**
+ * MediaPipe Pose Landmarker in VIDEO mode. "lite" is the live model; GPU falls back to CPU.
+ * `numPoses` > 1 only for the video import (target person, Etappe 8f); live play keeps 1.
+ */
 export function createMediaPipeEstimator(
   model: PoseModel = "lite",
   delegate?: PoseDelegate,
+  numPoses = 1,
 ): PoseEstimator {
   let landmarker: PoseLandmarker | null = null;
   let closed = false;
@@ -18,6 +25,7 @@ export function createMediaPipeEstimator(
       const made = await createPoseLandmarker({
         mode: "VIDEO",
         model,
+        numPoses,
         ...(delegate ? { delegate } : {}),
       });
       // close() may have been called while the model was loading.
@@ -30,7 +38,10 @@ export function createMediaPipeEstimator(
     },
     detect(video, timestampMs) {
       const pose = landmarker?.detectForVideo(video, timestampMs).landmarks[0];
-      return pose ? pose.map((q) => [q.x, q.y, q.visibility ?? 1] as Landmark) : null;
+      return pose ? toLandmarks(pose) : null;
+    },
+    detectAll(video, timestampMs) {
+      return landmarker?.detectForVideo(video, timestampMs).landmarks.map(toLandmarks) ?? [];
     },
     close() {
       closed = true;

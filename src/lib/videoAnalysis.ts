@@ -1,10 +1,11 @@
 import type { PoseEstimator } from "./poseEstimator";
+import type { MultiPoseTrack } from "./targetPerson";
 import type { Landmark } from "./types";
-import type { PoseTrack } from "./videoChoreo";
 
 /**
  * Offline pose analysis of a video element: seeks through the video on a fixed time grid and
- * runs the estimator on every frame. The result feeds `choreoFromPoseTrack` (videoChoreo.ts).
+ * runs the estimator on every frame. The result keeps every detected person; `trackTarget`
+ * (targetPerson.ts) turns it into the `PoseTrack` that feeds `choreoFromPoseTrack`.
  * Wall-clock time is only used for progress throttling; the samples carry video time.
  */
 
@@ -129,16 +130,17 @@ function seekTo(
 
 /**
  * Steps through `range` (default: the whole video) every `intervalMs`, seeks the paused video
- * there and records the estimator result. Sample times are video time in ms (not relative to
+ * there and records all people the estimator finds (`detectAll`, or `detect` wrapped as zero or
+ * one person). Sample times are video time in ms (not relative to
  * the range). Rejects with an "AbortError" DOMException when `signal` aborts, and with
  * `VideoAnalysisError` for missing metadata, seek timeouts and media errors. Errors thrown by
- * `estimator.detect` propagate unchanged.
+ * `estimator.detect` / `detectAll` propagate unchanged.
  */
 export async function analyzeVideo(
   video: HTMLVideoElement,
   estimator: PoseEstimator,
   opts: AnalyzeVideoOptions = {},
-): Promise<PoseTrack> {
+): Promise<MultiPoseTrack> {
   const {
     intervalMs = DEFAULT_INTERVAL_MS,
     signal,
@@ -165,7 +167,7 @@ export async function analyzeVideo(
   const offset = last === undefined ? 0 : Math.max(0, last + intervalMs - startMs);
 
   video.pause();
-  const samples: PoseTrack["samples"] = [];
+  const samples: MultiPoseTrack["samples"] = [];
   let lastReport = -Infinity;
   for (let i = 0; i < steps; i++) {
     if (signal?.aborted) throw abortError();
@@ -174,8 +176,13 @@ export async function analyzeVideo(
     if (signal?.aborted) throw abortError();
     const ts = offset + timeMs;
     lastTimestamps.set(estimator, ts);
-    const landmarks: Landmark[] | null = estimator.detect(video, ts);
-    samples.push({ timeMs, landmarks });
+    let poses: Landmark[][];
+    if (estimator.detectAll) poses = estimator.detectAll(video, ts);
+    else {
+      const one = estimator.detect(video, ts);
+      poses = one ? [one] : [];
+    }
+    samples.push({ timeMs, poses });
     if (onProgress) {
       const fraction = (i + 1) / steps;
       const t = now();

@@ -123,6 +123,9 @@ gilt Videozeit = Audiozeit. Für den Bereich `[start, ende]` und eine Beat-Phase
   `P + k · Beatlänge`.
 - `song.startOffsetMs = start`: Die Musik beginnt am Bereichsanfang. `syncOffsetMs` ist 0.
 - BPM kommt aus dem Formular. Kein Formatwechsel, keine neue Version.
+- Mehrere Personen im Video (Etappe 8f): Die Analyse kennt bis zu 3 Personen je Probe;
+  `choreoFromPoseTrack` bekommt nur die gewählte Zielperson (`trackTarget`, siehe
+  [architecture.md](architecture.md#zielperson-etappe-8f)). Am Format ändert sich nichts.
 - `P` kann „Takt erkennen“ setzen (Etappe 8e): erster Beat ab `start`, geschätzt aus der
   Onset-Hüllkurve der Musikdatei oder der Tonspur des Videos (`estimateBeatPhaseMs`, siehe
   [architecture.md](architecture.md#bpm-schätzung-und-beat-phase)). Jeder Beat ist als `P`

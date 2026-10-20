@@ -359,7 +359,8 @@ Google Fonts oder ein anderes CDN.
 `src/lib/videoChoreo.ts` (Etappe 8a, reine Logik ohne React): `choreoFromPoseTrack` macht aus
 einer rohen Pose-Spur (`PoseTrack`: Seitenverhältnis plus Proben `{ timeMs, landmarks | null }`,
 Landmarks pro Achse normiert wie MediaPipe sie liefert) eine geprüfte `Choreography`. Die
-Pose-Spur selbst liefert `useVideoAnalysis` (siehe unten). Ablauf und Konventionen:
+Pose-Spur entsteht aus der Analyse (`useVideoAnalysis`, siehe unten) und der Wahl der
+Zielperson (`trackTarget`, siehe [Zielperson](#zielperson-etappe-8f)). Ablauf und Konventionen:
 [choreography-format.md](choreography-format.md#video-import).
 
 - Glättung: One-Euro-Filter je Koordinate, vorwärts und rückwärts gerechnet und gemittelt. Die
@@ -450,6 +451,47 @@ den Quell-Tabs (Datei, URL, YouTube); das Video liefert nur die Bewegungen.
   fertiges Ergebnis aus dem alten.
 - Datenschutz: Das Panel nennt, dass das Video auf dem Gerät bleibt und die Erkennung ohne
   externe Abrufe läuft (Modell von der eigenen Adresse, siehe [Externe Abrufe](#externe-abrufe)).
+
+### Zielperson (Etappe 8f)
+
+Tanzen mehrere Personen im Video, wählt man nach der Analyse, wessen Bewegungen übernommen
+werden. Logik in `src/lib/targetPerson.ts` (ohne React).
+
+- Die Video-Analyse erkennt bis zu 3 Personen je Probe (`VIDEO_MAX_POSES`, MediaPipe
+  `numPoses`; `PoseEstimator.detectAll`). `analyzeVideo` liefert eine `MultiPoseTrack`
+  (`{ timeMs, poses }` je Probe, `poses` leer = niemand erkannt). Das Live-Spiel bleibt bei
+  einer Person.
+- `trackTarget` macht daraus die `PoseTrack` für `choreoFromPoseTrack`: Ab der gewählten Probe
+  vorwärts und rückwärts nimmt es je Probe die Pose, deren Rumpfmitte (Mittel der sichtbaren
+  Schultern und Hüften, in Bildhöhen, x mit dem Seitenverhältnis) der letzten bekannten Mitte
+  am nächsten liegt, aber nur innerhalb einer Sprunggrenze. Die Grenze wächst mit der Zeit,
+  seit die Person zuletzt gesehen wurde: `0,12 + 0,6 × Sekunden`, höchstens `0,5` Bildhöhen
+  (Startwerte, am Gerät prüfen). Sonst bleibt die Probe leer; eine andere Person wird nie
+  eingesetzt. Die Reihenfolge, in der MediaPipe die Personen meldet, spielt keine Rolle.
+- Es zählen nur Personen mit sichtbarem Rumpf (mindestens eine Schulter oder Hüfte). Mehrere
+  Personen gelten erst, wenn mindestens 5 Proben und mindestens 5 % der Proben mit Pose zwei
+  oder mehr solche Personen haben (`MIN_MULTI_SAMPLES`, `MIN_MULTI_RATIO`, Startwerte). Eine
+  einzelne Fehlerkennung schaltet also nicht um.
+- Vorauswahl (`defaultTarget`): die erste Probe, mit der 3 aufeinanderfolgende Proben mit den
+  meisten Personen beginnen (gezählt wird das Minimum der drei, eine einmalige Zusatzerkennung
+  zählt nicht), ersatzweise die erste Probe mit zwei Personen; dort die größte Person (längere
+  Seite des Rahmens um die sichtbaren Punkte).
+- Oberfläche: Nach der Analyse und nur bei mehr als einer Person zeigt `VideoChoreoPanel`
+  „Mehrere Personen erkannt“ mit einem Standbild (Canvas: Vorschaubild der Probe, alle
+  Skelette nummeriert von links nach rechts, die Gewählte gold, die anderen gedimmt), Antippen
+  wählt (`pickPoseAt`). Dazu Knöpfe „Person 1 … N“ (`aria-pressed`). „Aktuelles Bild“ zeigt die
+  Probe an der Vorschauposition, etwa wo die Personen gut getrennt stehen. Die Wahl rechnet nur
+  aus der vorhandenen Analyse neu, wie BPM und Spiegeln; eine neue Analyse beginnt wieder mit
+  der Vorauswahl. Die Zusammenfassung nennt „Person k von N“.
+- Das Standbild wird einmal je Probe gegriffen: Die Vorschau springt kurz zur Probe und danach
+  an die vorige Stelle zurück, damit „Ab hier“/„Bis hier“ keine fremde Position lesen. Hat man
+  inzwischen selbst gespult, gilt das Bild nicht und die eigene Position bleibt.
+- Ohne Mehrpersonen-Modus ist das Ergebnis genau wie vor 8f (erste Pose oder
+  `null`, ohne Sprunggrenze), und es erscheint keine Auswahl.
+- Grenzen: Ohne Bewegungsmodell kann der Abgleich beim Kreuzen auf gleicher Höhe oder nach einer
+  längeren Verdeckung neben einer anderen Person (näher als 0,5 Bildhöhen) die Person
+  wechseln. Die Nummern gelten je Standbild; nach „Aktuelles Bild“ können sie anders lauten. Die
+  Analyse mit `numPoses` 3 kann länger dauern als mit 1.
 
 ## Choreografie-Editor (Etappe 8d-1)
 

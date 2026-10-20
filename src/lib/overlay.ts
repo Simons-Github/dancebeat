@@ -1,4 +1,4 @@
-import { OVERLAY_COLORS } from "@/theme";
+import { OVERLAY_COLORS, PERSON_PICK } from "@/theme";
 
 import { BONES, isVisible } from "./pose";
 import type { Landmark } from "./types";
@@ -79,5 +79,68 @@ export function drawOverlay(
     ctx.beginPath();
     ctx.arc(p[0] * w, p[1] * h, 6 * unit, 0, Math.PI * 2);
     ctx.fill();
+  }
+}
+
+/**
+ * Still for choosing the target person (video import): the video frame, every person's skeleton
+ * and a number badge at the head. `people` lists pose index and shown number; `selected` (a pose
+ * index) is drawn in the highlight color, the others dimmed and thinner.
+ */
+export function drawPersonPicker(
+  canvas: HTMLCanvasElement,
+  frame: CanvasImageSource | null,
+  poses: Landmark[][],
+  people: { index: number; number: number }[],
+  selected: number | null,
+) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return;
+  const { width: w, height: h } = canvas;
+  ctx.clearRect(0, 0, w, h);
+  if (frame) ctx.drawImage(frame, 0, 0, w, h);
+
+  const unit = Math.min(w, h) / 480;
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
+  // The chosen person last, so it stays on top where skeletons overlap.
+  const order = [...people].sort(
+    (a, b) => Number(a.index === selected) - Number(b.index === selected),
+  );
+  for (const { index, number } of order) {
+    const lm = poses[index];
+    if (!lm) continue;
+    const on = index === selected;
+    const color = on ? PERSON_PICK.selected : PERSON_PICK.other;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = (on ? 6 : 3) * unit;
+    ctx.beginPath();
+    for (const [a, b] of BONES) {
+      const pa = lm[a];
+      const pb = lm[b];
+      if (!isVisible(pa) || !isVisible(pb) || !pa || !pb) continue;
+      ctx.moveTo(pa[0] * w, pa[1] * h);
+      ctx.lineTo(pb[0] * w, pb[1] * h);
+    }
+    ctx.stroke();
+
+    // Badge at the nose, else above the highest visible point.
+    const vis = lm.filter((p) => isVisible(p));
+    const nose = lm[0];
+    const top = vis.reduce<Landmark | undefined>((t, p) => (!t || p[1] < t[1] ? p : t), undefined);
+    const anchor = nose && isVisible(nose) ? nose : top;
+    if (!anchor) continue;
+    const r = 16 * unit;
+    const x = anchor[0] * w;
+    const y = Math.max(r, anchor[1] * h - r * 1.5);
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = PERSON_PICK.ink;
+    ctx.font = `600 ${Math.round(r * 1.2)}px ${PERSON_PICK.font}`;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText(String(number), x, y);
   }
 }

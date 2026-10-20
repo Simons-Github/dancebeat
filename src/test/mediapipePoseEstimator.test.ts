@@ -38,6 +38,32 @@ describe("MediaPipe-Estimator", () => {
     expect(landmarker.close).toHaveBeenCalledTimes(1);
   });
 
+  it("erkennt mit numPoses mehrere Personen, detect bleibt die erste", async () => {
+    const landmarker = {
+      close: vi.fn(),
+      detectForVideo: vi.fn(() => ({
+        landmarks: [[{ x: 0.1, y: 0.2, z: 0 }], [{ x: 0.7, y: 0.3, z: 0, visibility: 0.4 }]],
+      })),
+    };
+    mp.create.mockResolvedValue({ landmarker, delegate: "GPU" });
+    const est = createMediaPipeEstimator("lite", undefined, 3);
+    await est.init();
+    expect(mp.create).toHaveBeenCalledWith(expect.objectContaining({ numPoses: 3 }));
+    const video = document.createElement("video");
+    expect(est.detectAll?.(video, 1)).toEqual([[[0.1, 0.2, 1]], [[0.7, 0.3, 0.4]]]);
+    expect(est.detect(video, 2)).toEqual([[0.1, 0.2, 1]]);
+    landmarker.detectForVideo.mockReturnValue({ landmarks: [] });
+    expect(est.detectAll?.(video, 3)).toEqual([]);
+    est.close();
+    expect(est.detectAll?.(video, 4)).toEqual([]);
+  });
+
+  it("nutzt für das Live-Spiel eine Person", async () => {
+    mp.create.mockResolvedValue({ landmarker: fakeLandmarker(), delegate: "GPU" });
+    await createMediaPipeEstimator().init();
+    expect(mp.create).toHaveBeenCalledWith(expect.objectContaining({ numPoses: 1 }));
+  });
+
   it("fragt ohne Vorgabe keinen bestimmten Delegate an", async () => {
     mp.create.mockResolvedValue({ landmarker: fakeLandmarker(), delegate: "GPU" });
     await createMediaPipeEstimator().init();

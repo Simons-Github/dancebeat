@@ -16,7 +16,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d, 8e ✅)      | Opus                                                                  |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d, 8e, 8f ✅)  | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
 | 10. Spotify                                  | ⏳                         | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
@@ -426,7 +426,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f umgesetzt)
 
 Aufteilung:
 
@@ -463,7 +463,7 @@ Aufteilung:
     selten eine Person erkannt.“, Abbrechen zeigt „Analyse abgebrochen.“, Dialog scrollt im
     Querformat, Konsole nur mit den erwarteten CSP-/MediaPipe-Meldungen. Erfolgspfad mit echtem
     Tanzvideo offen (Gerätetest).
-  - Nicht enthalten: Zielperson wählen, „Video behalten“, Editor (8d).
+  - Nicht enthalten: „Video behalten“; Zielperson kam mit 8f, Editor mit 8d.
   - **Gerätetest 8c (offen):**
     - [ ] Echtes MP4 und MOV auf iPhone (Safari) und Android (Chrome) wählen, Vorschau läuft
     - [ ] Dauer der Analyse für einen Abschnitt von 1–3 Minuten notieren
@@ -541,12 +541,31 @@ Aufteilung:
     Kein Formatwechsel.
   - Grenze: Die BPM-Schätzung ist ganzzahlig und kann um 1–2 daneben liegen; dann driften die
     Moves über den Song, die Phase sitzt nur am Abschnittsanfang. BPM bitte prüfen.
-  - Nicht enthalten: Zielperson wählen, „Video behalten“, gebrochene BPM.
+  - Nicht enthalten: „Video behalten“, gebrochene BPM.
   - **Gerätetest 8e (offen):**
     - [ ] iPhone (Safari) und Android (Chrome): Tonspur aus MP4 und MOV wird gelesen, Dauer
           und Speicher bei einem 100–250-MB-Video
     - [ ] Mit echtem Song: Moves des importierten Tanzes treffen die Musik ohne Handkorrektur,
           Sync-Test zeigt nur kleine Abweichung
+- **8f Zielperson wählen – umgesetzt, Gerätetest offen.** Die Video-Analyse erkennt bis zu 3
+  Personen je Probe. Bei mehreren zeigt der Import „Mehrere Personen erkannt“: Standbild mit
+  nummerierten Skeletten zum Antippen, Knöpfe „Person 1 … N“, „Aktuelles Bild“ für ein Bild an
+  der Vorschauposition. Die Wahl rechnet ohne neue Analyse neu; `trackTarget` folgt der Person
+  über die Rumpfmitte mit wachsender Sprunggrenze (Startwerte 0,12 + 0,6 × s, höchstens 0,5
+  Bildhöhen) und setzt nie eine andere Person ein. Mit einer Person bleibt alles wie vorher.
+  Details: [architecture.md](architecture.md#zielperson-etappe-8f).
+  - Logik in `src/lib/targetPerson.ts`; Tests `targetPerson.test.ts` (wechselnde
+    Modell-Reihenfolge, Kreuzen, Verdeckung, Wiederfinden, eine Person unverändert,
+    Vorauswahl, Antippen), `videoAnalysis.test.ts`, `mediapipePoseEstimator.test.ts`,
+    `video-choreo-panel.test.tsx` (Auswahl ohne neue Analyse, keine Auswahl bei einer Person).
+    Kein Formatwechsel.
+  - Nicht enthalten: „Video behalten“, Bewegungsmodell für das Kreuzen auf gleicher Höhe.
+  - **Gerätetest 8f (offen):**
+    - [ ] Echtes Video mit 2 Tänzern: Auswahl erscheint, Standbild zeigt Bild und Skelette
+          deckungsgleich (auch Safari nach dem Seek), Antippen wählt die richtige Person
+    - [ ] Tracking über Kreuzungen und kurze Verdeckungen: die Choreografie bleibt bei der
+          gewählten Person (im Editor oder Spiel prüfen)
+    - [ ] Dauer der Analyse mit `numPoses` 3 gegenüber vorher (1) für denselben Abschnitt
 
 Ursprüngliche Schritte:
 

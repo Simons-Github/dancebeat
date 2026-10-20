@@ -188,3 +188,35 @@ export function patchVideoElement(
     },
   });
 }
+
+/** Estimator that finds several people: `poses` maps the shown video time to all of them. */
+export function fakeMultiEstimator(poses: (timeMs: number) => Landmark[][]): FakeEstimator {
+  const est = fakeEstimator((t) => poses(t)[0] ?? null);
+  est.detectAll = vi.fn((video: HTMLVideoElement, ts: number) => {
+    const shown = (video as unknown as FakeVideo).shownMs;
+    est.timestamps.push(ts);
+    est.seen.push(shown);
+    return poses(shown);
+  });
+  return est;
+}
+
+/**
+ * `figureLandmarks` moved sideways by `dx` and down by `dy` (per-axis normalized) and scaled by
+ * `scale` around the hip center: a second dancer in the same frame.
+ */
+export function shiftedFigure(
+  t: number,
+  {
+    dx = 0,
+    dy = 0,
+    scale = 1,
+    aspect = 16 / 9,
+  }: { dx?: number; dy?: number; scale?: number; aspect?: number } = {},
+): Landmark[] {
+  return figureLandmarks(t, aspect).map((p) => [
+    0.5 + (p[0] - 0.5) * scale + dx,
+    0.58 + (p[1] - 0.58) * scale + dy,
+    p[2] ?? 1,
+  ]);
+}

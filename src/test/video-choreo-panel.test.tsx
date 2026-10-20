@@ -8,8 +8,10 @@ import type { PoseModel } from "@/lib/mediapipe";
 import type { Song } from "@/lib/types";
 import {
   fakeEstimator,
+  fakeMultiEstimator,
   figureLandmarks,
   patchVideoElement,
+  shiftedFigure,
   type FakeEstimator,
 } from "./videoAnalysisFakes";
 
@@ -249,5 +251,113 @@ describe("VideoChoreoPanel", () => {
     expect(plain.choreo.moves.map((m) => m.timeMs)).toEqual(
       mirrored.choreo.moves.map((m) => m.timeMs),
     );
+  });
+});
+
+describe("VideoChoreoPanel: Zielperson", () => {
+  function renderPanel(est: FakeEstimator) {
+    const onChange = vi.fn<(r: VideoImportResult | null) => void>();
+    render(<VideoChoreoPanel bpm={120} onChange={onChange} createEstimator={() => est} />);
+    fireEvent.change(screen.getByLabelText("Tanzvideo"), {
+      target: { files: [new File(["v"], "tanz.mp4", { type: "video/mp4" })] },
+    });
+    const video = screen.getByLabelText<HTMLVideoElement>("Videovorschau");
+    patchVideoElement(video, { durationMs: 6000 });
+    fireEvent.loadedMetadata(video);
+    fireEvent.click(screen.getByRole("button", { name: "Video analysieren" }));
+    const latest = () => onChange.mock.calls.at(-1)?.[0] ?? null;
+    return { video, latest };
+  }
+
+  it("bietet bei zwei Personen die Auswahl an und rechnet ohne neue Analyse neu", async () => {
+    // Model order swaps every 100 ms; the left dancer waves, the right one moves out of phase.
+    const left = (t: number) => shiftedFigure(t, { dx: -0.22 });
+    const right = (t: number) => shiftedFigure(t + 1000, { dx: 0.22, scale: 0.9 });
+    const est = fakeMultiEstimator((t) =>
+      t < 0 ? [] : Math.floor(t / 100) % 2 ? [right(t), left(t)] : [left(t), right(t)],
+    );
+    const { video, latest } = renderPanel(est);
+    expect(
+      await screen.findByText("Mehrere Personen erkannt", {}, { timeout: 4000 }),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Tippe auf die Person/)).toBeInTheDocument();
+    const p1 = screen.getByRole("button", { name: "Person 1" });
+    const p2 = screen.getByRole("button", { name: "Person 2" });
+    // Default: the larger person, numbered left to right.
+    expect(p1).toHaveAttribute("aria-pressed", "true");
+    expect(p2).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByText(/Moves, davon/)).toHaveTextContent(/^Person 1 von 2: /);
+    await waitFor(() => expect(latest()).not.toBeNull());
+    const first = latest()!;
+    const detects = vi.mocked(est.detectAll!).mock.calls.length;
+
+    fireEvent.click(p2);
+    expect(screen.getByRole("button", { name: "Person 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByText(/Moves, davon/)).toHaveTextContent(/^Person 2 von 2: /);
+    await waitFor(() => expect(latest()).not.toBe(first));
+    const second = latest()!;
+    expect(second.choreo.frames.map((f) => f.angles)).not.toEqual(
+      first.choreo.frames.map((f) => f.angles),
+    );
+    // Person 2 is followed through the order swaps: every frame is the right dancer.
+    expect(second.choreo.frames.every((f) => f.landmarks[0]![0] > 0.5)).toBe(true);
+    expect(first.choreo.frames.every((f) => f.landmarks[0]![0] < 0.5)).toBe(true);
+    expect(second.stats.detectionRatio).toBe(1);
+    expect(vi.mocked(est.detectAll!).mock.calls.length).toBe(detects);
+    expect(est.detect).not.toHaveBeenCalled();
+
+    // "Aktuelles Bild" shows the sample at the preview position and keeps the choice.
+    video.currentTime = 3.03;
+    fireEvent.click(screen.getByRole("button", { name: "Aktuelles Bild" }));
+    expect(screen.getByRole("button", { name: "Person 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(latest()).toBe(second);
+  });
+
+  it("neue Analyse setzt die Wahl auf die Vorauswahl zurück, die Vorschauposition bleibt", async () => {
+    const left = (t: number) => shiftedFigure(t, { dx: -0.22 });
+    const right = (t: number) => shiftedFigure(t + 1000, { dx: 0.22, scale: 0.9 });
+    const est = fakeMultiEstimator((t) => (t < 0 ? [] : [left(t), right(t)]));
+    const { video, latest } = renderPanel(est);
+    await screen.findByText("Mehrere Personen erkannt", {}, { timeout: 4000 });
+    // The still is grabbed at the seed sample (0 s), then the position before it comes back.
+    await waitFor(() => expect(video.currentTime).toBe(6));
+    fireEvent.click(screen.getByRole("button", { name: "Person 2" }));
+    expect(screen.getByRole("button", { name: "Person 2" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    await waitFor(() => expect(screen.getByText(/Moves, davon/)).toHaveTextContent(/^Person 2/));
+    const chosen = latest();
+
+    fireEvent.click(screen.getByRole("button", { name: "Neu analysieren" }));
+    await waitFor(
+      () =>
+        expect(screen.getByRole("button", { name: "Person 1" })).toHaveAttribute(
+          "aria-pressed",
+          "true",
+        ),
+      { timeout: 4000 },
+    );
+    expect(screen.getByRole("button", { name: "Person 2" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+    await waitFor(() => expect(latest()).not.toBe(chosen));
+    expect(latest()!.choreo.frames.every((f) => f.landmarks[0]![0] < 0.5)).toBe(true);
+  });
+
+  it("zeigt bei nur einer Person keine Auswahl", async () => {
+    const est = fakeMultiEstimator((t) => (t < 0 ? [] : [figureLandmarks(t)]));
+    renderPanel(est);
+    await screen.findByText(/Moves, davon/, {}, { timeout: 4000 });
+    expect(screen.getByText(/Moves, davon/)).not.toHaveTextContent(/von \d+:/);
+    expect(screen.queryByText("Mehrere Personen erkannt")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Person / })).not.toBeInTheDocument();
   });
 });

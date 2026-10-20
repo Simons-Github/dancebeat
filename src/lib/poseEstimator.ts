@@ -16,6 +16,11 @@ export interface PoseEstimator {
    * call. Returns null when no person is found.
    */
   detect(video: HTMLVideoElement, timestampMs: number): Landmark[] | null;
+  /**
+   * Like `detect`, but returns every detected person (empty array if none), in model order.
+   * Optional: estimators without it are treated as finding at most one person.
+   */
+  detectAll?(video: HTMLVideoElement, timestampMs: number): Landmark[][];
   /** Releases the model. Safe to call at any time, also while `init` is still pending. */
   close(): void;
 }

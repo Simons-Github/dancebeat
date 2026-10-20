@@ -3,14 +3,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { PoseModel } from "@/lib/mediapipe";
 import { createMediaPipeEstimator } from "@/lib/mediapipePoseEstimator";
 import type { PoseEstimator } from "@/lib/poseEstimator";
+import { VIDEO_MAX_POSES, type MultiPoseTrack } from "@/lib/targetPerson";
 import { analyzeVideo, VideoAnalysisError, type AnalyzeVideoOptions } from "@/lib/videoAnalysis";
-import type { PoseTrack } from "@/lib/videoChoreo";
 
 export type VideoAnalysisState =
   | { status: "idle" }
   | { status: "loading" }
   | { status: "running"; progress: number }
-  | { status: "done"; track: PoseTrack }
+  | { status: "done"; track: MultiPoseTrack }
   | { status: "error"; message: string }
   | { status: "aborted" };
 
@@ -23,7 +23,7 @@ export interface VideoAnalysisStartOptions extends Omit<
 }
 
 export interface VideoAnalysisHookOptions {
-  /** Injected in tests. Default: MediaPipe in VIDEO mode. */
+  /** Injected in tests. Default: MediaPipe in VIDEO mode with up to `VIDEO_MAX_POSES` people. */
   createEstimator?: (model: PoseModel) => PoseEstimator;
 }
 
@@ -107,7 +107,9 @@ export function useVideoAnalysis(hookOpts: VideoAnalysisHookOptions = {}) {
 
       setState({ status: "loading" });
       try {
-        const factory = factoryRef.current ?? ((m: PoseModel) => createMediaPipeEstimator(m));
+        const factory =
+          factoryRef.current ??
+          ((m: PoseModel) => createMediaPipeEstimator(m, undefined, VIDEO_MAX_POSES));
         run.estimator = factory(model);
         await run.estimator.init();
       } catch {

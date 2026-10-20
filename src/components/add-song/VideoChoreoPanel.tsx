@@ -1,4 +1,12 @@
-import { useEffect, useId, useMemo, useRef, useState, type ChangeEvent } from "react";
+import {
+  useEffect,
+  useId,
+  useMemo,
+  useRef,
+  useState,
+  type ChangeEvent,
+  type MouseEvent,
+} from "react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,8 +32,20 @@ import {
   type VideoRange,
 } from "@/lib/library/videoImport";
 import type { PoseModel } from "@/lib/mediapipe";
+import { drawPersonPicker } from "@/lib/overlay";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import { formatStartOffsetSeconds } from "@/lib/sync";
+import { DEFAULT_INTERVAL_MS } from "@/lib/videoAnalysis";
+import {
+  defaultTarget,
+  hasMultiplePersons,
+  nearestSampleIndex,
+  personOrder,
+  pickPoseAt,
+  trackTarget,
+  type MultiPoseTrack,
+  type TargetSeed,
+} from "@/lib/targetPerson";
 
 const BTN = "h-11 rounded-full px-4 text-base focus-visible:ring-4 focus-visible:ring-gold";
 const INPUT = "h-11 rounded-xl text-base md:text-base";
@@ -41,6 +61,9 @@ const VIDEO_ACCEPT = "video/mp4,video/quicktime,video/*,.mp4,.mov";
 export const VIDEO_BEAT_MAX_BYTES = 250 * 1024 * 1024;
 /** Longest video decoded for the beat detection: the decoded samples grow with the duration. */
 export const VIDEO_BEAT_MAX_MS = 15 * 60_000;
+
+/** Longer side of the person-picker still (canvas pixels). */
+const STILL_MAX_PX = 640;
 
 const BEAT_HAND_HINT = "Bitte die Beat-Phase von Hand eintragen.";
 
@@ -76,10 +99,19 @@ const formatFloor = (ms: number) => formatStartOffsetSeconds(Math.floor(ms / 100
 const sameRange = (a: VideoRange, b: VideoRange | null) =>
   b !== null && a.startMs === b.startMs && a.endMs === b.endMs;
 
+/** Target person and shown still, valid only for the analysis (`track`) they were made for. */
+interface PersonPick {
+  track: MultiPoseTrack;
+  seed: TargetSeed | null;
+  /** Sample shown in the picker still. */
+  still: number;
+}
+
 /**
- * Choreography from a dance video: file, preview, range, mirroring, beat phase and the pose
- * analysis. The video stays in memory only (object URL, revoked on change and unmount); the
- * preview must stay visible during the analysis (video-frame callbacks).
+ * Choreography from a dance video: file, preview, range, mirroring, beat phase, the pose
+ * analysis and, with several people in the video, the target person. The video stays in memory
+ * only (object URL, revoked on change and unmount); the preview must stay visible during the
+ * analysis (video-frame callbacks).
  */
 export function VideoChoreoPanel({
   bpm,
@@ -147,11 +179,32 @@ export function VideoChoreoPanel({
   const track = state.status === "done" ? state.track : null;
   const stale = track !== null && (range === null || !sameRange(range, analyzed));
 
+  // Target person: chosen after the analysis, a new analysis starts again from the default.
+  const multi = useMemo(() => track !== null && hasMultiplePersons(track), [track]);
+  const defaultSeed = useMemo(() => (track ? defaultTarget(track) : null), [track]);
+  const [pick, setPick] = useState<PersonPick | null>(null);
+  const currentPick = track && pick?.track === track ? pick : null;
+  const seed = currentPick ? currentPick.seed : defaultSeed;
+  const target = useMemo(() => (track ? trackTarget(track, seed) : null), [track, seed]);
+  const stillIndex = currentPick ? currentPick.still : (defaultSeed?.sampleIndex ?? 0);
+  const stillSample = track && multi && !stale ? track.samples[stillIndex] : undefined;
+  const stillPoses = useMemo(() => stillSample?.poses ?? [], [stillSample]);
+  const people = useMemo(
+    () =>
+      track
+        ? personOrder(stillPoses, track.aspect).map((index, k) => ({ index, number: k + 1 }))
+        : [],
+    [track, stillPoses],
+  );
+  const targetLm = target?.samples[stillIndex]?.landmarks ?? null;
+  const selectedIndex = targetLm ? stillPoses.indexOf(targetLm) : -1;
+  const selected = people.find((p) => p.index === selectedIndex) ?? null;
+
   const built = useMemo(() => {
-    if (!track || !analyzed || stale || !bpmValid || phaseMs === null) return null;
+    if (!target || !analyzed || stale || !bpmValid || phaseMs === null) return null;
     try {
       const result = buildVideoChoreo({
-        track,
+        track: target,
         title: "Video", // replaced by the form title in buildNewSong
         bpm,
         range: analyzed,
@@ -165,12 +218,112 @@ export function VideoChoreoPanel({
       const message = e instanceof Error ? e.message : "Aus dem Video ließ sich kein Tanz bauen.";
       return { ok: false as const, message };
     }
-  }, [track, analyzed, stale, bpmValid, phaseMs, bpm, selfie, durationMs]);
+  }, [target, analyzed, stale, bpmValid, phaseMs, bpm, selfie, durationMs]);
   const result = built?.ok ? built.result : null;
 
   useEffect(() => {
     onChangeRef.current(result);
   }, [result]);
+
+  // Person-picker still: the preview frame at the shown sample, grabbed once per sample into an
+  // offscreen canvas; skeletons and numbers are redrawn on top when the choice changes.
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  /** Grabbed frame and the sample it belongs to (frame null without a 2D context). */
+  const frameRef = useRef<{
+    track: MultiPoseTrack;
+    timeMs: number;
+    frame: HTMLCanvasElement | null;
+  } | null>(null);
+  const aspect = track?.aspect ?? 1;
+  const stillW = Math.round(aspect >= 1 ? STILL_MAX_PX : STILL_MAX_PX * aspect);
+  const stillH = Math.round(aspect >= 1 ? STILL_MAX_PX / aspect : STILL_MAX_PX);
+  const stillTimeMs = stillSample?.timeMs ?? null;
+  const redraw = useRef(() => {});
+  useEffect(() => {
+    redraw.current = () => {
+      const canvas = canvasRef.current;
+      if (!canvas) return;
+      const cached = frameRef.current;
+      const frame =
+        cached && cached.track === track && cached.timeMs === stillTimeMs ? cached.frame : null;
+      drawPersonPicker(
+        canvas,
+        frame,
+        stillPoses,
+        people,
+        selectedIndex >= 0 ? selectedIndex : null,
+      );
+    };
+    redraw.current();
+  }, [track, stillTimeMs, stillPoses, people, selectedIndex, stillW, stillH]);
+
+  useEffect(() => {
+    const video = videoRef.current;
+    if (!video || !track || stillTimeMs === null) return;
+    const cached = frameRef.current;
+    // Already grabbed (e.g. the range went stale and back): no seek, the position stays.
+    if (cached && cached.track === track && cached.timeMs === stillTimeMs) return;
+    const first = track.samples[0]?.timeMs ?? 0;
+    const interval = (track.samples[1]?.timeMs ?? first + DEFAULT_INTERVAL_MS) - first;
+    const tolerance = Math.max(interval / 2, 40);
+    const near = (ms: number) => Math.abs(video.currentTime * 1000 - ms) <= tolerance;
+    // The player's position: restored after the grab so "Ab hier" / "Bis hier" never read a
+    // position they did not choose.
+    const userMs = video.currentTime * 1000;
+    let pending = false;
+    const restore = () => {
+      if (Math.abs(userMs - stillTimeMs) >= 1) video.currentTime = userMs / 1000;
+    };
+    const grab = () => {
+      pending = false;
+      // The player scrubbed meanwhile: this is not our frame, and their position wins.
+      if (!near(stillTimeMs)) return;
+      const frame = document.createElement("canvas");
+      frame.width = stillW;
+      frame.height = stillH;
+      const ctx = frame.getContext("2d");
+      ctx?.drawImage(video, 0, 0, stillW, stillH);
+      frameRef.current = { track, timeMs: stillTimeMs, frame: ctx ? frame : null };
+      redraw.current();
+      restore();
+    };
+    if (Math.abs(video.currentTime * 1000 - stillTimeMs) < 1) grab();
+    else {
+      pending = true;
+      video.addEventListener("seeked", grab, { once: true });
+      video.currentTime = stillTimeMs / 1000;
+    }
+    return () => {
+      video.removeEventListener("seeked", grab);
+      if (pending && near(stillTimeMs)) restore();
+    };
+  }, [track, stillTimeMs, stillW, stillH]);
+
+  const choosePerson = (poseIndex: number) => {
+    if (!track) return;
+    setPick({ track, seed: { sampleIndex: stillIndex, poseIndex }, still: stillIndex });
+  };
+
+  /** Shows the sample at the preview's position, e.g. where the people stand apart. */
+  const showCurrentFrame = () => {
+    const video = videoRef.current;
+    if (!video || !track) return;
+    video.pause();
+    const still = nearestSampleIndex(track, video.currentTime * 1000);
+    if (still >= 0) setPick({ track, seed, still });
+  };
+
+  const tapStill = (e: MouseEvent<HTMLCanvasElement>) => {
+    if (!track) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (!rect.width || !rect.height) return;
+    const point = {
+      x: (e.clientX - rect.left) / rect.width,
+      y: (e.clientY - rect.top) / rect.height,
+    };
+    const hit = pickPoseAt(stillPoses, point, track.aspect);
+    if (hit !== null) choosePerson(hit);
+  };
 
   const chooseVideo = (e: ChangeEvent<HTMLInputElement>) => {
     const chosen = e.target.files?.[0] ?? null;
@@ -480,11 +633,56 @@ export function VideoChoreoPanel({
             )}
             {result && (
               <p className={HINT}>
+                {selected && `Person ${selected.number} von ${people.length}: `}
                 {result.stats.moves} Moves, davon {result.stats.gold} Gold Moves, Person in{" "}
                 {Math.round(result.stats.detectionRatio * 100)} % der Bilder erkannt.
               </p>
             )}
           </div>
+
+          {stillSample && (
+            <section aria-labelledby={`${id}-persons`} className="flex flex-col gap-3">
+              <h3 id={`${id}-persons`} className="text-base font-medium">
+                Mehrere Personen erkannt
+              </h3>
+              <p className={HINT}>Tippe auf die Person, deren Bewegungen du übernehmen willst.</p>
+              <canvas
+                ref={canvasRef}
+                width={stillW}
+                height={stillH}
+                aria-hidden="true"
+                onClick={tapStill}
+                className="mx-auto block h-auto max-h-[40dvh] w-auto max-w-full cursor-pointer rounded-xl bg-black"
+              />
+              <div role="group" aria-label="Zielperson" className="flex flex-wrap gap-2">
+                {people.map((p) => (
+                  <Button
+                    key={p.index}
+                    type="button"
+                    aria-pressed={p.index === selectedIndex}
+                    variant={p.index === selectedIndex ? "default" : "secondary"}
+                    onClick={() => choosePerson(p.index)}
+                    className={BTN}
+                  >
+                    Person {p.number}
+                  </Button>
+                ))}
+              </div>
+              {!selected && (
+                <p className={HINT}>
+                  Die gewählte Person ist in diesem Bild nicht erkannt. Wähle eine Person oder ein
+                  anderes Bild.
+                </p>
+              )}
+              <Button type="button" variant="secondary" onClick={showCurrentFrame} className={BTN}>
+                Aktuelles Bild
+              </Button>
+              <p className={HINT}>
+                Zeigt das Bild an der Stelle der Videovorschau, z. B. wo die Personen gut getrennt
+                stehen.
+              </p>
+            </section>
+          )}
         </>
       )}
     </div>

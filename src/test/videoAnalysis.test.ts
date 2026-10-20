@@ -9,6 +9,7 @@ import {
   PROGRESS_INTERVAL_MS,
   VideoAnalysisError,
 } from "@/lib/videoAnalysis";
+import { defaultTarget, trackTarget } from "@/lib/targetPerson";
 import { choreoFromPoseTrack } from "@/lib/videoChoreo";
 import { fakeEstimator, FakeVideo } from "./videoAnalysisFakes";
 
@@ -42,17 +43,33 @@ describe("analyzeVideo", () => {
     expect(track.samples.map((s) => s.timeMs)).toEqual([600, 700, 800, 900, 1000]);
   });
 
-  it("behält Samples ohne Person als null", async () => {
+  it("behält Samples ohne Person als leere Liste", async () => {
     const video = new FakeVideo({ durationMs: 200 });
     const est = fakeEstimator((t) => (t === 100 ? null : someone));
     const track = await analyzeVideo(video.asVideo(), est);
-    expect(track.samples.map((s) => s.landmarks)).toEqual([
-      someone,
-      someone,
-      null,
-      someone,
-      someone,
+    expect(track.samples.map((s) => s.poses)).toEqual([
+      [someone],
+      [someone],
+      [],
+      [someone],
+      [someone],
     ]);
+  });
+
+  it("übernimmt mit detectAll alle erkannten Personen je Sample", async () => {
+    const video = new FakeVideo({ durationMs: 100 });
+    const other: Landmark[] = [[0.2, 0.5, 1]];
+    const est = fakeEstimator(() => someone);
+    const all = vi.fn((_v: HTMLVideoElement, _ts: number) => [someone, other]);
+    est.detectAll = all;
+    const track = await analyzeVideo(video.asVideo(), est);
+    expect(track.samples.map((s) => s.poses)).toEqual([
+      [someone, other],
+      [someone, other],
+      [someone, other],
+    ]);
+    expect(all.mock.calls.map((c) => c[1])).toEqual([0, 50, 100]);
+    expect(est.detect).not.toHaveBeenCalled();
   });
 
   it("übergibt streng steigende Zeitstempel, auch über mehrere Läufe mit demselben Modell", async () => {
@@ -220,7 +237,7 @@ describe("analyzeVideo → choreoFromPoseTrack", () => {
     const video = new FakeVideo({ width: 720, height: 720, durationMs: 8000 });
     const est = fakeEstimator((t) => figure(pose(t)));
     const track = await analyzeVideo(video.asVideo(), est, { intervalMs: 50 });
-    const choreo = choreoFromPoseTrack(track, {
+    const choreo = choreoFromPoseTrack(trackTarget(track, defaultTarget(track)), {
       title: "Video",
       bpm: 120,
       mirror: false,

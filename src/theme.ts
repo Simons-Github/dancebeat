@@ -99,6 +99,17 @@ export const OVERLAY_COLORS = {
   guideReady: "#7CFF4F",
 } as const;
 
+/**
+ * Person picker in the video import (canvas still with numbered skeletons): the chosen person in
+ * gold, the others dimmed; `ink` is the number on the badge.
+ */
+export const PERSON_PICK = {
+  selected: GOLD,
+  other: "rgb(255 255 255 / 55%)",
+  ink: SCRIM.ink,
+  font: FONTS.display,
+} as const;
+
 /** Gameplay screen (canvas colors are plain strings, no CSS variables). */
 export const GAME = {
   /** Song-color filter over the camera picture (opacity). */
