@@ -18,7 +18,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d, 8e, 8f ✅)  | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
-| 10. Spotify                                  | ⏳                         | Opus                                                                  |
+| 10. Spotify                                  | ⏳ (10a ✅)                | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
@@ -642,15 +642,32 @@ Ursprüngliche Schritte:
 
 Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 
-### 10. Spotify (zuletzt) ⏳
+### 10. Spotify (zuletzt) ⏳ (10a umgesetzt)
 
-- Vorher am Handy prüfen, ob das Web Playback SDK mobil überhaupt läuft.
-- W6: `startOffsetMs` über `position_ms` im play-Aufruf; Timeout und `onerror` beim Laden des
-  SDK; Fehler nach dem Laden (`autoplay_failed`, `account_error`) melden; Token-Ablauf nach 1 h
-  verständlich behandeln.
-- Route `/spotify-callback`. Redirect nur über HTTPS oder `http://127.0.0.1`, nie `localhost`.
-  Verifier nach dem Tausch löschen. Hinweis „Premium nötig“. Player-Initialisierung im
-  Klick-Handler (iOS/Safari).
+- Vorher am Handy prüfen, ob das Web Playback SDK mobil überhaupt läuft (offen, Gerätetest; vor
+  10b klären, sonst Spotify auf Desktop-Browser beschränken).
+
+**10a Spotify-Verbindung ✅** (Gerätetest mit echtem Spotify-Konto offen)
+
+- `src/lib/audio/spotifyAuth.ts`: PKCE mit `state`, Redirect nur über HTTPS oder
+  `http://127.0.0.1`/`[::1]`, nie `localhost`; Verifier und `state` nach dem Tausch immer
+  gelöscht; Token-Satz nur in `sessionStorage`, Erneuerung per Refresh-Token 60 s vor Ablauf,
+  sonst verständliche Meldung (Teil von W6: Token-Ablauf).
+- Route `/spotify-callback`, Abschnitt „Spotify“ in den Einstellungen (Client-ID, Redirect-URI,
+  Hinweis „Premium nötig“, benannte Hosts, Status, Verbinden/Trennen).
+- CSP `connect-src` um `accounts.spotify.com` und `api.spotify.com` erweitert.
+- Details: [architecture.md](architecture.md#spotify-anmeldung-etappe-10a).
+
+**10b Spotify im Spiel ⏳**
+
+- W6 (Rest): `startOffsetMs` über `position_ms` im play-Aufruf; Timeout und `onerror` beim Laden
+  des SDK; Fehler nach dem Laden (`autoplay_failed`, `account_error`) über `onError` melden.
+- Player-Initialisierung (`load()`) im Klick-Handler (iOS/Safari); `useAudioClock` lädt Spotify
+  bisher gar nicht.
+- Spotify-Song im Dialog „Song hinzufügen“ (`parseSpotifyUri`), Datenschutzhinweis in der
+  Aufstellhilfe (sdk.scdn.co, accounts/api.spotify.com).
+
+**10c Sync-Test und Editor-Vorschau mit Spotify ⏳**
 
 ### 11. Nice-to-have ⏳
 
@@ -663,7 +680,7 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
 | ID  | Befund                                                                          | Etappe |
 | --- | ------------------------------------------------------------------------------- | ------ |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf          | 10     |
+| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden (Token-Ablauf: 10a ✅) | 10b    |
 | W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                          | 3b     |
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)          | 3b     |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                        | 11     |

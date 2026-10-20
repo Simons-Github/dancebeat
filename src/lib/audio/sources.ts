@@ -1,5 +1,6 @@
 import { songRepository } from "../library/repository";
 import { PlayRefusedError } from "./errors";
+import { getSpotifyToken } from "./spotifyAuth";
 import { effectivePlaybackRate } from "./rate";
 import { musicGainFor, sharedAudioContext } from "./unlock";
 import type { Song } from "../types";
@@ -667,49 +668,7 @@ class YouTubeSource implements AudioSource {
   }
 }
 
-// ---------- Spotify (PKCE, Token nur in sessionStorage) ----------
-const SP_TOKEN = "dancebeat.spotify.token";
-const SP_VERIFIER = "dancebeat.spotify.verifier";
-const b64url = (b: ArrayBuffer) =>
-  btoa(String.fromCharCode(...new Uint8Array(b)))
-    .replace(/\+/g, "-")
-    .replace(/\//g, "_")
-    .replace(/=+$/, "");
-
-export async function spotifyLogin(clientId: string) {
-  const verifier = b64url(crypto.getRandomValues(new Uint8Array(48)).buffer);
-  sessionStorage.setItem(SP_VERIFIER, verifier);
-  const challenge = b64url(
-    await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)),
-  );
-  const p = new URLSearchParams({
-    client_id: clientId,
-    response_type: "code",
-    redirect_uri: location.origin + "/spotify-callback",
-    code_challenge_method: "S256",
-    code_challenge: challenge,
-    scope: "streaming user-read-email user-read-private user-modify-playback-state",
-  });
-  location.href = "https://accounts.spotify.com/authorize?" + p;
-}
-export async function spotifyExchange(clientId: string, code: string) {
-  const r = await fetch("https://accounts.spotify.com/api/token", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: new URLSearchParams({
-      client_id: clientId,
-      grant_type: "authorization_code",
-      code,
-      redirect_uri: location.origin + "/spotify-callback",
-      code_verifier: sessionStorage.getItem(SP_VERIFIER) || "",
-    }),
-  });
-  if (!r.ok) throw new Error("Spotify-Anmeldung fehlgeschlagen.");
-  const j = await r.json();
-  sessionStorage.setItem(SP_TOKEN, j.access_token);
-}
-export const spotifyToken = () =>
-  typeof sessionStorage !== "undefined" ? sessionStorage.getItem(SP_TOKEN) : null;
+// ---------- Spotify (login and token: ./spotifyAuth.ts) ----------
 export function parseSpotifyUri(input: string) {
   const m = input.match(/track[/:]([A-Za-z0-9]{22})/);
   return m ? `spotify:track:${m[1]}` : null;
@@ -726,8 +685,8 @@ class SpotifySource implements AudioSource {
   private errorCb: (message: string) => void = () => {};
   constructor(private uri: string) {}
   async load() {
-    const token = spotifyToken();
-    if (!token) throw new Error("Bitte zuerst in den Einstellungen mit Spotify verbinden.");
+    // Throws a message for the UI when not connected or the session cannot be renewed.
+    await getSpotifyToken();
     if (!window.Spotify) {
       await new Promise<void>((res) => {
         window.onSpotifyWebPlaybackSDKReady = () => res();
@@ -738,7 +697,11 @@ class SpotifySource implements AudioSource {
     }
     const player = new window.Spotify.Player({
       name: "DanceBeat",
-      getOAuthToken: (cb) => cb(token),
+      // The SDK asks again before the token expires; a failed refresh surfaces as
+      // authentication_error.
+      getOAuthToken: (cb) => {
+        getSpotifyToken().then(cb, () => {});
+      },
       volume: 0.8,
     });
     this.player = player;
@@ -772,7 +735,7 @@ class SpotifySource implements AudioSource {
   async play() {
     const r = await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${this.deviceId}`, {
       method: "PUT",
-      headers: { Authorization: `Bearer ${spotifyToken()}` },
+      headers: { Authorization: `Bearer ${await getSpotifyToken()}` },
       body: JSON.stringify({ uris: [this.uri] }),
     });
     if (!r.ok) throw new Error("Spotify konnte den Song nicht starten.");

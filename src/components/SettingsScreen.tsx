@@ -3,13 +3,24 @@ import { Link } from "@tanstack/react-router";
 import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
+import {
+  checkRedirectOrigin,
+  isSpotifyClientId,
+  spotifyLogin,
+  spotifyLogout,
+  spotifyRedirectUri,
+  spotifyStatus,
+  type RedirectCheck,
+  type SpotifyStatus,
+} from "@/lib/audio/spotifyAuth";
 import { mediaVolumeIgnored } from "@/lib/audio/unlock";
 import { getStorageUsage, type StorageUsage } from "@/lib/library/storage";
 import { DIFFICULTIES, type Difficulty } from "@/lib/scoring";
-import { LATENCY_MAX, LATENCY_MIN, LATENCY_STEP, useSettings } from "@/lib/settings";
+import { LATENCY_MAX, LATENCY_MIN, LATENCY_STEP, useSettings, type Settings } from "@/lib/settings";
 import { formatOffsetMs } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 
@@ -60,6 +71,130 @@ function SwitchRow({
       </div>
       <Switch id={id} checked={checked} onCheckedChange={onChange} />
     </div>
+  );
+}
+
+const SPOTIFY_STATUS_LABELS: Record<SpotifyStatus, string> = {
+  disconnected: "Nicht verbunden",
+  connected: "Verbunden",
+  expired: "Anmeldung abgelaufen, bitte neu verbinden",
+};
+
+/**
+ * Spotify login (PKCE, src/lib/audio/spotifyAuth.ts): client ID, redirect URI to register,
+ * connect and disconnect. The token lives in sessionStorage only, so it ends with the tab.
+ */
+function SpotifySettings({
+  clientId,
+  save,
+}: {
+  clientId: string;
+  save: (p: Partial<Settings>) => void;
+}) {
+  // Read in an effect: location and sessionStorage are browser APIs.
+  const [env, setEnv] = useState<{
+    status: SpotifyStatus;
+    redirect: RedirectCheck;
+    redirectUri: string;
+  } | null>(null);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    setEnv({
+      status: spotifyStatus(),
+      redirect: checkRedirectOrigin(location),
+      redirectUri: spotifyRedirectUri(location),
+    });
+  }, []);
+
+  const validId = isSpotifyClientId(clientId);
+  const showIdError = clientId !== "" && !validId;
+  const connect = () => {
+    setError("");
+    setBusy(true);
+    spotifyLogin(clientId).catch((e: unknown) => {
+      setBusy(false);
+      setError(e instanceof Error ? e.message : String(e));
+    });
+  };
+  const disconnect = () => {
+    spotifyLogout();
+    setEnv((v) => (v ? { ...v, status: "disconnected" } : v));
+  };
+
+  return (
+    <Section title="Spotify">
+      <p className={HINT}>
+        Für Spotify-Songs brauchst du Spotify Premium und eine eigene App im
+        Spotify-Developer-Dashboard. Beim Verbinden und Abspielen spricht dein Gerät direkt mit
+        Spotify (accounts.spotify.com, api.spotify.com, sdk.scdn.co); Spotify sieht dabei deine
+        IP-Adresse. Die Anmeldung gilt nur, bis du den Tab schließt. Spotify-Songs im Spiel
+        abspielen folgt in einer späteren Etappe.
+      </p>
+      <div className="flex flex-col gap-2">
+        <Label htmlFor="spotify-client-id" className="text-base">
+          Client-ID
+        </Label>
+        <Input
+          id="spotify-client-id"
+          value={clientId}
+          placeholder="32 Zeichen aus dem Dashboard"
+          autoComplete="off"
+          autoCapitalize="off"
+          spellCheck={false}
+          aria-invalid={showIdError ? true : undefined}
+          aria-describedby={showIdError ? "spotify-client-id-err" : undefined}
+          onChange={(e) => save({ spotifyClientId: e.target.value.trim() })}
+          className="h-11 rounded-xl border-white/40 text-base placeholder:text-white/60 md:text-base"
+        />
+        {showIdError && (
+          <p id="spotify-client-id-err" className="text-sm font-medium text-white">
+            Die Client-ID besteht aus 32 Zeichen (0–9, a–f).
+          </p>
+        )}
+      </div>
+      {env && (
+        <>
+          <div className="flex flex-col gap-1">
+            <span className="text-base font-medium">Redirect-URI für das Dashboard</span>
+            <code className="break-all rounded-lg bg-black/30 px-3 py-2 text-sm">
+              {env.redirectUri}
+            </code>
+            {!env.redirect.ok && (
+              <p className="text-sm font-medium text-white">
+                {env.redirect.reason === "localhost"
+                  ? "Spotify erlaubt „localhost“ nicht. Öffne die App über 127.0.0.1 statt localhost."
+                  : "Spotify verlangt eine HTTPS-Adresse. Auf dem Handy die App über HTTPS öffnen."}
+              </p>
+            )}
+          </div>
+          <p role="status" className="text-base">
+            Status: {SPOTIFY_STATUS_LABELS[env.status]}
+          </p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              disabled={!validId || !env.redirect.ok || busy}
+              onClick={connect}
+              className={BTN}
+            >
+              {env.status === "disconnected" ? "Mit Spotify verbinden" : "Neu verbinden"}
+            </Button>
+            {env.status !== "disconnected" && (
+              <Button type="button" variant="secondary" onClick={disconnect} className={BTN}>
+                Trennen
+              </Button>
+            )}
+          </div>
+          {error && (
+            <p role="alert" className="text-sm font-medium text-white">
+              {error}
+            </p>
+          )}
+        </>
+      )}
+    </Section>
   );
 }
 
@@ -260,6 +395,8 @@ export function SettingsScreen() {
             </Button>
           )}
         </Section>
+
+        <SpotifySettings clientId={settings.spotifyClientId} save={save} />
 
         <Section title="Speicher">
           <p className="text-base">

@@ -249,7 +249,7 @@ Abbrechen im Countdown ──▶ /setup/$songId
 | Einstellungen                    | `localStorage` `dancebeat.settings`         | `useSettings`                  |
 | Gelöschte Demo-Songs (IDs)       | `localStorage` `dancebeat.deletedDemos`     | `seedDemos`, `markDemoDeleted` |
 | Version der Demo-Audiodaten      | `localStorage` `dancebeat.demoAudioVersion` | `seedDemos`                    |
-| Spotify-Token und PKCE-Verifier  | `sessionStorage`                            | `lib/audio/sources.ts`         |
+| Spotify-Token und PKCE-Verifier  | `sessionStorage`                            | `lib/audio/spotifyAuth.ts`     |
 | App-Hülle, MediaPipe-WASM/Modell | Cache Storage `dancebeat-*`                 | Service Worker (`src/sw/`)     |
 
 **SongRepository** (`src/lib/library/repository.ts`) ist die einzige Schnittstelle zur
@@ -352,8 +352,33 @@ kommen von der eigenen Adresse der App (`<base>mediapipe/wasm/…`,
   bewusst offen (Audio-URLs über `<audio>`, YouTube-Skript und -Iframe). Der Logger scheitert
   und stoppt sich; Chrome meldet das als zwei Konsolenfehler („violates the following Content
   Security Policy directive“). Diese Fehler sind erwartet und gelten nicht als Fehler aus eigenem
-  Code. Spotify (Etappe 10) braucht dann `accounts.spotify.com` und `api.spotify.com` in der
-  Policy. Gilt nur für von Vite ausgelieferte `index.html` (dev, build, preview).
+  Code. Seit Etappe 10a erlaubt die Policy zusätzlich `https://accounts.spotify.com`
+  (Token-Tausch) und `https://api.spotify.com` (Play-Aufruf), sonst keine fremden Hosts. Gilt nur für von Vite ausgelieferte `index.html` (dev, build, preview).
+
+### Spotify-Anmeldung (Etappe 10a)
+
+`src/lib/audio/spotifyAuth.ts`, Authorization Code mit PKCE, ohne Client-Secret und ohne Backend.
+Die Client-ID trägt der Nutzer in den Einstellungen ein (Abschnitt „Spotify“, `settings.spotifyClientId`,
+32 Hex-Zeichen); dort stehen auch die einzutragende Redirect-URI (`<origin><BASE_URL>spotify-callback`),
+der Hinweis „Premium nötig“, die angesprochenen Hosts und der Status.
+
+- Redirect nur über HTTPS oder `http://127.0.0.1` / `http://[::1]`, nie `localhost`
+  (`checkRedirectOrigin`; Spotify lehnt `localhost` ab). Sonst ist „Verbinden“ gesperrt und ein
+  Hinweis erscheint. Für den Desktop-Test die App also über `http://127.0.0.1:5173` öffnen.
+- `spotifyLogin` legt Verifier und `state` in `sessionStorage` ab und springt zu
+  `accounts.spotify.com/authorize`. `/spotify-callback` (`SpotifyCallbackScreen`) ruft einmal
+  `spotifyExchange` auf: Verifier und `state` werden vorher gelöscht (Erfolg oder nicht),
+  `state` muss passen; danach ersetzt die Route sich durch `/settings` (Code bleibt nicht in der
+  Historie). Fehler (abgelehnt, falscher `state`, Tausch gescheitert) zeigt die Route mit Link
+  zu den Einstellungen.
+- Token-Satz `{accessToken, refreshToken?, expiresAt, clientId}` liegt unter
+  `dancebeat.spotify.token` nur in `sessionStorage` (endet mit dem Tab). `getSpotifyToken()`
+  erneuert ihn 60 s vor Ablauf per `refresh_token` (gleichzeitige Aufrufe teilen eine Anfrage).
+  Scheitert das, wird der Token gelöscht und die Meldung „Die Spotify-Anmeldung ist abgelaufen.
+  Bitte in den Einstellungen neu verbinden.“ geworfen. `spotifyStatus()`: `disconnected`,
+  `connected`, `expired`.
+- `SpotifySource` holt den Token nur noch über `getSpotifyToken()` (auch im `getOAuthToken`
+  des SDK). Abspielen im Spiel, Sync-Test und Editor folgt mit 10b/10c.
 
 Alle Abrufe außer Spotify sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
 (`src/components/setup/PrivacyNote.tsx`; W12): immer „Kamerabilder verlassen dein Gerät nie“
@@ -665,7 +690,8 @@ erhalten). Keine `src/pages/` und kein `app/layout.tsx` anlegen.
 Routen der App: `/` (Bibliothek), `/setup/$songId` (Aufstellhilfe), `/play/$songId` (Spiel,
 Vollbild), `/result/$songId` (Ergebnis), `/sync/$songId` (Sync-Test pro Song, siehe
 [scoring.md](scoring.md#sync-test-pro-song)), `/edit/$songId` (Choreografie-Editor, siehe
-[oben](#choreografie-editor-etappe-8d-1)), `/settings`.
+[oben](#choreografie-editor-etappe-8d-1)), `/settings`, `/spotify-callback` (Rücksprung der
+Spotify-Anmeldung, siehe [Spotify-Anmeldung](#spotify-anmeldung-etappe-10a)).
 
 ## Service Worker und Offline-Betrieb
 

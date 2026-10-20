@@ -6,12 +6,14 @@ import type { Plugin } from "vite";
  * https://odml.pa.googleapis.com/v1/log). All other directives stay unrestricted on purpose:
  * YouTube (script + iframe), URL audio (media element) and fonts are not affected.
  *
- * What the app connects to itself: MediaPipe WASM and model (same origin), blob:/data: URLs.
- * Spotify (Etappe 10) will need https://accounts.spotify.com and https://api.spotify.com here
- * (SpotifySource in src/lib/audio/sources.ts fetches both).
+ * What the app connects to itself: MediaPipe WASM and model (same origin), blob:/data: URLs,
+ * and Spotify: token exchange at accounts.spotify.com (src/lib/audio/spotifyAuth.ts) and the
+ * play request at api.spotify.com (SpotifySource in src/lib/audio/sources.ts).
  */
+export const SPOTIFY_CONNECT_SOURCES = ["https://accounts.spotify.com", "https://api.spotify.com"];
+
 export function connectSrcPolicy(command: "build" | "serve"): string {
-  const sources = ["'self'", "blob:", "data:"];
+  const sources = ["'self'", "blob:", "data:", ...SPOTIFY_CONNECT_SOURCES];
   // Dev only: Vite's HMR socket (also wss: for `dev:https` on phones).
   if (command === "serve") sources.push("ws:", "wss:");
   return `connect-src ${sources.join(" ")}`;

@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as SpotifyCallbackRouteImport } from './routes/spotify-callback'
 import { Route as EditSongIdRouteImport } from './routes/edit/$songId'
 import { Route as PlaySongIdRouteImport } from './routes/play/$songId'
 import { Route as ResultSongIdRouteImport } from './routes/result/$songId'
@@ -25,6 +26,11 @@ const IndexRoute = IndexRouteImport.update({
 const SettingsRoute = SettingsRouteImport.update({
   id: '/settings',
   path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const SpotifyCallbackRoute = SpotifyCallbackRouteImport.update({
+  id: '/spotify-callback',
+  path: '/spotify-callback',
   getParentRoute: () => rootRouteImport,
 } as any)
 const EditSongIdRoute = EditSongIdRouteImport.update({
@@ -56,6 +62,7 @@ const SyncSongIdRoute = SyncSongIdRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/spotify-callback': typeof SpotifyCallbackRoute
   '/edit/$songId': typeof EditSongIdRoute
   '/play/$songId': typeof PlaySongIdRoute
   '/result/$songId': typeof ResultSongIdRoute
@@ -65,6 +72,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/spotify-callback': typeof SpotifyCallbackRoute
   '/edit/$songId': typeof EditSongIdRoute
   '/play/$songId': typeof PlaySongIdRoute
   '/result/$songId': typeof ResultSongIdRoute
@@ -75,6 +83,7 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/settings': typeof SettingsRoute
+  '/spotify-callback': typeof SpotifyCallbackRoute
   '/edit/$songId': typeof EditSongIdRoute
   '/play/$songId': typeof PlaySongIdRoute
   '/result/$songId': typeof ResultSongIdRoute
@@ -86,6 +95,7 @@ export interface FileRouteTypes {
   fullPaths:
     | '/'
     | '/settings'
+    | '/spotify-callback'
     | '/edit/$songId'
     | '/play/$songId'
     | '/result/$songId'
@@ -95,6 +105,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/settings'
+    | '/spotify-callback'
     | '/edit/$songId'
     | '/play/$songId'
     | '/result/$songId'
@@ -104,6 +115,7 @@ export interface FileRouteTypes {
     | '__root__'
     | '/'
     | '/settings'
+    | '/spotify-callback'
     | '/edit/$songId'
     | '/play/$songId'
     | '/result/$songId'
@@ -114,6 +126,7 @@ export interface FileRouteTypes {
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   SettingsRoute: typeof SettingsRoute
+  SpotifyCallbackRoute: typeof SpotifyCallbackRoute
   EditSongIdRoute: typeof EditSongIdRoute
   PlaySongIdRoute: typeof PlaySongIdRoute
   ResultSongIdRoute: typeof ResultSongIdRoute
@@ -135,6 +148,13 @@ declare module '@tanstack/react-router' {
       path: '/settings'
       fullPath: '/settings'
       preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/spotify-callback': {
+      id: '/spotify-callback'
+      path: '/spotify-callback'
+      fullPath: '/spotify-callback'
+      preLoaderRoute: typeof SpotifyCallbackRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/edit/$songId': {
@@ -178,6 +198,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   SettingsRoute: SettingsRoute,
+  SpotifyCallbackRoute: SpotifyCallbackRoute,
   EditSongIdRoute: EditSongIdRoute,
   PlaySongIdRoute: PlaySongIdRoute,
   ResultSongIdRoute: ResultSongIdRoute,

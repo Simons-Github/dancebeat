@@ -5,18 +5,22 @@ import { describe, expect, it } from "vitest";
 import { connectSrcPolicy, csp } from "../../vite-plugins/csp";
 
 describe("Content-Security-Policy (nur connect-src)", () => {
-  it("erlaubt im Build nur den eigenen Origin, blob: und data:", () => {
-    expect(connectSrcPolicy("build")).toBe("connect-src 'self' blob: data:");
+  const SPOTIFY = "https://accounts.spotify.com https://api.spotify.com";
+
+  it("erlaubt im Build nur den eigenen Origin, blob:, data: und Spotify", () => {
+    expect(connectSrcPolicy("build")).toBe(`connect-src 'self' blob: data: ${SPOTIFY}`);
   });
 
   it("erlaubt im Dev-Server zusätzlich WebSockets für HMR", () => {
-    expect(connectSrcPolicy("serve")).toBe("connect-src 'self' blob: data: ws: wss:");
+    expect(connectSrcPolicy("serve")).toBe(`connect-src 'self' blob: data: ${SPOTIFY} ws: wss:`);
   });
 
   it("lässt keine Google-Telemetrie und keine anderen Direktiven zu", () => {
     for (const command of ["build", "serve"] as const) {
       const policy = connectSrcPolicy(command);
-      expect(policy).not.toMatch(/googleapis|https:|\*/);
+      expect(policy).not.toMatch(/googleapis|\*/);
+      // The only remote hosts are Spotify's login and Web API.
+      expect(policy.match(/https:\S*/g)).toEqual(SPOTIFY.split(" "));
       expect(policy.split(";")).toHaveLength(1);
     }
   });
