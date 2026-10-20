@@ -5,6 +5,7 @@ import { analyzeAudio, DECODE_ERROR_MESSAGE } from "@/lib/beat";
 import { buildChoreoFile, parseChoreoFile } from "@/lib/library/choreoFile";
 import {
   buildNewSong,
+  formatBpm,
   parseSpotifyTrackUri,
   parseYouTubeId,
   validateAudioUrl,
@@ -15,6 +16,15 @@ import { SongSchema } from "@/lib/schema";
 import { makeSong } from "./fixtures";
 
 const ID = "dQw4w9WgXcQ";
+
+describe("formatBpm", () => {
+  it("shows at most one fraction digit, German style", () => {
+    expect(formatBpm(128)).toBe("128");
+    expect(formatBpm(123.4)).toBe("123,4");
+    expect(formatBpm(97.25)).toBe("97,3");
+    expect(formatBpm(120.04)).toBe("120");
+  });
+});
 
 describe("parseYouTubeId", () => {
   it.each([
@@ -274,7 +284,7 @@ describe("validateNewSongFields", () => {
 
 describe("analyzeAudio", () => {
   const SR = 22050;
-  it("returns rounded, clamped bpm and the duration", async () => {
+  it("returns refined (0.1), clamped bpm and the duration", async () => {
     const data = new Float32Array(SR * 20);
     const beat = (60 / 120) * SR;
     for (let t = 0; t < data.length; t += beat) {
@@ -285,8 +295,9 @@ describe("analyzeAudio", () => {
       duration: 20.0004,
       getChannelData: () => data,
     }));
-    expect(Number.isInteger(r.bpm)).toBe(true);
-    expect(Math.abs(r.bpm - 120)).toBeLessThanOrEqual(2);
+    // 0.1 resolution; a true integer tempo comes back exact.
+    expect(Math.round(r.bpm * 10) / 10).toBe(r.bpm);
+    expect(r.bpm).toBe(120);
     expect(r.durationMs).toBe(20_000);
     expect(r.envelope.values.length).toBeGreaterThan(1900);
     expect(r.envelope.hopMs).toBeCloseTo(9.977, 3);

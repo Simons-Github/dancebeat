@@ -11,6 +11,11 @@ export const DURATION_MAX_S = 600;
 export const TITLE_MAX = 120;
 export const ARTIST_MAX = 120;
 
+/** BPM for display, German style with at most one fraction digit ("123,4", "128"). */
+export function formatBpm(bpm: number): string {
+  return bpm.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+}
+
 const VIDEO_ID = /^[\w-]{11}$/;
 const YOUTUBE_HOSTS = new Set([
   "youtube.com",

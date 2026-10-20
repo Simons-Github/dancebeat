@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { Flame, Star, Trophy } from "lucide-react";
 
 import { SongCover } from "@/components/SongCover";
+import { formatBpm } from "@/lib/library/newSong";
 import { cn } from "@/lib/utils";
 import type { Song } from "@/lib/types";
 import { FLAME, GOLD, ICON_OFF, SPRING, TILE_SCALE } from "@/theme";
@@ -36,7 +37,7 @@ export const SongTile = forwardRef<HTMLButtonElement, SongTileProps>(
         <span className="font-title truncate text-xl leading-tight">{song.title}</span>
         <span className="truncate text-sm text-white/85">{song.artist}</span>
         <div className="mt-1 flex items-center justify-between gap-2 text-sm">
-          <span className="font-semibold">{song.bpm} BPM</span>
+          <span className="font-semibold">{formatBpm(song.bpm)} BPM</span>
           <Flames level={song.difficulty} />
         </div>
         <div className="flex items-center justify-between gap-2 text-sm">

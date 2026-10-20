@@ -12,7 +12,7 @@ beschreibt Bedeutung und Konventionen.
 | `version`                | `1`           | Formatversion                                                        |
 | `id`                     | UUID          | stabile ID (`crypto.randomUUID`)                                     |
 | `title`                  | Text, 1–120   | Titel                                                                |
-| `bpm`                    | 30–300        | Tempo                                                                |
+| `bpm`                    | 30–300        | Tempo; darf gebrochen sein (die Analyse liefert 0,1-Schritte)        |
 | `offsetMs`               | Zahl          | Verschiebung der Choreografie gegen die Audiozeit (positiv = später) |
 | `accentColor`            | `#RRGGBB`     | Songfarbe (Hintergrund, Piktogramme, Effekte)                        |
 | `secondaryColor`         | `#RRGGBB`     | Zweitfarbe (Pfeile, Wackellinien)                                    |
@@ -122,7 +122,8 @@ gilt Videozeit = Audiozeit. Für den Bereich `[start, ende]` und eine Beat-Phase
   damit bei Audiozeit `t + offsetMs`, also genau dort, wo er im Video getanzt wird, und auf
   `P + k · Beatlänge`.
 - `song.startOffsetMs = start`: Die Musik beginnt am Bereichsanfang. `syncOffsetMs` ist 0.
-- BPM kommt aus dem Formular. Kein Formatwechsel, keine neue Version.
+- BPM kommt aus dem Formular und darf gebrochen sein (Analyse auf 0,1 BPM, Etappe 8g-4a). Kein
+  Formatwechsel, keine neue Version.
 - Mehrere Personen im Video (Etappe 8f): Die Analyse kennt bis zu 3 Personen je Probe;
   `choreoFromPoseTrack` bekommt nur die gewählte Zielperson (`trackTarget`, siehe
   [architecture.md](architecture.md#zielperson-etappe-8f)). Am Format ändert sich nichts.

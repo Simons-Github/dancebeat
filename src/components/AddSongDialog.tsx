@@ -166,7 +166,9 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   }, [open, kind]);
   const useImport = choreoMode === "import";
   const useVideo = choreoMode === "video";
-  const bpmNum = bpm.trim() === "" ? NaN : Number(bpm);
+  // The field accepts any decimal (step "any", so the browser never blocks the submit with its own
+  // message); the song keeps 0.1 BPM like the estimate.
+  const bpmNum = bpm.trim() === "" ? NaN : Math.round(Number(bpm) * 10) / 10;
   const durationNum = durationS.trim() === "" ? NaN : Number(durationS);
   const errors = validateNewSongFields({
     kind,
@@ -333,7 +335,8 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       <Input
         id={`${id}-${key}`}
         type="number"
-        inputMode="numeric"
+        inputMode={key === "bpm" ? "decimal" : "numeric"}
+        step={key === "bpm" ? "any" : 1}
         min={min}
         max={max}
         value={value}

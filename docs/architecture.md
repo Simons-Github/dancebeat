@@ -766,14 +766,34 @@ Samples (≈ 10 ms, `hopMs` exakt, sonst driftet die Zeitachse bei 22 050 Hz um 
 BPM: Autokorrelation der ersten 90 s über 70–180 BPM. Die Schleife summiert nur Terme, deren
 gerundete Indizes existieren; `src/test/beat.test.ts` vergleicht das mit der früheren
 Implementierung auf synthetischen Klick-Tracks. `analyzeAudio` dekodiert die Datei einmal
-(Decoder für Tests austauschbar) und liefert BPM (gerundet, 30–300), Länge und die Hüllkurve der
-ganzen Datei (100 Werte pro Sekunde). `quantize` rastet Zeiten auf Beats ein.
+(Decoder für Tests austauschbar) und liefert BPM (auf 0,1 verfeinert, 30–300), Länge und die
+Hüllkurve der ganzen Datei (100 Werte pro Sekunde). `quantize` rastet Zeiten auf Beats ein.
+
+Verfeinerung (Etappe 8g-4a): Die Autokorrelation liefert nur ganze BPM und liegt auf Klick-Tracks
+bei hohen Tempi bis knapp 2 BPM zu tief (ganzzahlige Lags, 10 ms statt `hopMs` angenommen).
+`refineBpm(env, grob)` probiert `grob ± 3` BPM in Schritten von 0,02 und bewertet jeden Kandidaten
+mit einem phasenkohärenten Kammfilter über die ersten 300 s der Hüllkurve (exaktes `hopMs`, jede
+Phase in Hüllkurvenschritten, Mittelwert des Onsets auf dem Raster, Nachbarschritte halb
+gewichtet, beste Phase zählt). Über eine lange Strecke läuft ein leicht falsches Tempo vom Raster
+weg, deshalb ist das Maximum scharf. Sieger ist die Mitte des Plateaus der Kandidaten innerhalb
+von 2 % des besten Werts, auf 0,1 gerundet; liegt die nächste ganze Zahl ebenfalls innerhalb der
+2 %, gewinnt sie, damit echte ganzzahlige Tempi exakt bleiben. Bei kurzen Ausschnitten (ca. 20 s)
+ist das Maximum flach, dort rastet z. B. 127,9 auf 128 ein. Stille, ungültige Eingabe, ein
+Maximum ohne Kontrast (bester Wert unter dem 1,5-Fachen des Medians aller Kandidaten; abseits des
+Tempos liegen Klick-Tracks bei 2,5–3,6 × dem mittleren Onset, am Tempo bei 10–50 ×) oder ein
+Plateau am Rand des Suchbereichs (grobe Schätzung mehr als 3 BPM daneben): die grobe BPM, also
+das Verhalten vor 8g-4a. Das
+BPM-Feld im Formular nimmt beliebige Kommawerte an (`step="any"`, sonst blockiert der Browser das
+Absenden mit eigener Meldung) und rundet auf 0,1. Laufzeit bei 5 min Hüllkurve in Node unter 0,1 s. Messung (Klick-Track 123,4 BPM,
+180 s): letzter Beat 0 ms neben dem echten Raster statt 2064 ms mit der groben Schätzung 122
+und 585 ms mit der besten ganzen Zahl 123.
 
 `estimateBeatPhaseMs(env, bpm, fromMs)` (Etappe 8e) probiert jede Phase in Hüllkurvenschritten
 und summiert den Onset auf dem Beat-Raster (Kammfilter, Nachbarschritte halb gewichtet). Es
-schaut nur 10 s ab `fromMs` an und gewichtet frühe Beats stärker, weil die BPM eine ganze Zahl
-ist: 1 BPM daneben driftet bei 128 BPM um ~80 ms in 10 s, so bleibt die Phase am Abschnittsanfang
-in den Tests unter 50 ms. Ergebnis: erster Beat ab `fromMs` (ganze ms) oder `null` (Stille,
+schaut nur 10 s ab `fromMs` an und gewichtet frühe Beats stärker, weil auch die verfeinerte BPM
+nicht exakt ist (0,1 BPM daneben driftet bei 128 BPM um ~8 ms in 10 s, eine misslungene
+Verfeinerung mit 1 BPM daneben um ~80 ms); so bleibt die Phase am Abschnittsanfang in den Tests
+unter 50 ms. Ergebnis: erster Beat ab `fromMs` (ganze ms) oder `null` (Stille,
 weniger als zwei Beats im Fenster). Die Feinabstimmung bleibt dem Sync-Test überlassen.
 
 ## Routing-Konventionen

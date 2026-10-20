@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { estimateBeatPhaseMs, estimateBpmFromSamples, onsetEnvelope } from "@/lib/beat";
+import { estimateBeatPhaseMs, estimateBpmFromSamples, onsetEnvelope, refineBpm } from "@/lib/beat";
 
 const SR = 22050;
 
@@ -137,5 +137,84 @@ describe("estimateBeatPhaseMs", () => {
     expect(estimateBeatPhaseMs(env, 0, 0)).toBeNull();
     expect(estimateBeatPhaseMs(env, 120, -1)).toBeNull();
     expect(estimateBeatPhaseMs(env, 120, Number.NaN)).toBeNull();
+  });
+});
+
+describe("refineBpm", () => {
+  /** Coarse integer estimate as analyzeAudio computes it, then the refinement. */
+  const analyse = (data: Float32Array) => {
+    const coarse = Math.round(estimateBpmFromSamples(data, SR));
+    return { coarse, refined: refineBpm(onsetEnvelope(data, SR), coarse) };
+  };
+
+  for (const bpm of [90, 120, 128, 140]) {
+    it(`keeps the integer tempo ${bpm} exact`, () => {
+      const { coarse, refined } = analyse(clickTrack(bpm, 60, 150));
+      console.log(`bpm=${bpm} coarse=${coarse} refined=${refined}`);
+      expect(refined).toBe(bpm);
+    });
+  }
+
+  for (const bpm of [97.3, 123.4, 128.6]) {
+    it(`finds the fractional tempo ${bpm} within 0.1`, () => {
+      const { coarse, refined } = analyse(clickTrack(bpm, 60, 80));
+      console.log(`bpm=${bpm} coarse=${coarse} refined=${refined}`);
+      expect(Math.abs(refined - bpm)).toBeLessThanOrEqual(0.1 + 1e-9);
+      expect(Math.round(refined * 10)).toBe(refined * 10);
+    });
+  }
+
+  it("limits the drift over 180 s at 123.4 BPM (and is fast)", () => {
+    const bpm = 123.4;
+    const data = clickTrack(bpm, 180);
+    const { coarse, refined } = analyse(data);
+    const beats = Math.floor((180_000 * bpm) / 60_000);
+    const truthLast = (beats * 60_000) / bpm;
+    const drift = (b: number) => Math.abs((beats * 60_000) / b - truthLast);
+    console.log(
+      `123.4 BPM over 180 s: refined=${refined} drift=${drift(refined).toFixed(0)} ms, ` +
+        `coarse ${coarse} drift=${drift(coarse).toFixed(0)} ms, ` +
+        `rounded ${Math.round(bpm)} drift=${drift(Math.round(bpm)).toFixed(0)} ms`,
+    );
+    expect(drift(refined)).toBeLessThanOrEqual(60);
+
+    // Runtime on a 5-minute envelope (refinement only; decoding is the browser's job).
+    const env = onsetEnvelope(clickTrack(bpm, 300), SR);
+    const t0 = performance.now();
+    refineBpm(env, coarse);
+    const ms = performance.now() - t0;
+    console.log(`refineBpm on 5 min: ${ms.toFixed(0)} ms`);
+    expect(ms).toBeLessThan(1000);
+  });
+
+  it("is robust against weaker off-beat clicks and mild noise", () => {
+    const bpm = 123.4;
+    const data = clickTrack(bpm, 60, 100);
+    const off = clickTrack(bpm, 60, 100 + 30_000 / bpm);
+    let seed = 1;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647) * 2 - 1;
+    for (let i = 0; i < data.length; i++) data[i]! += 0.4 * off[i]! + 0.05 * rand();
+    const { coarse, refined } = analyse(data);
+    console.log(`noisy 123.4: coarse=${coarse} refined=${refined}`);
+    expect(Math.abs(refined - bpm)).toBeLessThanOrEqual(0.1 + 1e-9);
+    const plain = clickTrack(128, 60, 100);
+    for (let i = 0; i < plain.length; i++) plain[i]! += 0.05 * rand();
+    expect(analyse(plain).refined).toBe(128);
+  });
+
+  it("keeps the coarse value when the true tempo lies outside the search range", () => {
+    const env = onsetEnvelope(clickTrack(123.4, 60, 100), SR);
+    expect(refineBpm(env, 119)).toBe(119);
+    expect(refineBpm(env, 128)).toBe(128);
+  });
+
+  it("returns the coarse value for silence and invalid input", () => {
+    const silent = onsetEnvelope(new Float32Array(SR * 20), SR);
+    expect(refineBpm(silent, 120)).toBe(120);
+    expect(refineBpm({ hopMs: 10, values: new Float64Array(0) }, 97)).toBe(97);
+    const env = onsetEnvelope(clickTrack(120, 20), SR);
+    expect(refineBpm(env, 0)).toBe(0);
+    expect(refineBpm(env, Number.NaN)).toBeNaN();
+    expect(refineBpm({ hopMs: 0, values: env.values }, 120)).toBe(120);
   });
 });

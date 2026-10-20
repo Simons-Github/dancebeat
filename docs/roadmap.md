@@ -7,19 +7,19 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status                     | Empfohlenes Modell                                                    |
-| -------------------------------------------- | -------------------------- | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                         | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
-| 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3 ✅)  | Opus                                                                  |
-| 9. Typen und Lint                            | ✅                         | –                                                                     |
-| 10. Spotify                                  | ✅ (Gerätetest offen)      | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
+| Etappe                                       | Status                           | Empfohlenes Modell                                                    |
+| -------------------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                               | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                               | Sonnet                                                                |
+| 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5)       | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ✅                               | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)            | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)            | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)            | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2, 8g-3, 8g-4a ✅) | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                               | –                                                                     |
+| 10. Spotify                                  | ✅ (Gerätetest offen)            | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                               | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
 
@@ -488,7 +488,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3 umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a umgesetzt)
 
 Aufteilung:
 
@@ -601,9 +601,10 @@ Aufteilung:
     Tests `beat.test.ts` (Raster bei 90–140 BPM, gerundete BPM, Off-Beats, Stille) und
     `video-beat-detect.test.tsx` (beide Quellen, BPM-Übernahme, Fehler, veraltetes Ergebnis).
     Kein Formatwechsel.
-  - Grenze: Die BPM-Schätzung ist ganzzahlig und kann um 1–2 daneben liegen; dann driften die
-    Moves über den Song, die Phase sitzt nur am Abschnittsanfang. BPM bitte prüfen.
-  - Nicht enthalten: „Video behalten“, gebrochene BPM.
+  - Grenze: Die BPM-Schätzung war ganzzahlig und lag oft 1–2 daneben; dann drifteten die Moves
+    über den Song, die Phase saß nur am Abschnittsanfang. Seit 8g-4a auf 0,1 BPM verfeinert
+    (siehe dort); bei Musik ohne klare Schläge trotzdem prüfen.
+  - Nicht enthalten: „Video behalten“ (gebrochene BPM kam mit 8g-4a).
   - **Gerätetest 8e (offen):**
     - [ ] iPhone (Safari) und Android (Chrome): Tonspur aus MP4 und MOV wird gelesen, Dauer
           und Speicher bei einem 100–250-MB-Video
@@ -647,9 +648,21 @@ Aufteilung:
     Holdout in `videoChoreo.test.ts`. **Offen:** Lauf mit den echten Rohdaten aus 8g-1, danach
     neue Standardwerte mit Begründung in
     [choreography-format.md](choreography-format.md#video-import).
-  - **8g-4 Verbesserungen, nur nach Messung (offen):** Modell „full“/„heavy“ mit Auswahl
-    „Schnell / Genau“; Bruchteil-BPM (0,1 BPM, Schema erlaubt das schon); Moves auf markanten
-    Haltepunkten statt starr alle 2 Beats; Hinweis zum Selfie-Schalter bei Mirrored-Videos.
+  - **8g-4a Bruchteil-BPM – umgesetzt.** `refineBpm` (`src/lib/beat.ts`) verfeinert die
+    ganzzahlige Schätzung auf 0,1 BPM: Kandidaten ±3 BPM in 0,02er-Schritten, phasenkohärenter
+    Kammfilter über die ersten 300 s der Hüllkurve; echte ganzzahlige Tempi bleiben exakt.
+    `analyzeAudio` liefert die verfeinerte BPM, das Formular nimmt Kommazahlen an (`step="any"`, gerundet auf 0,1),
+    die Kachel zeigt „123,4 BPM“ (`formatBpm`). Gemessen auf einem Klick-Track mit 123,4 BPM
+    über 180 s: Abstand des letzten Beats zum echten Raster 0 ms verfeinert, 2064 ms mit der
+    bisherigen ganzzahligen Schätzung (122), 585 ms selbst mit der besten ganzen Zahl (123).
+    Laufzeit für 5 min Hüllkurve in Node ~30–70 ms (mit ±3 BPM). Tests `beat.test.ts` (ganzzahlige und
+    gebrochene Tempi, Drift, Off-Beats und Rauschen, Stille), `newSong.test.ts`. Kein
+    Formatwechsel (Schema erlaubt Bruchteile). Liegt das Plateau am Rand des Suchbereichs, bleibt
+    die grobe BPM. **Offen:** Prüfung mit echten Songs; Gerätetest: BPM-Feld am iPhone mit
+    deutscher Tastatur (Komma) liefert den Wert und nicht „BPM muss zwischen 30 und 300 liegen“.
+  - **8g-4 weitere Verbesserungen, nur nach Messung (offen):** Modell „full“/„heavy“ mit
+    Auswahl „Schnell / Genau“; Moves auf markanten Haltepunkten statt starr alle 2 Beats;
+    Hinweis zum Selfie-Schalter bei Mirrored-Videos.
 
 Ursprüngliche Schritte:
 
