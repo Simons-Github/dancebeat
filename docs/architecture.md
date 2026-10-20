@@ -547,7 +547,8 @@ Browser (`beforeunload`).
   sperrt die Knöpfe und nennt die Gründe. Die Pose eines Moves wird aus den Frames interpoliert,
   neue Pose-Daten sind nicht nötig. `isEdited` vergleicht auch `label` und `iconId`.
 - Timeline: waagerecht scrollende Move-Karten mit Strichfigur der Referenzpose
-  (`moveFigures` + `drawMoveFigure` auf Canvas, gezeichnet nur bei Änderung, kein rAF), Zeit in
+  (Figuren aus `createMoveFigureCache`, unveränderte Moves behalten ihre Figur, sodass nur geänderte
+  Karten neu zeichnen; `drawMoveFigure` auf Canvas, gezeichnet nur bei Änderung, kein rAF), Zeit in
   Musikzeit (`move.timeMs + offsetMs`, ohne Latenz und Sync-Offset), Gold-Markierung.
 - Der Offset verschiebt die Moves gegen die Musik; die Geräteverzögerung bleibt Sache des
   Sync-Tests (`syncOffsetMs`). Spotify ignoriert das Tempo; der Editor sperrt die Tempo-Knöpfe dort und

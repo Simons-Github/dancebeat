@@ -64,6 +64,9 @@ gespeichertem `playbackRate` (z. B. per Import) spielen jetzt in diesem Tempo, W
 YouTube-Liste (z. B. 0,8) laden nicht mehr. Gerätetest offen: wendet YouTube die Rate auf iOS an,
 meldet `getAvailablePlaybackRates` vor dem ersten Start die Liste (bei `[1]` scheitert jeder
 YouTube-Song mit Tempo)?
+✅ N14 (Etappe 11d): Der Editor baut Strichfiguren nicht mehr bei jeder Änderung neu.
+`createMoveFigureCache` (`pikto.ts`) behält die Figur eines Moves, solange `frames` und die Zeiten
+von Move und Vorgänger gleich bleiben; Gold umschalten zeichnet keine Karte neu.
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.
@@ -630,13 +633,12 @@ Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
 Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
-| ID  | Befund                                                                                                                 | Etappe |
-| --- | ---------------------------------------------------------------------------------------------------------------------- | ------ |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                 | 10     |
-| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                 | 3b     |
-| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                 | 3b     |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                               | 11     |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                           | 11     |
-| N6  | `@tanstack/react-query` bisher ungenutzt                                                                               | 11     |
-| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                        | 11     |
-| N14 | Editor: jede Änderung (Gold, Offset) baut alle Strichfiguren der Timeline neu; bei langen Video-Choreografien spürbar? | 11     |
+| ID  | Befund                                                                          | Etappe |
+| --- | ------------------------------------------------------------------------------- | ------ |
+| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf          | 10     |
+| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                          | 3b     |
+| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)          | 3b     |
+| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                        | 11     |
+| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                    | 11     |
+| N6  | `@tanstack/react-query` bisher ungenutzt                                        | 11     |
+| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal) | 11     |

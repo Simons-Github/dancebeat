@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { MAX_PULSE_HZ, beatPulse, beatsPerPulse } from "@/lib/game/beat";
 import {
   PIKTO,
+  createMoveFigureCache,
   coachPose,
   coachView,
   flashSchedule,
@@ -93,6 +94,60 @@ describe("Strichfiguren", () => {
     const [first, second] = moveFigures(c);
     expect(first?.arrows).toEqual([]);
     expect(second?.arrows.length).toBe(1);
+  });
+});
+
+describe("Figuren-Cache", () => {
+  const c = makeChoreo([
+    { la: 10, ra: 10 },
+    { la: 90, ra: 10 },
+    { la: 170, ra: 10 },
+    { la: 90, ra: 90 },
+  ]);
+
+  it("liefert dasselbe wie moveFigures", () => {
+    expect(createMoveFigureCache().figures(c)).toEqual(moveFigures(c));
+  });
+
+  it("Gold umschalten behält alle Figuren (===)", () => {
+    const cache = createMoveFigureCache();
+    const a = cache.figures(c);
+    const moves = c.moves.map((m, i) => (i === 1 ? { ...m, gold: true } : m));
+    const b = cache.figures({ moves, frames: c.frames });
+    b.forEach((f, i) => expect(f).toBe(a[i]));
+  });
+
+  it("verschobener Move ändert nur sich und seinen Nachfolger", () => {
+    const cache = createMoveFigureCache();
+    const a = cache.figures(c);
+    const moves = c.moves.map((m, i) => (i === 1 ? { ...m, timeMs: m.timeMs + 200 } : m));
+    const b = cache.figures({ moves, frames: c.frames });
+    expect(b).toEqual(moveFigures({ moves, frames: c.frames }));
+    expect(b[0]).toBe(a[0]);
+    expect(b[1]).not.toBe(a[1]);
+    expect(b[2]).not.toBe(a[2]);
+    expect(b[3]).toBe(a[3]);
+  });
+
+  it("eingefügter Move lässt unbeteiligte Figuren unberührt", () => {
+    const cache = createMoveFigureCache();
+    const a = cache.figures(c);
+    const moves = [...c.moves.slice(0, 2), move(1250), ...c.moves.slice(2)];
+    const b = cache.figures({ moves, frames: c.frames });
+    expect(b).toEqual(moveFigures({ moves, frames: c.frames }));
+    expect(b[0]).toBe(a[0]);
+    expect(b[1]).toBe(a[1]);
+    expect(b[4]).toBe(a[3]);
+  });
+
+  it("neues frames-Objekt verwirft den Cache", () => {
+    const cache = createMoveFigureCache();
+    const a = cache.figures(c);
+    const b = cache.figures({ moves: c.moves, frames: [...c.frames] });
+    b.forEach((f, i) => {
+      expect(f).toEqual(a[i]);
+      expect(f).not.toBe(a[i]);
+    });
   });
 });
 

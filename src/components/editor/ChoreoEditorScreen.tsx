@@ -37,7 +37,7 @@ import {
 } from "@/lib/choreoEditor";
 import { scrollIntoBoxDelta } from "@/lib/editorPreview";
 import { drawMoveFigure } from "@/lib/game/draw";
-import { moveFigures, type StickFigure } from "@/lib/game/pikto";
+import { createMoveFigureCache, type StickFigure } from "@/lib/game/pikto";
 import { StorageFullError } from "@/lib/library/storage";
 import { formatOffsetMs } from "@/lib/sync";
 import type { Song } from "@/lib/types";
@@ -129,7 +129,11 @@ export function ChoreoEditorScreen({
 
   const choreo = working.choreo;
   const { moves, frames, accentColor: accent, secondaryColor: secondary } = choreo;
-  const figures = useMemo(() => moveFigures({ moves, frames }), [moves, frames]);
+  const [figureCache] = useState(createMoveFigureCache);
+  const figures = useMemo(
+    () => figureCache.figures({ moves, frames }),
+    [figureCache, moves, frames],
+  );
   const sel = Math.min(selected, moves.length - 1);
   const move = moves[sel];
   const dirty = isEdited(song, working);

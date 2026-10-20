@@ -176,6 +176,41 @@ export function moveFigures(
 }
 
 /**
+ * Memoised `moveFigures`: a figure depends only on `frames`, its move's `timeMs` and the previous
+ * move's `timeMs`, so an unchanged move keeps its figure object (e.g. after toggling gold) and
+ * canvases keyed on it do not redraw. A new `frames` object drops everything; each call keeps only
+ * the entries it used, so the cache does not grow.
+ */
+export function createMoveFigureCache() {
+  let lastFrames: Choreography["frames"] | null = null;
+  let entries = new Map<string, StickFigure | null>();
+  return {
+    figures(choreo: Pick<Choreography, "moves" | "frames">): (StickFigure | null)[] {
+      if (choreo.frames !== lastFrames) {
+        lastFrames = choreo.frames;
+        entries = new Map();
+      }
+      const next = new Map<string, StickFigure | null>();
+      const pose = (timeMs: number) => frameAt(choreo.frames, timeMs)?.landmarks ?? null;
+      const result = choreo.moves.map((m, i) => {
+        const prevTime = choreo.moves[i - 1]?.timeMs ?? null;
+        const key = `${prevTime ?? "-"}|${m.timeMs}`;
+        if (!next.has(key)) {
+          if (entries.has(key)) next.set(key, entries.get(key) ?? null);
+          else {
+            const lm = pose(m.timeMs);
+            next.set(key, lm ? stickFigure(lm, prevTime !== null ? pose(prevTime) : null) : null);
+          }
+        }
+        return next.get(key) ?? null;
+      });
+      entries = next;
+      return result;
+    },
+  };
+}
+
+/**
  * Fixed square view for the coach, covering every pose of the choreography (plus a margin), so the
  * coach does not jump or zoom between frames. Returned in landmark space.
  */
