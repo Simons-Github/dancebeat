@@ -44,6 +44,8 @@ const audio = vi.hoisted(() => ({
   playFails: false,
   /** Set: play() rejects with this real error (not a refusal). */
   playError: null as string | null,
+  /** Set: load() rejects with this message. */
+  loadError: null as string | null,
   externalPause: null as null | (() => void),
   playGate: null as Promise<void> | null,
   rates: [] as number[],
@@ -61,7 +63,10 @@ vi.mock("@/lib/audio/sources", async () => {
       return {
         type: song.source.type,
         lowPrecision: false,
-        load: async () => void audio.calls.push("load"),
+        load: async () => {
+          audio.calls.push("load");
+          if (audio.loadError) throw new Error(audio.loadError);
+        },
         play: async () => {
           audio.calls.push("play");
           if (audio.playFails) throw new PlayRefusedError();
@@ -154,6 +159,7 @@ beforeEach(() => {
     at: 0,
     playFails: false,
     playError: null,
+    loadError: null,
     externalPause: null,
     playGate: null,
     rates: [],
@@ -727,14 +733,54 @@ describe("Vorschau im Editor", () => {
     expect(within(preview()).getByText(/von music\.example\.org geladen/)).toBeInTheDocument();
   });
 
-  it("Spotify: gesperrt mit Hinweis, keine Quelle", async () => {
-    setSong(3, { source: { type: "spotify", trackUri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" } });
+  const SPOTIFY = { type: "spotify", trackUri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" } as const;
+  const settingsLink = () =>
+    within(preview()).queryByRole("link", { name: /Zu den Einstellungen/ });
+
+  it("Spotify: Quelle wird geladen, Abspielen startet ab startOffsetMs", async () => {
+    setSong(3, { source: SPOTIFY, startOffsetMs: 300 });
+    await loaded();
+    expect(audio.rates).toEqual([1]);
+    expect(audio.calls).toEqual(["load"]);
+    expect(within(preview()).getByText(/sdk\.scdn\.co/)).toBeInTheDocument();
+    expect(btn("Ab Move 1 abspielen")).toBeEnabled();
+    expect(settingsLink()).not.toBeInTheDocument();
+    fireEvent.click(btn("Abspielen"));
+    // seek and play() run synchronously in the tap (user gesture).
+    expect(audio.calls.slice(-2)).toEqual(["seek:300", "play"]);
+    await flush();
+    expect(audio.playing).toBe(true);
+    expect(btn("Stopp")).toBeInTheDocument();
+  });
+
+  it("Spotify: Ladefehler zeigt die Meldung und einen Link zu den Einstellungen", async () => {
+    setSong(3, { source: SPOTIFY });
+    audio.loadError = "Spotify ist nicht verbunden.";
     await renderAt(`/edit/${SONG_ID}`);
-    expect(
-      within(preview()).getByText("Abspielen mit Spotify folgt mit Etappe 10."),
-    ).toBeInTheDocument();
+    expect(await within(preview()).findByRole("alert")).toHaveTextContent(
+      "Die Musik konnte nicht geladen werden. Spotify ist nicht verbunden.",
+    );
     expect(btn("Abspielen")).toBeDisabled();
-    expect(btn("Ab Move 1 abspielen")).toBeDisabled();
-    expect(audio.rates).toEqual([]);
+    expect(settingsLink()).toHaveAttribute("href", "/settings");
+  });
+
+  it("Spotify: echter Startfehler zeigt die Meldung und einen Link zu den Einstellungen", async () => {
+    setSong(3, { source: SPOTIFY });
+    audio.playError = "Die Spotify-Sitzung ist abgelaufen.";
+    await loaded();
+    fireEvent.click(btn("Abspielen"));
+    expect(await within(preview()).findByRole("alert")).toHaveTextContent(
+      "Die Spotify-Sitzung ist abgelaufen.",
+    );
+    expect(settingsLink()).toHaveAttribute("href", "/settings");
+  });
+
+  it("Ladefehler ohne Spotify: kein Link zu den Einstellungen", async () => {
+    audio.loadError = "Die Audiodatei konnte nicht dekodiert werden.";
+    await renderAt(`/edit/${SONG_ID}`);
+    expect(await within(preview()).findByRole("alert")).toHaveTextContent(
+      /Die Musik konnte nicht geladen werden/,
+    );
+    expect(settingsLink()).not.toBeInTheDocument();
   });
 });

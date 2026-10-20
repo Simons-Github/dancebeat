@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "@tanstack/react-router";
-import { AlertTriangle, ArrowLeft, Check, Play, RotateCcw, Square } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Check, Play, RotateCcw, Settings, Square } from "lucide-react";
 
 import { PrivacyNote } from "@/components/setup/PrivacyNote";
 import { Button } from "@/components/ui/button";
@@ -97,9 +97,8 @@ export function SyncTestScreen({
   const isYouTube = song.source.type === "youtube";
   const lowPrecision = isLowPrecision(song);
 
-  // Spotify playback arrives with stage 10; no source is created for it here.
   const isSpotify = song.source.type === "spotify";
-  const audio = useAudioClock(isSpotify ? null : song, {
+  const audio = useAudioClock(song, {
     latencyMs: settings.latencyMs,
     volume: settings.volume,
     element: claimSharedElement,
@@ -113,7 +112,7 @@ export function SyncTestScreen({
       setStartError(null);
       setPhase("playing");
     },
-    // Paused in the YouTube player itself: stop like the stop button.
+    // Paused in the YouTube player (or another Spotify app): stop like the stop button.
     onExternalPause: () => {
       playingRef.current = false;
       setPhase("idle");
@@ -333,11 +332,7 @@ export function SyncTestScreen({
               />
             )}
             <PrivacyNote source={song.source} camera={false} />
-            {isSpotify ? (
-              <p role="alert" className={ERROR}>
-                Sync-Test für Spotify folgt mit Etappe 10.
-              </p>
-            ) : audioError ? (
+            {audioError ? (
               <p role="alert" className={ERROR}>
                 Die Musik konnte nicht geladen werden. {audio.error}
               </p>
@@ -365,6 +360,15 @@ export function SyncTestScreen({
               <p role="alert" className={ERROR}>
                 {startError}
               </p>
+            )}
+            {/* Most Spotify failures (not connected, session expired) are fixed there. */}
+            {isSpotify && (audioError || startError) && (
+              <Button asChild size="lg" variant="secondary" className={cn(BTN, "self-start")}>
+                <Link to="/settings">
+                  <Settings aria-hidden />
+                  Zu den Einstellungen
+                </Link>
+              </Button>
             )}
             {phase === "ended" && <p className="text-base">Der Song ist zu Ende.</p>}
           </Card>

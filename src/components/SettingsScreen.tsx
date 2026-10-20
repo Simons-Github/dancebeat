@@ -129,8 +129,7 @@ function SpotifySettings({
         Für Spotify-Songs brauchst du Spotify Premium und eine eigene App im
         Spotify-Developer-Dashboard. Beim Verbinden und Abspielen spricht dein Gerät direkt mit
         Spotify (accounts.spotify.com, api.spotify.com, sdk.scdn.co); Spotify sieht dabei deine
-        IP-Adresse. Die Anmeldung gilt nur, bis du den Tab schließt. Sync-Test und Editor-Vorschau
-        mit Spotify folgen in einer späteren Etappe.
+        IP-Adresse. Die Anmeldung gilt nur, bis du den Tab schließt.
       </p>
       <div className="flex flex-col gap-2">
         <Label htmlFor="spotify-client-id" className="text-base">

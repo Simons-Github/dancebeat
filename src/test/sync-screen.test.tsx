@@ -32,25 +32,37 @@ const audio = vi.hoisted(() => ({
   base: 0,
   at: 0,
   loadFails: false,
+  /** Set: load() rejects with this message (overrides the default load error text). */
+  loadError: null as string | null,
+  /** Set: load() waits for this promise (to observe the loading state). */
+  loadGate: null as Promise<void> | null,
+  /** Set: play() rejects with this real error (not a refusal). */
+  playError: null as string | null,
   created: 0,
+  /** Source type of every created source. */
+  types: [] as string[],
   calls: [] as string[],
   externalPause: null as null | (() => void),
 }));
 vi.mock("@/lib/audio/sources", () => ({
   isLowPrecision: (song: Song) => song.source.type === "youtube" || song.source.type === "spotify",
-  createSource: () => {
+  createSource: (song: Song) => {
     audio.created++;
+    audio.types.push(song.source.type);
     const now = () => performance.now();
     const time = () => (audio.playing ? audio.base + (now() - audio.at) : audio.base);
     return {
-      type: "local",
+      type: song.source.type,
       lowPrecision: false,
       load: async () => {
         audio.calls.push("load");
+        if (audio.loadGate) await audio.loadGate;
+        if (audio.loadError) throw new Error(audio.loadError);
         if (audio.loadFails) throw new Error("Die Audiodatei konnte nicht dekodiert werden.");
       },
       play: async () => {
         audio.calls.push("play");
+        if (audio.playError) throw new Error(audio.playError);
         audio.base = time();
         audio.at = now();
         audio.playing = true;
@@ -107,7 +119,11 @@ beforeEach(() => {
     base: 0,
     at: 0,
     loadFails: false,
+    loadError: null,
+    loadGate: null,
+    playError: null,
     created: 0,
+    types: [],
     calls: [],
     externalPause: null,
   });
@@ -321,16 +337,68 @@ describe("Sync-Test", () => {
     expect(screen.queryByRole("note")).not.toBeInTheDocument();
   });
 
-  it("Spotify: kein Audio, Hinweis auf Etappe 10", async () => {
-    repo.songs = repo.songs.map((s) => ({
-      ...s,
-      source: { type: "spotify", trackUri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" },
-    }));
+  const SPOTIFY = { type: "spotify", trackUri: "spotify:track:4uLU6hMCjMI75M1A2tKUQC" } as const;
+  const settingsLink = () => screen.queryByRole("link", { name: /Zu den Einstellungen/ });
+
+  it("Spotify: Quelle wird geladen, Start spielt ab startOffsetMs, Hinweise sichtbar", async () => {
+    repo.songs = repo.songs.map((s) => ({ ...s, source: SPOTIFY }));
+    let release: () => void = () => {};
+    audio.loadGate = new Promise<void>((r) => (release = r));
+    await renderAt(`/sync/${SONG_ID}`);
+    expect(audio.types).toEqual(["spotify"]);
+    expect(audio.calls).toEqual(["load"]);
+    expect(screen.getByRole("button", { name: "Musik lädt …" })).toBeDisabled();
+
+    await act(async () => release());
+    await advance(0);
+    const start = screen.getByRole("button", { name: "Start" });
+    expect(start).toBeEnabled();
+    expect(screen.getByRole("note")).toHaveTextContent(/Bei Spotify ist die Zeitmessung ungenauer/);
+    expect(screen.getByText(/sdk\.scdn\.co/)).toBeInTheDocument();
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(settingsLink()).not.toBeInTheDocument();
+
+    fireEvent.click(start);
+    // seek and play() run synchronously inside the tap (user gesture), before any await.
+    expect(audio.calls.slice(-2)).toEqual(["seek:1000", "play"]);
+    await advance(0);
+    expect(audio.playing).toBe(true);
+    expect(screen.getByRole("button", { name: "Stopp" })).toBeInTheDocument();
+  });
+
+  it("Spotify: Ladefehler zeigt die Meldung und einen Link zu den Einstellungen", async () => {
+    repo.songs = repo.songs.map((s) => ({ ...s, source: SPOTIFY }));
+    audio.loadError = "Spotify ist nicht verbunden.";
     await renderAt(`/sync/${SONG_ID}`);
     expect(screen.getByRole("alert")).toHaveTextContent(
-      "Sync-Test für Spotify folgt mit Etappe 10.",
+      "Die Musik konnte nicht geladen werden. Spotify ist nicht verbunden.",
     );
-    expect(audio.created).toBe(0);
     expect(screen.queryByRole("button", { name: "Start" })).not.toBeInTheDocument();
+    const link = settingsLink();
+    expect(link).toHaveAttribute("href", "/settings");
+    fireEvent.click(link as HTMLElement);
+    await advance(10);
+    expect(router.state.location.pathname).toBe("/settings");
+  });
+
+  it("Spotify: echter Startfehler zeigt die Meldung und einen Link zu den Einstellungen", async () => {
+    repo.songs = repo.songs.map((s) => ({ ...s, source: SPOTIFY }));
+    audio.playError = "Die Spotify-Sitzung ist abgelaufen.";
+    await renderAt(`/sync/${SONG_ID}`);
+    expect(settingsLink()).not.toBeInTheDocument();
+    fireEvent.click(screen.getByRole("button", { name: "Start" }));
+    await advance(0);
+    const alert = screen.getByRole("alert");
+    expect(alert).toHaveTextContent("Die Spotify-Sitzung ist abgelaufen.");
+    expect(alert).not.toHaveTextContent("Tippe");
+    expect(settingsLink()).toHaveAttribute("href", "/settings");
+    expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
+  });
+
+  it("Ladefehler ohne Spotify: kein Link zu den Einstellungen", async () => {
+    audio.loadFails = true;
+    await renderAt(`/sync/${SONG_ID}`);
+    expect(screen.getByRole("alert")).toHaveTextContent(/Die Musik konnte nicht geladen werden/);
+    expect(settingsLink()).not.toBeInTheDocument();
   });
 });

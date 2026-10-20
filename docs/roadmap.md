@@ -18,7 +18,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
 | 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d, 8e, 8f ✅)  | Opus                                                                  |
 | 9. Typen und Lint                            | ✅                         | –                                                                     |
-| 10. Spotify                                  | ⏳ (10a, 10b ✅)           | Opus                                                                  |
+| 10. Spotify                                  | ✅ (Gerätetest offen)      | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
@@ -642,7 +642,7 @@ Ursprüngliche Schritte:
 
 Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 
-### 10. Spotify (zuletzt) ⏳ (10a, 10b-1, 10b-2 umgesetzt)
+### 10. Spotify (zuletzt) ✅ (Gerätetest mit echtem Konto offen)
 
 - Vorher am Handy prüfen, ob das Web Playback SDK mobil überhaupt läuft (offen, Gerätetest; vor
   10b klären, sonst Spotify auf Desktop-Browser beschränken).
@@ -696,7 +696,17 @@ Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
   - [ ] Konsole: keine CSP-Verstöße durch das SDK (die Policy regelt nur `connect-src`)
   - [ ] Ohne Verbindung bzw. mit abgelaufener Anmeldung: Overlay mit „Zu den Einstellungen“
 
-**10c Sync-Test und Editor-Vorschau mit Spotify ⏳**
+**10c Sync-Test und Editor-Vorschau mit Spotify ✅** (Gerätetest offen)
+
+- Sync-Test und Karte „Vorschau“ im Editor erzeugen auch für Spotify eine Quelle über
+  `useAudioClock`; Start (`seek` und `play()`) läuft im Tipp. Hinweis „Zeitmessung ungenauer“
+  im Sync-Test wie bei YouTube; Tempo bleibt für Spotify gesperrt (1×).
+- Lade- oder Startfehler bei Spotify: Meldung plus „Zu den Einstellungen“.
+- Einstellungen: Hinweis „folgt in einer späteren Etappe“ entfernt.
+- **Gerätetest 10c (offen):**
+  - [ ] Sync-Test mit Spotify: Taps ergeben einen plausiblen Offset (Streuung notieren)
+  - [ ] Editor: „Ab Move N abspielen“ springt an die richtige Stelle, Klick passt zur Musik
+  - [ ] Stopp und erneuter Start setzen fort bzw. springen korrekt
 
 ### 11. Nice-to-have ⏳
 

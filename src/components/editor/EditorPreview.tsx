@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
-import { Play, SkipForward, Square } from "lucide-react";
+import { Link } from "@tanstack/react-router";
+import { Play, Settings, SkipForward, Square } from "lucide-react";
 
 import { PrivacyNote } from "@/components/setup/PrivacyNote";
 import { Button } from "@/components/ui/button";
@@ -19,6 +20,7 @@ import {
 import { useSettings } from "@/lib/settings";
 import { resumeSfx, setSfxVolume, sfx } from "@/lib/sfx";
 import type { Song } from "@/lib/types";
+import { cn } from "@/lib/utils";
 import { BTN, Card, ERROR, HINT } from "./parts";
 
 type Phase = "idle" | "starting" | "playing";
@@ -70,10 +72,9 @@ export function EditorPreview({
    */
   const seekRef = useRef<number | null>(null);
   const isYouTube = song.source.type === "youtube";
-  // Spotify playback arrives with stage 10; no source is created for it here.
   const isSpotify = song.source.type === "spotify";
 
-  const audio = useAudioClock(isSpotify ? null : song, {
+  const audio = useAudioClock(song, {
     latencyMs: settings.latencyMs,
     volume: settings.volume,
     element: claimSharedElement,
@@ -89,14 +90,14 @@ export function EditorPreview({
       setEnded(false);
       setPhase("playing");
     },
-    // Paused in the YouTube player itself: stop like the stop button.
+    // Paused in the YouTube player (or another Spotify app): stop like the stop button.
     onExternalPause: () => {
       runRef.current++;
       setPhase("idle");
     },
   });
   const { source, timeMs } = audio;
-  const ready = audio.state === "ready" && !isSpotify;
+  const ready = audio.state === "ready";
   const playing = phase === "playing" && audio.state === "ready";
 
   /** Latest edit state for the frame loop. */
@@ -229,14 +230,10 @@ export function EditorPreview({
         />
       )}
       <PrivacyNote source={song.source} camera={false} />
-      {isSpotify ? (
-        <p className="text-base font-medium">Abspielen mit Spotify folgt mit Etappe 10.</p>
-      ) : (
-        audio.state === "error" && (
-          <p role="alert" className={ERROR}>
-            Die Musik konnte nicht geladen werden. {audio.error}
-          </p>
-        )
+      {audio.state === "error" && (
+        <p role="alert" className={ERROR}>
+          Die Musik konnte nicht geladen werden. {audio.error}
+        </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
         {phase !== "idle" ? (
@@ -269,6 +266,15 @@ export function EditorPreview({
         <p role="alert" className={ERROR}>
           {startError}
         </p>
+      )}
+      {/* Most Spotify failures (not connected, session expired) are fixed there. */}
+      {isSpotify && (audio.state === "error" || startError) && (
+        <Button asChild size="lg" variant="secondary" className={cn(BTN, "self-start")}>
+          <Link to="/settings">
+            <Settings aria-hidden />
+            Zu den Einstellungen
+          </Link>
+        </Button>
       )}
       {ended && <p className="text-base">Der Song ist zu Ende.</p>}
       <div className="flex items-center justify-between gap-4">

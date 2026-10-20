@@ -421,7 +421,9 @@ der Hinweis „Premium nötig“, die angesprochenen Hosts und der Status.
   Bitte in den Einstellungen neu verbinden.“ geworfen. `spotifyStatus()`: `disconnected`,
   `connected`, `expired`.
 - `SpotifySource` holt den Token nur noch über `getSpotifyToken()` (auch im `getOAuthToken`
-  des SDK). Abspielen im Spiel seit 10b-2; Sync-Test und Editor folgen mit 10c.
+  des SDK). Abspielen im Spiel seit 10b-2, im Sync-Test und in der Editor-Vorschau seit 10c.
+  Schlägt Laden oder Start eines Spotify-Songs fehl, zeigen alle drei zusätzlich „Zu den
+  Einstellungen“ (dort verbinden bzw. neu verbinden).
 
 Alle Abrufe sind im Aufstellhilfe-Screen als Datenschutzhinweis benannt
 (`src/components/setup/PrivacyNote.tsx`; W12): immer „Kamerabilder verlassen dein Gerät nie“
@@ -430,9 +432,8 @@ und dass die Erkennung vollständig auf dem Gerät läuft, bei YouTube-Songs zus
 Adresse, bei Spotify-Songs Spotify (Skript von sdk.scdn.co, accounts.spotify.com,
 api.spotify.com); jeweils mit dem Hinweis, dass die Gegenstelle die IP-Adresse sieht. Der Sync-Test
 (`/sync/$songId`) startet keine Kamera; er nennt per `PrivacyNote camera={false}` nur den Abruf
-der Songquelle (YouTube bzw. Host der Audio-URL, bei lokalen Dateien nichts). Spotify-Songs
-lädt er nicht (folgt mit Etappe 10). Ebenso die Vorschau im Choreografie-Editor (`/edit/$songId`,
-Etappe 8d-2b).
+der Songquelle (YouTube, Host der Audio-URL bzw. Spotify, bei lokalen Dateien nichts). Ebenso
+die Vorschau im Choreografie-Editor (`/edit/$songId`, Etappe 8d-2b).
 
 **Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
 selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gibt keine Anfrage an
@@ -654,7 +655,8 @@ Browser (`beforeunload`).
   „Klick bei jedem Move“ (an, nicht gespeichert). Quelle über `useAudioClock` mit dem geteilten
   Audio-Element; `seek` und `play()` laufen synchron im Tipp (iOS, YouTube). YouTube zeigt den
   Player sichtbar (mindestens 200 × 200 px) und meldet einen blockierten Start („Tippe direkt auf
-  das Video“, `onExternalStart`); Spotify ist gesperrt (folgt mit Etappe 10, keine Quelle).
+  das Video“, `onExternalStart`). Spotify spielt seit Etappe 10c wie im Spiel; `play()` läuft
+  im Tipp, damit `activateElement()` die Geste bekommt.
   - Eine rAF-Schleife liest Moves und Offsets der Arbeitskopie über Refs; Änderungen (Offset,
     Verschieben, Einfügen, Löschen, Gold) wirken also sofort ohne Neustart. Pure Logik in
     `src/lib/editorPreview.ts`: `previewStartAudioMs`, `currentMoveIndex`, `dueMoves`,
