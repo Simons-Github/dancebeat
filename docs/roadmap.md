@@ -11,7 +11,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | -------------------------------------------- | -------------------------------- | --------------------------------------------------------------------- |
 | 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                               | Sonnet                                                                |
 | 2. Aufstellhilfe                             | ✅                               | Sonnet                                                                |
-| 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5)       | Opus                                                                  |
+| 3. Gameplay                                  | ✅ (Gerätetest offen)            | Opus                                                                  |
 | 4. Ergebnis-Screen und Highscores            | ✅                               | Sonnet                                                                |
 | 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)            | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
 | 6. Bewegungsmodus                            | ✅ (Gerätetest offen)            | Sonnet                                                                |
@@ -149,7 +149,7 @@ Screen. Handy-Test bestanden: MediaPipe läuft flüssig, **MoveNet entfällt** (
 `PoseEstimator`-Implementierung, keine TF.js-Abhängigkeit). Messwerte stehen in
 [architecture.md](architecture.md#messwerte) (vom Nutzer nachzutragen).
 
-### 3. Gameplay 🔜 (3a umgesetzt, 3b umgesetzt bis auf Schritt 5)
+### 3. Gameplay ✅ (Gerätetest offen)
 
 **3a Kern (Demo-Songs, lokale Audioquelle) – umgesetzt, Gerätetest offen.**
 
