@@ -111,9 +111,13 @@ Spielscreen zeigt dann, wenn das Spiel schon gestartet war, das Overlay „Die M
 abgebrochen“ (sonst „Die Musik konnte nicht geladen werden“) mit Rückweg zur Bibliothek.
 
 `useAudioClock` ist die einzige Spielzeit:
-`timeMs = getTimeMs() − globale Latenz − song.syncOffsetMs − choreo.offsetMs` (reine Funktion
+`timeMs = getTimeMs() − globale Latenz · Rate − song.syncOffsetMs − choreo.offsetMs` (reine Funktion
 `gameTimeMs` in `src/lib/audio/clock.ts`). Positive Offsets verschieben die Choreografie also nach
-hinten (sie kommt später). `timeMs` behält seine Identität (Offsets über Refs), damit Schleifen
+hinten (sie kommt später). Die Rate ist `effectivePlaybackRate(song)` (`src/lib/audio/rate.ts`):
+`song.playbackRate ?? 1` nur für Datei und URL, YouTube/Spotify immer 1. Die Latenz ist Wandzeit und
+wird damit in Audiozeit umgerechnet. Bei Songs mit Rate ≠ 1, deren `syncOffsetMs` vorher gemessen
+wurde, verschiebt sich die Choreografie um `Latenz · (r − 1)`: klein, bei Bedarf den Sync-Test
+wiederholen. `timeMs` behält seine Identität (Offsets über Refs), damit Schleifen
 nicht neu starten. Der Hook verwirft späte Ladeergebnisse eines vorherigen Songs, setzt `ended`
 und `error` beim Songwechsel zurück und zerstört die Quelle beim Verlassen.
 
@@ -540,7 +544,7 @@ Browser (`beforeunload`).
   - Zwei Zeitachsen: Die Markierung folgt der Spielzeit (`timeMs()` aus `useAudioClock`, mit
     Latenz, `syncOffsetMs` und `choreo.offsetMs`), wie die Piktogramme im Spiel. Der Klick ist
     selbst Audio und hat dieselbe Ausgabeverzögerung wie die Musik; er folgt deshalb der
-    Audioposition minus `choreo.offsetMs` (`tickTimeMs` = Spielzeit + Latenz + Sync-Offset) und
+    Audioposition minus `choreo.offsetMs` (`tickTimeMs` = Spielzeit + Latenz · Rate + Sync-Offset) und
     sitzt direkt auf der Musik.
   - Klick: `dueMoves` liefert die Moves mit `prev < timeMs ≤ jetzt`. Nach Start oder Seek beginnt
     das Intervall knapp vor dem Ziel (`SEEK_TICK_EPSILON_MS`), ein Move genau am Startpunkt klickt

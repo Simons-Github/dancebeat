@@ -6,20 +6,25 @@ export interface ClockOffsets {
   syncOffsetMs: number;
   /** Choreography offset (`choreo.offsetMs`). */
   choreoOffsetMs: number;
+  /**
+   * Effective playback rate (`effectivePlaybackRate`), default 1. The latency is wall time; at
+   * rate r it corresponds to `latency · r` ms of audio.
+   */
+  rate?: number;
 }
 
 /**
  * Game time (choreography time) for an audio position. The only conversion between the two:
- * `audio − latency − song sync offset − choreo offset`. `startOffsetMs` is not subtracted: it is
- * a seek of the audio, so it is already contained in the audio position.
+ * `audio − latency·rate − song sync offset − choreo offset`. `startOffsetMs` is not subtracted: it
+ * is a seek of the audio, so it is already contained in the audio position.
  */
 export function gameTimeMs(audioMs: number, o: ClockOffsets): number {
-  return audioMs - o.latencyMs - o.syncOffsetMs - o.choreoOffsetMs;
+  return audioMs - o.latencyMs * (o.rate ?? 1) - o.syncOffsetMs - o.choreoOffsetMs;
 }
 
 /** Inverse of `gameTimeMs`: the audio position at which the choreography reaches `gameMs`. */
 export function audioTimeMs(gameMs: number, o: ClockOffsets): number {
-  return gameMs + o.latencyMs + o.syncOffsetMs + o.choreoOffsetMs;
+  return gameMs + o.latencyMs * (o.rate ?? 1) + o.syncOffsetMs + o.choreoOffsetMs;
 }
 
 /**

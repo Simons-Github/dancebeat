@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { createSource, type AudioSource } from "@/lib/audio/sources";
+import { effectivePlaybackRate } from "@/lib/audio/rate";
 import { gameTimeMs, type ClockOffsets } from "@/lib/audio/clock";
 import type { Song } from "@/lib/types";
 
@@ -31,7 +32,7 @@ export interface AudioClockOptions {
 
 /**
  * Owns the song's AudioSource and is the only game clock:
- * `timeMs() = getTimeMs() − latency − song.syncOffsetMs − choreo.offsetMs` (see `gameTimeMs`).
+ * `timeMs() = getTimeMs() − latency·rate − song.syncOffsetMs − choreo.offsetMs` (see `gameTimeMs`).
  * `timeMs` keeps its identity; offsets are read from refs, so loops never need to restart.
  */
 export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
@@ -41,11 +42,17 @@ export function useAudioClock(song: Song | null, opts: AudioClockOptions) {
   const [ended, setEnded] = useState(false);
   const latest = useRef(opts);
   latest.current = opts;
-  const offsets = useRef<ClockOffsets>({ latencyMs: 0, syncOffsetMs: 0, choreoOffsetMs: 0 });
+  const offsets = useRef<ClockOffsets>({
+    latencyMs: 0,
+    syncOffsetMs: 0,
+    choreoOffsetMs: 0,
+    rate: 1,
+  });
   offsets.current = {
     latencyMs: opts.latencyMs,
     syncOffsetMs: song?.syncOffsetMs ?? 0,
     choreoOffsetMs: song?.choreo.offsetMs ?? 0,
+    rate: song ? effectivePlaybackRate(song) : 1,
   };
 
   useEffect(() => {

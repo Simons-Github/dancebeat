@@ -27,12 +27,14 @@ React rendert nur, wenn ein Move bewertet wurde (etwa einmal pro Move), nie pro 
 ## Zeitbasis
 
 - Spielzeit kommt nur aus `useAudioClock().timeMs()`:
-  `Audioposition − globale Latenz − song.syncOffsetMs − choreo.offsetMs` (`gameTimeMs` in
-  `src/lib/audio/clock.ts`). `startOffsetMs` ist ein Sprung der Audioposition und steckt darin.
+  `Audioposition − globale Latenz · Rate − song.syncOffsetMs − choreo.offsetMs` (`gameTimeMs` in
+  `src/lib/audio/clock.ts`). `startOffsetMs` ist ein Sprung der Audioposition und steckt darin. „Rate“ ist die effektive
+  Wiedergaberate (`effectivePlaybackRate`, YouTube/Spotify immer 1): die Latenz ist Wandzeit und
+  entspricht bei Rate r `Latenz · r` ms Audio.
 - **Verzögerung der Pose-Erkennung (neu):** `usePoseTracking` meldet je Bild das Alter
   `frameAgeMs`: vom Aufnahmezeitpunkt (`captureTime` aus den Video-Frame-Metadaten, wenn der
   Browser einen plausiblen Wert unter 300 ms liefert) oder sonst vom Beginn der Erkennung bis zum
-  Ergebnis. Das Spiel legt die Winkel unter `timeMs() − frameAgeMs × playbackRate` ab.
+  Ergebnis. Das Spiel legt die Winkel unter `timeMs() − frameAgeMs × Rate` (effektive Rate) ab.
   **Warum so:** Die Inferenz dauert auf dem Handy 20–40 ms und schwankt; ohne Abzug würde jede
   Pose zu spät einsortiert und die Schwankung käme als Zittern in die Wertung. Die Basis bleibt die
   Audiouhr; abgezogen wird nur eine Dauer, die auf derselben monotonen Uhr gemessen ist wie die
@@ -46,13 +48,13 @@ React rendert nur, wenn ein Move bewertet wurde (etwa einmal pro Move), nie pro 
 Route `/sync/$songId` (`SyncTestScreen`, erreichbar über „Sync-Test“ im Dialog „Song
 bearbeiten“). Der Song läuft ab `startOffsetMs`; der Spieler tippt im Takt auf die Fläche oder
 drückt die Leertaste. Jeder Tipp speichert `AudioSource.getTimeMs()`, abzüglich des Alters des Eingabe-Events
-(`performance.now() − event.timeStamp`, mal `playbackRate`; Werte außerhalb 0–200 ms gelten als 0,
+(`performance.now() − event.timeStamp`, mal effektive Rate, YouTube/Spotify: 1; Werte außerhalb 0–200 ms gelten als 0,
 `tapAudioMs`, wie `frameGameTimeMs`); nur Taps bei laufender Musik
 zählen. Die Berechnung steckt in `computeSyncOffset` (`src/lib/sync.ts`):
 
 1. Die ersten 2 Taps fallen weg (`SYNC_DISCARD_TAPS`, Einschwingen). Danach braucht es mindestens
    8 Taps (`SYNC_MIN_TAPS`), sonst gibt es keinen Vorschlag.
-2. Je Tap: Rest `r = tap − Latenz − choreo.offsetMs` modulo Beatlänge `60000 / bpm`, gewickelt
+2. Je Tap: Rest `r = tap − Latenz · Rate − choreo.offsetMs` modulo Beatlänge `60000 / bpm`, gewickelt
    nach (−Beat/2, +Beat/2].
 3. Die Reste sind zyklisch (ein Tipp knapp vor und einer knapp nach dem Beat liegen nah
    beieinander). Deshalb: zyklischer Mittelwert als Zentrum, Reste um das Zentrum neu wickeln,
@@ -61,7 +63,7 @@ zählen. Die Berechnung steckt in `computeSyncOffset` (`src/lib/sync.ts`):
 5. Vorschlag = Zentrum + Median, gewickelt und auf ganze ms gerundet. Streuung = Median der absoluten Abweichung (MAD) der verbleibenden Taps. Über 45 ms (`SYNC_MAX_SPREAD_MS`) zeigt der Screen
    „Ungleichmäßig, nochmal versuchen.“
 
-**Vorzeichen:** `Spielzeit = Audio − Latenz − syncOffsetMs − choreo.offsetMs`. Mit
+**Vorzeichen:** `Spielzeit = Audio − Latenz · Rate − syncOffsetMs − choreo.offsetMs`. Mit
 `syncOffsetMs = Vorschlag` liegt die Spielzeit im Moment, in dem der Spieler den Beat hört und
 tippt, auf dem Raster `k · Beatlänge`. Positiv heißt: der Spieler hört den Beat später, als die
 Audioposition sagt; die Choreografie rückt nach hinten. Der Wert ist nur bis auf einen ganzen
@@ -221,5 +223,3 @@ Ausfallquote 1 → alles X und der Hinweis „Wir sehen dich nicht“.
 
 - Die Kamera-Pipeline vor der Erkennung (Aufnahme bis Bildübergabe) ist nur ausgeglichen, wenn der
   Browser `captureTime` liefert; sonst steckt sie im globalen Latenz-Offset (Etappe 5).
-- Bei `playbackRate ≠ 1` wird der globale Latenz-Offset nicht mit der Rate skaliert (N7); das
-  Bildalter schon.

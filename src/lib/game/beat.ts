@@ -11,11 +11,12 @@ export function beatsPerPulse(bpm: number) {
 
 /**
  * Pulse intensity 0..1 at game time `t` (ms): 1 on the beat, linear fade over PULSE_DECAY_MS.
- * Before the first beat (negative time) there is no pulse.
+ * Before the first beat (negative time) there is no pulse. The song plays at `rate`, so the
+ * rate limit applies to `bpm · rate` (real time), not to the stored tempo.
  */
-export function beatPulse(t: number, bpm: number): number {
+export function beatPulse(t: number, bpm: number, rate = 1): number {
   if (!(bpm > 0) || !Number.isFinite(t) || t < 0) return 0;
-  const period = (60000 / bpm) * beatsPerPulse(bpm);
+  const period = (60000 / bpm) * beatsPerPulse(bpm * rate);
   const since = t % period;
   return since < PULSE_DECAY_MS ? 1 - since / PULSE_DECAY_MS : 0;
 }

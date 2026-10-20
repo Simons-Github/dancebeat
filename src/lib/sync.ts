@@ -5,8 +5,8 @@ import { MAX_PULSE_HZ } from "@/lib/game/beat";
  * Per-song sync test: the player taps along to the beat, the taps (audio positions from
  * `AudioSource.getTimeMs()`) give the song's `syncOffsetMs`.
  *
- * Sign convention: `gameTimeMs = audio − latency − syncOffsetMs − choreoOffsetMs`. The proposed
- * offset is the typical residual of `tap − latency − choreoOffset` against the beat grid
+ * Sign convention: `gameTimeMs = audio − latency·rate − syncOffsetMs − choreoOffsetMs`. The
+ * proposed offset is the typical residual of `tap − latency·rate − choreoOffset` against the beat grid
  * `k · 60000 / bpm`. With `syncOffsetMs = offset`, the game time at the moment the player hears
  * (and taps) a beat lands on the grid. Positive = the player hears the beat later than the
  * audio position says, so the choreography is shifted later.
@@ -74,6 +74,9 @@ export function tapAudioMs(nowAudioMs: number, eventAgeMs: number, rate = 1): nu
  * Proposed sync offset from tap times (audio positions). Null when the tempo is invalid or fewer
  * than SYNC_MIN_TAPS usable taps remain after dropping the first SYNC_DISCARD_TAPS.
  *
+ * `rate` is the effective playback rate: the latency is wall time, so `latency · rate` is
+ * subtracted from the audio position (like `gameTimeMs`).
+ *
  * Residuals are circular (a tap just before the beat and one just after are 2 ms apart, not one
  * period), so they are centered around their circular mean first, then wrapped again, and only
  * then reduced with the median.
@@ -83,13 +86,14 @@ export function computeSyncOffset(
   bpm: number,
   latencyMs: number,
   choreoOffsetMs: number,
+  rate = 1,
 ): SyncResult | null {
   if (!Number.isFinite(bpm) || bpm <= 0) return null;
   const period = 60000 / bpm;
   const taps = tapAudioMs.slice(SYNC_DISCARD_TAPS).filter(Number.isFinite);
   if (taps.length < SYNC_MIN_TAPS) return null;
 
-  const residuals = taps.map((t) => wrapToBeat(t - latencyMs - choreoOffsetMs, period));
+  const residuals = taps.map((t) => wrapToBeat(t - latencyMs * rate - choreoOffsetMs, period));
 
   // Circular mean as the center; with no direction at all (taps spread evenly) take the first.
   let sin = 0;

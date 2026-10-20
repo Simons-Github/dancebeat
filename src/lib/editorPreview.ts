@@ -1,4 +1,5 @@
 import { audioTimeMs } from "./audio/clock";
+import { effectivePlaybackRate } from "./audio/rate";
 import { beatLengthMs } from "./choreoEditor";
 import type { Move, Song } from "./types";
 
@@ -21,8 +22,8 @@ export const TICK_MAX_GAP_MS = 250;
 /**
  * Audio position the preview seeks to. Without `index` (or for an unknown move): the song's
  * `startOffsetMs`, like the sync test. With a move: its game time minus `PREVIEW_LEAD_BEATS` beats,
- * converted with the game's offsets (latency, `syncOffsetMs`, `choreo.offsetMs`), never before
- * `startOffsetMs` or 0.
+ * converted with the game's offsets (latency scaled by the effective rate, `syncOffsetMs`,
+ * `choreo.offsetMs`), never before `startOffsetMs` or 0.
  */
 export function previewStartAudioMs(song: Song, latencyMs: number, index?: number): number {
   const floor = Math.max(0, song.startOffsetMs);
@@ -33,6 +34,7 @@ export function previewStartAudioMs(song: Song, latencyMs: number, index?: numbe
     latencyMs,
     syncOffsetMs: song.syncOffsetMs,
     choreoOffsetMs: song.choreo.offsetMs,
+    rate: effectivePlaybackRate(song),
   });
   return Math.max(floor, audioMs);
 }

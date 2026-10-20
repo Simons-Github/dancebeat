@@ -21,6 +21,7 @@ import { useDeviceMotion } from "@/hooks/useDeviceMotion";
 import { usePoseTracking, type FrameInfo } from "@/hooks/usePoseTracking";
 import { useScoring } from "@/hooks/useScoring";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import { effectivePlaybackRate } from "@/lib/audio/rate";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { scrimCss } from "@/lib/contrast";
 import { beatPulse } from "@/lib/game/beat";
@@ -103,6 +104,7 @@ export function GameScreen({
   // Latest toggles for the loops, without restarting them.
   const showSkeleton = useRef(settings.skeleton);
   showSkeleton.current = settings.skeleton;
+  const rate = effectivePlaybackRate(song);
   const pulseOn = useRef(settings.beatPulse && !reducedMotion);
   pulseOn.current = settings.beatPulse && !reducedMotion;
 
@@ -205,7 +207,7 @@ export function GameScreen({
       scoring,
       startOffsetMs: song.startOffsetMs,
       endMs,
-      rate: song.playbackRate ?? 1,
+      rate,
       onState: (s) => {
         // Start and restart rewind the song and begin with the lead-in (count 0): measurements
         // from before belong to another song time. "Weiter" keeps them (no rewind, count 3).
@@ -320,7 +322,7 @@ export function GameScreen({
       if (pulseRef.current) {
         const playing = ctl?.state.phase === "playing";
         pulseRef.current.style.opacity = String(
-          playing && pulseOn.current ? beatPulse(t, song.bpm) * GAME.pulse : 0,
+          playing && pulseOn.current ? beatPulse(t, song.bpm, rate) * GAME.pulse : 0,
         );
       }
       const g = choreo.moves.some(
@@ -333,7 +335,7 @@ export function GameScreen({
     };
     raf = requestAnimationFrame(loop);
     return () => cancelAnimationFrame(raf);
-  }, [timeMs, choreo, figures, flashes, view, reducedMotion, sim, song.bpm]);
+  }, [timeMs, choreo, figures, flashes, view, reducedMotion, sim, song.bpm, rate]);
 
   // The music broke (load or runtime error): stop timers and playback; the overlay explains.
   useEffect(() => {

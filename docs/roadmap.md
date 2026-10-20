@@ -38,6 +38,8 @@ W9 teilweise: `type` als Union, Lade-Race beim Songwechsel, `ended`/`error` zur�
 `visibilitychange` → Pause.
 ✅ N12 (Etappe 5): Aufstellhilfe im Querformat scrollt, Karte nicht mehr unter der Kopfzeile.
 ✅ N3 (Etappe 5b): Seed-Regel prüft die Bibliothek, gelöschte Demos bleiben weg.
+✅ N7, N13, N15 (Etappe 11a): `effectivePlaybackRate(song)` (nur Datei und URL, sonst 1) für Spiel, Sync-Test und
+Editor-Vorschau; die Latenz wird mit der Rate skaliert (`latency · rate`), der Beat-Puls begrenzt nach `bpm × rate`.
 ✅ W11 (Etappe 5a, 5c): Settings mit zod geprüft, Persistenz-Anfrage beim Anlegen, `StorageFullError`
 verständlich angezeigt.
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
@@ -606,20 +608,17 @@ Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
 Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 
-| ID  | Befund                                                                                                                       | Etappe |
-| --- | ---------------------------------------------------------------------------------------------------------------------------- | ------ |
-| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                       | 10     |
-| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                       | 3b     |
-| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                       | 3b     |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                                     | 11     |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                                 | 11     |
-| N6  | `@tanstack/react-query` bisher ungenutzt                                                                                     | 11     |
-| N7  | Bei `playbackRate ≠ 1` wird die Latenz nicht mit der Rate skaliert (Bildalter schon)                                         | 11     |
-| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                           | 11     |
-| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked`                     | 11     |
-| N10 | YouTube ignoriert `song.playbackRate`                                                                                        | 11     |
-| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                              | 11     |
-| N13 | Beat-Puls im Spiel (`beatsPerPulse`) begrenzt nach Song-BPM, nicht nach `bpm × playbackRate`: bei Rate > 1 über 3 Hz möglich | 11     |
-| N14 | Editor: jede Änderung (Gold, Offset) baut alle Strichfiguren der Timeline neu; bei langen Video-Choreografien spürbar?       | 11     |
-| N15 | Spiel und Sync-Test rechnen mit `playbackRate`, auch wenn die Quelle sie ignoriert (YouTube, Spotify)                        | 11     |
-| N16 | YouTube: Pause/Weiter direkt im Player wird nicht gemeldet (Sync-Test, Editor-Vorschau zeigen weiter „Stopp“)                | 11     |
+| ID  | Befund                                                                                                                 | Etappe |
+| --- | ---------------------------------------------------------------------------------------------------------------------- | ------ |
+| W6  | Spotify: Start-Offset, SDK-Ladefehler, Fehler nach Laden, Token-Ablauf                                                 | 10     |
+| W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                                                                 | 3b     |
+| W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen)                                                 | 3b     |
+| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht                                                               | 11     |
+| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen                                                           | 11     |
+| N6  | `@tanstack/react-query` bisher ungenutzt                                                                               | 11     |
+| N8  | `YouTubeSource.load`: Timeout 15000 als feste Zahl statt Konstante                                                     | 11     |
+| N9  | „YouTube-Video lädt nicht“ erscheint nie: der Controller zeigt jede Ablehnung von `play()` als `blocked`               | 11     |
+| N10 | YouTube ignoriert `song.playbackRate`                                                                                  | 11     |
+| N11 | `index.html` ist nicht Prettier-konform (`bun run format` ändert sie jedes Mal)                                        | 11     |
+| N14 | Editor: jede Änderung (Gold, Offset) baut alle Strichfiguren der Timeline neu; bei langen Video-Choreografien spürbar? | 11     |
+| N16 | YouTube: Pause/Weiter direkt im Player wird nicht gemeldet (Sync-Test, Editor-Vorschau zeigen weiter „Stopp“)          | 11     |

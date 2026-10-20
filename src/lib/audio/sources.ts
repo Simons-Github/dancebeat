@@ -1,4 +1,5 @@
 import { songRepository } from "../library/repository";
+import { effectivePlaybackRate } from "./rate";
 import type { Song } from "../types";
 
 export type SourceType = Song["source"]["type"];
@@ -672,11 +673,11 @@ export function createSource(song: Song, opts: SourceOptions = {}): AudioSource 
           if (!b) throw new Error("Audiodatei nicht gefunden.");
           return URL.createObjectURL(b);
         },
-        song.playbackRate ?? 1,
+        effectivePlaybackRate(song),
         opts.element,
       );
     case "url":
-      return new ElementSource("url", async () => s.url, song.playbackRate ?? 1, opts.element);
+      return new ElementSource("url", async () => s.url, effectivePlaybackRate(song), opts.element);
     case "youtube":
       return new YouTubeSource(s.videoId, opts.container);
     case "spotify":

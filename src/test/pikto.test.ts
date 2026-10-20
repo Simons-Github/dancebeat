@@ -140,6 +140,19 @@ describe("Beat-Puls", () => {
     expect(beatPulse(-10, 120)).toBe(0);
   });
 
+  it("mit Rate gilt die Grenze für bpm × Rate (echte Zeit)", () => {
+    for (const rate of [0.5, 1, 1.25, 1.5, 2]) {
+      for (let bpm = 60; bpm <= 300; bpm += 7) {
+        const hz = (bpm * rate) / 60 / beatsPerPulse(bpm * rate);
+        expect(hz).toBeLessThanOrEqual(MAX_PULSE_HZ);
+      }
+    }
+    // 150 BPM at 2x = 300 BPM: pulse only every 2nd beat (period 2 · 400 ms in game time).
+    expect(beatPulse(800, 150, 2)).toBe(1);
+    expect(beatPulse(400, 150, 2)).toBe(0);
+    expect(beatPulse(400, 150)).toBe(1);
+  });
+
   it("höchstens 3 Pulse pro Sekunde, auch bei schnellen Songs", () => {
     for (const bpm of [60, 124, 180, 181, 240, 300]) {
       const hz = bpm / 60 / beatsPerPulse(bpm);

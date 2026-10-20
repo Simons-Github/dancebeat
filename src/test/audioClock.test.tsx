@@ -23,6 +23,13 @@ describe("Offsets", () => {
     expect(audioTimeMs(gameTimeMs(10_000, o), o)).toBe(10_000);
   });
 
+  it("Rate skaliert die Latenz (Wandzeit), Umkehrung stimmt, ohne Rate wie vorher", () => {
+    const r = { ...o, rate: 1.25 };
+    expect(gameTimeMs(10_000, r)).toBe(10_000 - 80 * 1.25 - 30 + 10);
+    expect(audioTimeMs(gameTimeMs(10_000, r), r)).toBeCloseTo(10_000, 9);
+    expect(gameTimeMs(10_000, { ...o, rate: 1 })).toBe(gameTimeMs(10_000, o));
+  });
+
   it("positive Offsets lassen die Choreografie später kommen", () => {
     // A move at game time 1000 is reached at a later audio position when offsets are positive.
     expect(audioTimeMs(1000, { latencyMs: 100, syncOffsetMs: 0, choreoOffsetMs: 0 })).toBe(1100);
@@ -77,6 +84,29 @@ describe("useAudioClock", () => {
     expect(api!.state).toBe("ready");
     src.t = 5000;
     expect(api!.timeMs()).toBe(5000 - 100 - 30 - 20);
+  });
+
+  it("timeMs skaliert die Latenz mit der effektiven Rate (url), nicht bei YouTube", async () => {
+    const base = makeSong({ ...makeChoreo(), offsetMs: 0 });
+    const url = {
+      ...base,
+      playbackRate: 1.25,
+      source: { type: "url" as const, url: "https://x/a.mp3" },
+    };
+    const yt = { ...url, source: { type: "youtube" as const, videoId: "abcdefghijk" } };
+    for (const [song, expected] of [
+      [url, 5000 - 100 * 1.25],
+      [yt, 5000 - 100],
+    ] as const) {
+      const src = fakeSource();
+      const { unmount } = render(
+        <Probe song={song} opts={{ latencyMs: 100, volume: 1, create: () => src }} />,
+      );
+      await flush();
+      src.t = 5000;
+      expect(api!.timeMs()).toBe(expected);
+      unmount();
+    }
   });
 
   it("räumt die Quelle beim Verlassen auf", async () => {

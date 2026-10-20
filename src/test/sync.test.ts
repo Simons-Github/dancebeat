@@ -42,6 +42,13 @@ describe("wrapToBeat", () => {
 });
 
 describe("computeSyncOffset", () => {
+  it("rate scales the latency", () => {
+    const t = taps(() => 100);
+    expect(computeSyncOffset(t, BPM, 80, 0, 1.25)?.offsetMs).toBe(0);
+    expect(computeSyncOffset(t, BPM, 80, 0)?.offsetMs).toBe(20);
+    expect(computeSyncOffset(t, BPM, 80, 0, 1)?.offsetMs).toBe(20);
+  });
+
   it("taps exactly on the grid give 0", () => {
     expect(
       computeSyncOffset(

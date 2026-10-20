@@ -1,3 +1,4 @@
+import { appliesPlaybackRate } from "./audio/rate";
 import type { Choreography, Move, Song } from "./types";
 import { poseUsableAt, suggestGoldMoves } from "./videoChoreo";
 
@@ -178,8 +179,7 @@ export const tempoOf = (song: Song) => song.playbackRate ?? 1;
  * Whether the song's audio source applies `playbackRate`. Only file and URL sources (HTML media
  * element) do; YouTube and Spotify always play at normal speed (finding N10).
  */
-export const supportsTempo = (song: Song) =>
-  song.source.type === "local" || song.source.type === "url";
+export const supportsTempo = (song: Song) => appliesPlaybackRate(song.source);
 
 /** Sets the tempo; 1 removes the optional field, as players read `playbackRate ?? 1`. */
 export function setTempo(song: Song, rate: number): Song {

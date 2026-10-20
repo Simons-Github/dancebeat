@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { useAudioClock } from "@/hooks/useAudioClock";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { gameTimeMs } from "@/lib/audio/clock";
+import { effectivePlaybackRate } from "@/lib/audio/rate";
 import { isLowPrecision } from "@/lib/audio/sources";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { StorageFullError } from "@/lib/library/storage";
@@ -157,7 +158,7 @@ export function SyncTestScreen({
     setPhase("idle");
   };
 
-  const rate = song.playbackRate ?? 1;
+  const rate = effectivePlaybackRate(song);
   /** Records a tap; `eventTimeStamp` is the input event's `timeStamp` (dispatch delay is removed). */
   const tap = useCallback(
     (eventTimeStamp: number) => {
@@ -214,6 +215,7 @@ export function SyncTestScreen({
               latencyMs,
               syncOffsetMs: candidateRef.current,
               choreoOffsetMs,
+              rate,
             }),
             bpm,
             divisor,
@@ -235,14 +237,15 @@ export function SyncTestScreen({
     latencyMs: settings.latencyMs,
     syncOffsetMs: candidate,
     choreoOffsetMs: song.choreo.offsetMs,
+    rate,
   };
   const deviations = taps
     .slice(-SHOWN_TAPS)
     .reverse()
     .map((t) => Math.round(beatDeviationMs(t, song.bpm, offsets)) || 0);
   const proposal = useMemo(
-    () => computeSyncOffset(taps, song.bpm, settings.latencyMs, song.choreo.offsetMs),
-    [taps, song.bpm, settings.latencyMs, song.choreo.offsetMs],
+    () => computeSyncOffset(taps, song.bpm, settings.latencyMs, song.choreo.offsetMs, rate),
+    [taps, song.bpm, settings.latencyMs, song.choreo.offsetMs, rate],
   );
   const remaining = Math.max(0, SYNC_MIN_TAPS + SYNC_DISCARD_TAPS - taps.length);
 
