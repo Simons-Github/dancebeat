@@ -87,7 +87,10 @@ Aliasing. Neue Mischung: Kick 180→55 Hz mit kurzem Anstieg, Bass eine Oktave h
 (Highscore, Sync-Offset, Änderungen) bleiben. Gerätetest 2026-10-20 (iPhone 11): Regler wirkt,
 nicht mehr übersteuert, Bass aber zu stark. **Nachgebessert (Audio-Version 3):** Hochpass 150 Hz
 auf der ganzen Mischung, Kick kürzer und höher (220→90 Hz, leiser), Bass zwei Oktaven über dem
-Grundton. Gerätetest offen: Bass am iPhone angemessen?
+Grundton. Gerätetest danach: am iPhone weiter dumpf und verrauscht, die Höhen fehlen (am MacBook
+hörbar). Verdacht: iOS rechnet die 22,05-kHz-WAV auf dem Web-Audio-Weg schlecht um.
+**Audio-Version 4:** Demos mit 48 kHz (ca. 5,8 MB pro Minute). Gerätetest offen: klingt die Demo
+am iPhone klar, und klingt eine eigene MP3 im Spiel gleich gut wie außerhalb der App?
 ✅ W5, W9 (Rest) (Etappe 3b): YouTube-Uhr nur bei PLAYING, `onError` in `AudioSource`.
 W7 (sichtbarer Player, Seek im Pausenzustand, Feld entfernt, Tipp aufs Video startet), iOS am
 Gerät offen. W10: Code erledigt (Uhr hält bei `waiting`), iOS am Gerät offen.

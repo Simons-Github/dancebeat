@@ -115,7 +115,9 @@ function envelope(g: GainNode, t: number, level: number, attack: number, decay: 
  * sample rate aliases).
  */
 async function synthTrack(bpm: number, seconds: number, root: number): Promise<Blob> {
-  const sr = 22050; // low rate keeps the stored blob small
+  // 48 kHz like the output hardware: iOS resampled the former 22.05 kHz audio on the Web Audio
+  // path (see unlock.ts) audibly dull and noisy. Mono 16-bit, about 5.8 MB per minute.
+  const sr = 48000;
   const ctx = new OfflineAudioContext(1, sr * seconds, sr);
   const beat = 60 / bpm;
   const notes = [0, 3, 7, 5];
@@ -268,9 +270,10 @@ export function markDemoDeleted(id: string) {
  * Version of the synthesized demo audio. Raise it when `synthTrack` changes audibly: the next seed
  * replaces the audio of demos already in the library once (song data stays untouched).
  * 1 – original mix (clipped) · 2 – phone-friendly mix, normalized to DEMO_PEAK · 3 – less bass
- * (highpass, higher kick and bass; device test: bass still too strong on an iPhone 11)
+ * (highpass, higher kick and bass; device test: bass still too strong on an iPhone 11) ·
+ * 4 – rendered at 48 kHz (iPhone 11: 22.05 kHz sounded dull and noisy)
  */
-export const DEMO_AUDIO_VERSION = 3;
+export const DEMO_AUDIO_VERSION = 4;
 const AUDIO_VERSION_KEY = "dancebeat.demoAudioVersion";
 const AudioVersionSchema = z.number().int().positive();
 
