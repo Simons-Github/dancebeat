@@ -206,6 +206,8 @@ describe("analyzeAudio", () => {
     expect(Number.isInteger(r.bpm)).toBe(true);
     expect(Math.abs(r.bpm - 120)).toBeLessThanOrEqual(2);
     expect(r.durationMs).toBe(20_000);
+    expect(r.envelope.values.length).toBeGreaterThan(1900);
+    expect(r.envelope.hopMs).toBeCloseTo(9.977, 3);
   });
   it("throws the German message when decoding fails", async () => {
     await expect(

@@ -1,4 +1,4 @@
-import { useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useId, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import { Plus } from "lucide-react";
 
 import { VideoChoreoPanel } from "@/components/add-song/VideoChoreoPanel";
@@ -15,7 +15,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { analyzeAudio } from "@/lib/beat";
+import { analyzeAudio, type OnsetEnvelope } from "@/lib/beat";
 import { parseChoreoFile } from "@/lib/library/choreoFile";
 import {
   ARTIST_MAX,
@@ -78,6 +78,8 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   const [kind, setKind] = useState<Kind>("file");
   const [file, setFile] = useState<File | null>(null);
   const [analysis, setAnalysis] = useState<AnalysisState>({ status: "idle" });
+  /** Onset envelope of the analyzed audio file; the video import reads the beat phase from it. */
+  const [musicBeat, setMusicBeat] = useState<OnsetEnvelope | null>(null);
   const [urlLink, setUrlLink] = useState("");
   const [youtubeLink, setYoutubeLink] = useState("");
   const [durationClamped, setDurationClamped] = useState(false);
@@ -97,6 +99,10 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   /** Guards against a slow analysis of a previous file overwriting the current one. */
   const analysisToken = useRef(0);
   const choreoToken = useRef(0);
+  const kindRef = useRef(kind);
+  useEffect(() => {
+    kindRef.current = kind;
+  });
   /** Fields the player typed in. Prefills (file name, analysis, imported choreography) skip these. */
   const edited = useRef({
     title: false,
@@ -122,6 +128,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     setKind("file");
     setFile(null);
     setAnalysis({ status: "idle" });
+    setMusicBeat(null);
     setTitle("");
     setArtist("");
     setBpm("120");
@@ -177,6 +184,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     const chosen = e.target.files?.[0] ?? null;
     const token = ++analysisToken.current;
     setFile(chosen);
+    setMusicBeat(null);
     setBpmEstimated(false);
     if (!chosen) {
       setAnalysis({ status: "idle" });
@@ -194,6 +202,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
         setDurationClamped(seconds > DURATION_MAX_S);
       }
       setBpmEstimated(true);
+      setMusicBeat(result.envelope);
       setAnalysis({ status: "done" });
     } catch (err) {
       if (token !== analysisToken.current) return;
@@ -222,6 +231,14 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       if (token !== choreoToken.current) return;
       setImportError(err instanceof Error ? err.message : "Die Datei konnte nicht gelesen werden.");
     }
+  };
+
+  /** BPM from the dance video's audio: only without an audio file and if not typed by hand. */
+  const takeVideoBpm = (detected: number) => {
+    // The decode may outlast a tab switch; read the current tab, not the one at click time.
+    if (kindRef.current === "file" || edited.current.bpm) return;
+    setBpm(String(detected));
+    setBpmEstimated(true);
   };
 
   const submit = async (e: FormEvent) => {
@@ -506,6 +523,8 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
               <VideoChoreoPanel
                 bpm={bpmNum}
                 onChange={setVideoResult}
+                musicBeat={kind === "file" ? musicBeat : null}
+                onBpmDetected={takeVideoBpm}
                 {...(createEstimator && { createEstimator })}
               />
             )}

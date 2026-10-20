@@ -12,8 +12,11 @@ import { choreoFromPoseTrack, type PoseTrack } from "../videoChoreo";
 export const VIDEO_RANGE_MIN_MS = 2000;
 /** Same limit as the song length in the dialog. */
 export const VIDEO_RANGE_MAX_MS = 600_000;
-/** Largest beat phase accepted in the form (ms, either sign). */
-export const BEAT_PHASE_MAX_MS = 600_000;
+/**
+ * Largest beat phase accepted in the form (ms, either sign). Generous because the detected phase
+ * is the first beat after the section start, which may lie far into a long video.
+ */
+export const BEAT_PHASE_MAX_MS = 3_600_000;
 /** Rounding slack between the shown end (0.1 s) and the real video duration. */
 const END_TOLERANCE_MS = 100;
 

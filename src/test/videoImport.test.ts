@@ -160,11 +160,12 @@ describe("parseBeatPhaseMs", () => {
     [" 250 ", 250],
     ["-120", -120],
     ["−80", -80],
+    ["700000", 700_000],
   ])("parses %j", (text, ms) => {
     expect(parseBeatPhaseMs(text)).toBe(ms);
   });
 
-  it.each(["1,5", "abc", "12ms", "700000"])("rejects %j", (text) => {
+  it.each(["1,5", "abc", "12ms", "3600001"])("rejects %j", (text) => {
     expect(parseBeatPhaseMs(text)).toBeNull();
   });
 });

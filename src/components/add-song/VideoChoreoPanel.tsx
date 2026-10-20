@@ -7,6 +7,12 @@ import { Progress } from "@/components/ui/progress";
 import { Switch } from "@/components/ui/switch";
 import { useVideoAnalysis } from "@/hooks/useVideoAnalysis";
 import { useWakeLock } from "@/hooks/useWakeLock";
+import {
+  BEAT_PHASE_WINDOW_MS,
+  analyzeAudio,
+  estimateBeatPhaseMs,
+  type OnsetEnvelope,
+} from "@/lib/beat";
 import { BPM_MAX, BPM_MIN } from "@/lib/library/newSong";
 import {
   VIDEO_RANGE_MAX_MS,
@@ -28,11 +34,38 @@ const FIELD_ERROR = "text-sm font-medium text-destructive";
 
 const VIDEO_ACCEPT = "video/mp4,video/quicktime,video/*,.mp4,.mov";
 
+/**
+ * Largest video whose audio track is decoded for the beat detection. Decoding reads the whole
+ * file into memory plus the decoded samples; beyond this, phones risk running out of memory.
+ */
+export const VIDEO_BEAT_MAX_BYTES = 250 * 1024 * 1024;
+/** Longest video decoded for the beat detection: the decoded samples grow with the duration. */
+export const VIDEO_BEAT_MAX_MS = 15 * 60_000;
+
+const BEAT_HAND_HINT = "Bitte die Beat-Phase von Hand eintragen.";
+
+/** Where the automatic beat phase comes from; null = typed by hand. */
+type BeatSource = { kind: "music" } | { kind: "video"; envelope: OnsetEnvelope };
+type BeatStatus = { status: "idle" | "busy" } | { status: "error"; message: string };
+
+/** First beat at or after the section start, judged on the start of the section only. */
+const phaseInRange = (env: OnsetEnvelope, bpm: number, range: VideoRange) =>
+  estimateBeatPhaseMs(
+    env,
+    bpm,
+    range.startMs,
+    Math.min(range.endMs - range.startMs, BEAT_PHASE_WINDOW_MS),
+  );
+
 interface VideoChoreoPanelProps {
   /** BPM from the form (NaN while invalid). Changing it only recomputes, no new analysis. */
   bpm: number;
   /** Ready-to-save result, or null while there is none (no video, stale, error, …). */
   onChange: (result: VideoImportResult | null) => void;
+  /** Onset envelope of the song's audio file (Datei tab, analyzed), else null. */
+  musicBeat?: OnsetEnvelope | null;
+  /** BPM estimated from the video's audio track; the dialog decides whether to take it. */
+  onBpmDetected?: (bpm: number) => void;
   /** Injected in tests. Default: MediaPipe. */
   createEstimator?: (model: PoseModel) => PoseEstimator;
 }
@@ -48,7 +81,13 @@ const sameRange = (a: VideoRange, b: VideoRange | null) =>
  * analysis. The video stays in memory only (object URL, revoked on change and unmount); the
  * preview must stay visible during the analysis (video-frame callbacks).
  */
-export function VideoChoreoPanel({ bpm, onChange, createEstimator }: VideoChoreoPanelProps) {
+export function VideoChoreoPanel({
+  bpm,
+  onChange,
+  musicBeat = null,
+  onBpmDetected,
+  createEstimator,
+}: VideoChoreoPanelProps) {
   const id = useId();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -58,6 +97,11 @@ export function VideoChoreoPanel({ bpm, onChange, createEstimator }: VideoChoreo
   const [endText, setEndText] = useState("");
   const [selfie, setSelfie] = useState(false);
   const [phaseText, setPhaseText] = useState("0");
+  const [videoFile, setVideoFile] = useState<File | null>(null);
+  const [beatSource, setBeatSource] = useState<BeatSource | null>(null);
+  const [beatStatus, setBeatStatus] = useState<BeatStatus>({ status: "idle" });
+  /** Guards against a slow audio decode of a previous video overwriting the current one. */
+  const beatToken = useRef(0);
   /** Range of the last started analysis; the track only covers this section. */
   const [analyzed, setAnalyzed] = useState<VideoRange | null>(null);
   const { state, start, cancel, reset } = useVideoAnalysis(
@@ -85,8 +129,21 @@ export function VideoChoreoPanel({ bpm, onChange, createEstimator }: VideoChoreo
     : range
       ? validateVideoRange(range, durationMs)
       : "Bitte Start und Ende in Sekunden angeben, z. B. 12,5.";
-  const phaseMs = parseBeatPhaseMs(phaseText);
   const bpmValid = Number.isFinite(bpm) && bpm >= BPM_MIN && bpm <= BPM_MAX;
+  const beatEnvelope = beatSource?.kind === "music" ? musicBeat : (beatSource?.envelope ?? null);
+  // The detected phase follows BPM and range changes until the player types a value.
+  const autoPhaseMs = useMemo(
+    () =>
+      beatEnvelope && bpmValid && startMs !== null && endMs !== null && endMs > startMs
+        ? phaseInRange(beatEnvelope, bpm, { startMs, endMs })
+        : null,
+    [beatEnvelope, bpmValid, bpm, startMs, endMs],
+  );
+  const phaseAuto = autoPhaseMs !== null;
+  // Detected, but not computable right now (music file gone, BPM or range invalid): never fall
+  // back silently to an old typed value.
+  const phaseLost = beatSource !== null && !phaseAuto;
+  const phaseMs = phaseAuto ? autoPhaseMs : phaseLost ? null : parseBeatPhaseMs(phaseText);
   const track = state.status === "done" ? state.track : null;
   const stale = track !== null && (range === null || !sameRange(range, analyzed));
 
@@ -118,6 +175,10 @@ export function VideoChoreoPanel({ bpm, onChange, createEstimator }: VideoChoreo
   const chooseVideo = (e: ChangeEvent<HTMLInputElement>) => {
     const chosen = e.target.files?.[0] ?? null;
     reset();
+    beatToken.current++;
+    setVideoFile(chosen);
+    if (beatSource?.kind === "video") setBeatSource(null);
+    setBeatStatus({ status: "idle" });
     setAnalyzed(null);
     setDurationMs(null);
     setVideoError(null);
@@ -155,6 +216,66 @@ export function VideoChoreoPanel({ bpm, onChange, createEstimator }: VideoChoreo
     }
     setAnalyzed(range);
     void start(video, { range });
+  };
+
+  /** Beat phase from the song's audio file if there is one, else from the video's audio track. */
+  const detectBeat = async () => {
+    if (!range || rangeError || beatStatus.status === "busy") return;
+    if (musicBeat) {
+      if (bpmValid && phaseInRange(musicBeat, bpm, range) === null) {
+        setBeatStatus({
+          status: "error",
+          message: `Im Abschnitt ist kein Takt erkennbar. ${BEAT_HAND_HINT}`,
+        });
+        return;
+      }
+      setBeatSource({ kind: "music" });
+      setBeatStatus({ status: "idle" });
+      return;
+    }
+    if (!videoFile) return;
+    if (videoFile.size > VIDEO_BEAT_MAX_BYTES) {
+      setBeatStatus({
+        status: "error",
+        message: `Das Video ist zu groß für die Takterkennung (höchstens ${VIDEO_BEAT_MAX_BYTES / 1024 / 1024} MB). ${BEAT_HAND_HINT}`,
+      });
+      return;
+    }
+    if (durationMs !== null && durationMs > VIDEO_BEAT_MAX_MS) {
+      setBeatStatus({
+        status: "error",
+        message: `Das Video ist zu lang für die Takterkennung (höchstens ${VIDEO_BEAT_MAX_MS / 60_000} Minuten). ${BEAT_HAND_HINT}`,
+      });
+      return;
+    }
+    const token = ++beatToken.current;
+    setBeatStatus({ status: "busy" });
+    try {
+      const audio = await analyzeAudio(videoFile);
+      if (token !== beatToken.current) return;
+      if (phaseInRange(audio.envelope, audio.bpm, range) === null) {
+        setBeatStatus({
+          status: "error",
+          message: `Im Ton des Videos ist kein Takt erkennbar. ${BEAT_HAND_HINT}`,
+        });
+        return;
+      }
+      onBpmDetected?.(audio.bpm);
+      setBeatSource({ kind: "video", envelope: audio.envelope });
+      setBeatStatus({ status: "idle" });
+    } catch {
+      if (token !== beatToken.current) return;
+      setBeatStatus({
+        status: "error",
+        message: `Der Ton des Videos lässt sich nicht auswerten. ${BEAT_HAND_HINT}`,
+      });
+    }
+  };
+
+  const typePhase = (text: string) => {
+    setPhaseText(text);
+    setBeatSource(null);
+    setBeatStatus({ status: "idle" });
   };
 
   const progress = state.status === "running" ? Math.round(state.progress * 100) : 0;
@@ -287,23 +408,43 @@ export function VideoChoreoPanel({ bpm, onChange, createEstimator }: VideoChoreo
             </Label>
             <Input
               id={`${id}-phase`}
-              value={phaseText}
+              value={phaseAuto ? String(autoPhaseMs) : phaseLost ? "" : phaseText}
               inputMode="numeric"
               autoComplete="off"
               aria-invalid={phaseMs === null ? true : undefined}
               aria-describedby={phaseMs === null ? `${id}-phase-err` : `${id}-phase-hint`}
-              onChange={(e) => setPhaseText(e.target.value)}
+              onChange={(e) => typePhase(e.target.value)}
               className={INPUT}
             />
             {phaseMs === null ? (
               <p id={`${id}-phase-err`} className={FIELD_ERROR}>
-                Bitte ganze Millisekunden eingeben, z. B. 0 oder 250.
+                {phaseLost
+                  ? "Der erkannte Takt lässt sich gerade nicht berechnen (BPM, Bereich oder Musikdatei fehlen). Bitte neu erkennen oder von Hand eintragen."
+                  : "Bitte ganze Millisekunden eingeben, z. B. 0 oder 250."}
               </p>
             ) : (
               <p id={`${id}-phase-hint`} className={HINT}>
-                Zeitpunkt eines Beats im Video. Die Feinabstimmung folgt später im Sync-Test.
+                {phaseAuto
+                  ? `Erster Beat ab Start, erkannt aus ${beatSource?.kind === "music" ? "der Musikdatei" : "dem Ton des Videos"}. Bitte im Sync-Test prüfen.`
+                  : "Zeitpunkt eines Beats im Video. Die Feinabstimmung folgt später im Sync-Test."}
               </p>
             )}
+            <Button
+              type="button"
+              variant="secondary"
+              disabled={!range || rangeError !== null || beatStatus.status === "busy"}
+              onClick={() => void detectBeat()}
+              className={BTN}
+            >
+              {beatStatus.status === "busy" ? "Werte den Ton aus …" : "Takt erkennen"}
+            </Button>
+            <div aria-live="polite">
+              {beatStatus.status === "error" && (
+                <p role="alert" className={FIELD_ERROR}>
+                  {beatStatus.message}
+                </p>
+              )}
+            </div>
           </div>
 
           <div className="flex flex-col gap-3" aria-live="polite">

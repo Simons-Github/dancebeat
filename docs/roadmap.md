@@ -7,19 +7,19 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status                            | Empfohlenes Modell                                                    |
-| -------------------------------------------- | --------------------------------- | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                                | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅                                | Sonnet                                                                |
-| 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5)        | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ✅                                | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)             | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)             | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)             | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d-1, 8d-2a, 8d-2b ✅) | Opus                                                                  |
-| 9. Typen und Lint                            | ✅                                | –                                                                     |
-| 10. Spotify                                  | ⏳                                | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳                                | je nach Punkt                                                         |
+| Etappe                                       | Status                     | Empfohlenes Modell                                                    |
+| -------------------------------------------- | -------------------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                         | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                         | Sonnet                                                                |
+| 3. Gameplay                                  | 🔜 (3a, 3b ohne Schritt 5) | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ✅                         | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)      | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)      | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)      | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8c, 8d, 8e ✅)      | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                         | –                                                                     |
+| 10. Spotify                                  | ⏳                         | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                         | je nach Punkt                                                         |
 
 ## Erledigt: Grundlagen
 
@@ -426,7 +426,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e umgesetzt)
 
 Aufteilung:
 
@@ -528,6 +528,25 @@ Aufteilung:
     - [ ] Tempo-Wechsel: Wiedergabe stoppt, neues Tempo hörbar, Klicks passen weiter
     - [ ] Display sperren oder App wechseln → Wiedergabe stoppt
     - [ ] Lautstärke aus den Einstellungen gilt für Musik und Klick
+
+- **8e Takt erkennen im Video-Import – umgesetzt, Gerätetest offen.** Knopf „Takt erkennen“
+  unter „Beat-Phase (ms)“: Phase aus der Musikdatei (Tab Datei) oder aus der Tonspur des Videos
+  (bis 250 MB und 15 Minuten), aus dem Video auch die BPM (nur ohne Musikdatei und wenn BPM nicht von Hand
+  geändert). Die Phase folgt BPM und Bereich, bis man sie selbst eintippt. Details:
+  [architecture.md](architecture.md#bpm-schätzung-und-beat-phase).
+  - Logik `onsetEnvelope`, `estimateBeatPhaseMs` in `src/lib/beat.ts` (10-s-Fenster ab
+    Bereichsstart, frühe Beats stärker gewichtet); `analyzeAudio` liefert die Hüllkurve mit.
+    Tests `beat.test.ts` (Raster bei 90–140 BPM, gerundete BPM, Off-Beats, Stille) und
+    `video-beat-detect.test.tsx` (beide Quellen, BPM-Übernahme, Fehler, veraltetes Ergebnis).
+    Kein Formatwechsel.
+  - Grenze: Die BPM-Schätzung ist ganzzahlig und kann um 1–2 daneben liegen; dann driften die
+    Moves über den Song, die Phase sitzt nur am Abschnittsanfang. BPM bitte prüfen.
+  - Nicht enthalten: Zielperson wählen, „Video behalten“, gebrochene BPM.
+  - **Gerätetest 8e (offen):**
+    - [ ] iPhone (Safari) und Android (Chrome): Tonspur aus MP4 und MOV wird gelesen, Dauer
+          und Speicher bei einem 100–250-MB-Video
+    - [ ] Mit echtem Song: Moves des importierten Tanzes treffen die Musik ohne Handkorrektur,
+          Sync-Test zeigt nur kleine Abweichung
 
 Ursprüngliche Schritte:
 

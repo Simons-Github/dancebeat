@@ -435,6 +435,19 @@ den Quell-Tabs (Datei, URL, YouTube); das Video liefert nur die Bewegungen.
   Pflicht.
 - Während Laden und Analyse hält `useWakeLock` den Bildschirm an. Schließen des Dialogs hängt
   das Panel aus; der Hook bricht die Analyse dabei ab und schließt das Modell.
+- „Takt erkennen“ (Etappe 8e) setzt die Beat-Phase. Quelle ist die Hüllkurve der Musikdatei,
+  wenn der Tab Datei aktiv und analysiert ist (`musicBeat`, ohne erneutes Dekodieren), sonst die
+  Tonspur des Videos (`analyzeAudio` auf der Videodatei, höchstens 250 MB und 15 Minuten, weil Datei und
+  dekodierte Samples ganz in den Speicher müssen). Aus dem Video kommt auch eine BPM-Schätzung;
+  der Dialog übernimmt sie nur ohne Musikdatei und solange BPM nicht von Hand geändert wurde
+  („Geschätzt, bitte prüfen.“). Die erkannte Phase ist abgeleitet: Sie folgt BPM und Bereich,
+  bis man das Feld selbst ändert. Lässt sie sich gerade nicht berechnen (Musikdatei weg, BPM oder
+  Bereich ungültig), bleibt das Feld leer mit Hinweis, statt still auf einen alten Wert
+  zurückzufallen. Die Phase darf bis zu 1 h betragen (`BEAT_PHASE_MAX_MS`), weil sie hinter dem
+  Bereichsstart liegt. Den BPM-Rückruf liest der Dialog mit dem aktuellen Tab (Ref), nicht dem beim
+  Klick. Fehler (zu groß, Ton nicht lesbar, kein Takt) melden sich mit
+  dem Hinweis, die Phase von Hand einzutragen. Ein neues Video verwirft ein laufendes oder
+  fertiges Ergebnis aus dem alten.
 - Datenschutz: Das Panel nennt, dass das Video auf dem Gerät bleibt und die Erkennung ohne
   externe Abrufe läuft (Modell von der eigenen Adresse, siehe [Externe Abrufe](#externe-abrufe)).
 
@@ -520,13 +533,22 @@ mehr als 25 FPS. Werte trägt der Nutzer nach.
 | ----- | ------- | ----- | ----------------- | -------- |
 | _TBD_ | _TBD_   | _TBD_ | _TBD_             | _TBD_    |
 
-## BPM-Schätzung
+## BPM-Schätzung und Beat-Phase
 
-`src/lib/beat.ts`: Onset-Hüllkurve (10-ms-Schritte, max. 90 s) plus Autokorrelation über 70–180
-BPM. Die Schleife summiert nur Terme, deren gerundete Indizes existieren;
-`src/test/beat.test.ts` vergleicht das mit der früheren Implementierung auf synthetischen
-Klick-Tracks. `analyzeAudio` dekodiert die Datei einmal (Decoder für Tests austauschbar) und
-liefert BPM (gerundet, 30–300) und Länge. `quantize` rastet Zeiten auf Beats ein (für den Video-Import).
+`src/lib/beat.ts`: `onsetEnvelope` liefert den positiven Energiefluss in Schritten von ganzen
+Samples (≈ 10 ms, `hopMs` exakt, sonst driftet die Zeitachse bei 22 050 Hz um 2,3 ms pro Sekunde).
+BPM: Autokorrelation der ersten 90 s über 70–180 BPM. Die Schleife summiert nur Terme, deren
+gerundete Indizes existieren; `src/test/beat.test.ts` vergleicht das mit der früheren
+Implementierung auf synthetischen Klick-Tracks. `analyzeAudio` dekodiert die Datei einmal
+(Decoder für Tests austauschbar) und liefert BPM (gerundet, 30–300), Länge und die Hüllkurve der
+ganzen Datei (100 Werte pro Sekunde). `quantize` rastet Zeiten auf Beats ein.
+
+`estimateBeatPhaseMs(env, bpm, fromMs)` (Etappe 8e) probiert jede Phase in Hüllkurvenschritten
+und summiert den Onset auf dem Beat-Raster (Kammfilter, Nachbarschritte halb gewichtet). Es
+schaut nur 10 s ab `fromMs` an und gewichtet frühe Beats stärker, weil die BPM eine ganze Zahl
+ist: 1 BPM daneben driftet bei 128 BPM um ~80 ms in 10 s, so bleibt die Phase am Abschnittsanfang
+in den Tests unter 50 ms. Ergebnis: erster Beat ab `fromMs` (ganze ms) oder `null` (Stille,
+weniger als zwei Beats im Fenster). Die Feinabstimmung bleibt dem Sync-Test überlassen.
 
 ## Routing-Konventionen
 

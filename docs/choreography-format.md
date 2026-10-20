@@ -123,6 +123,10 @@ gilt Videozeit = Audiozeit. Für den Bereich `[start, ende]` und eine Beat-Phase
   `P + k · Beatlänge`.
 - `song.startOffsetMs = start`: Die Musik beginnt am Bereichsanfang. `syncOffsetMs` ist 0.
 - BPM kommt aus dem Formular. Kein Formatwechsel, keine neue Version.
+- `P` kann „Takt erkennen“ setzen (Etappe 8e): erster Beat ab `start`, geschätzt aus der
+  Onset-Hüllkurve der Musikdatei oder der Tonspur des Videos (`estimateBeatPhaseMs`, siehe
+  [architecture.md](architecture.md#bpm-schätzung-und-beat-phase)). Jeder Beat ist als `P`
+  gleichwertig, der Wert ab `start` ist nur leichter zu lesen.
 
 ## Editor
 
