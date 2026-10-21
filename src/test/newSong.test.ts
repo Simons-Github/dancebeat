@@ -12,7 +12,8 @@ import {
   validateNewSongFields,
   type NewSongInput,
 } from "@/lib/library/newSong";
-import { SongSchema } from "@/lib/schema";
+import packJson from "@/data/motion-pack.json";
+import { MotionPackSchema, SongSchema } from "@/lib/schema";
 import { makeSong } from "./fixtures";
 
 const ID = "dQw4w9WgXcQ";
@@ -129,6 +130,9 @@ describe("validateAudioUrl", () => {
   );
 });
 
+const PACK = MotionPackSchema.parse(packJson);
+const AUTO = { type: "auto", pack: PACK } as const;
+
 const base: Omit<NewSongInput, "source" | "choreo"> = {
   title: "  Mein Song ",
   artist: "Ich",
@@ -139,8 +143,32 @@ const base: Omit<NewSongInput, "source" | "choreo"> = {
 };
 
 describe("buildNewSong", () => {
+  it("generates the auto choreography with the song id as seed and the song's difficulty", () => {
+    const song = buildNewSong({ ...base, difficulty: 1, source: { kind: "file" }, choreo: AUTO });
+    const again = autoChoreo("Mein Song", 120, 60_000, ["#FF2E93", "#00E5FF"], PACK, {
+      seed: song.id,
+      difficulty: 1,
+    });
+    expect(song.choreo.moves).toEqual(again.moves);
+    expect(song.choreo.frames).toEqual(again.frames);
+    // Difficulty 1 has no leg moves.
+    expect(
+      song.choreo.moves.some((m) => ["kick-l", "kick-r", "squat", "star"].includes(m.iconId)),
+    ).toBe(false);
+  });
+
+  it("places auto moves on the given beat phase", () => {
+    const song = buildNewSong({
+      ...base,
+      source: { kind: "file" },
+      choreo: { ...AUTO, beatPhaseMs: 120 },
+    });
+    for (const m of song.choreo.moves)
+      expect(Math.abs((m.timeMs - 120) % 500)).toBeLessThanOrEqual(1);
+  });
+
   it("builds a local song with a fresh blobId and an auto choreography", () => {
-    const song = buildNewSong({ ...base, source: { kind: "file" }, choreo: { type: "auto" } });
+    const song = buildNewSong({ ...base, source: { kind: "file" }, choreo: AUTO });
     expect(SongSchema.safeParse(song).success).toBe(true);
     expect(song.title).toBe("Mein Song");
     expect(song.source.type).toBe("local");
@@ -156,13 +184,13 @@ describe("buildNewSong", () => {
     const url = buildNewSong({
       ...base,
       source: { kind: "url", url: "https://example.com/a.mp3" },
-      choreo: { type: "auto" },
+      choreo: AUTO,
     });
     expect(url.source).toEqual({ type: "url", url: "https://example.com/a.mp3" });
     const yt = buildNewSong({
       ...base,
       source: { kind: "youtube", videoId: ID },
-      choreo: { type: "auto" },
+      choreo: AUTO,
     });
     expect(yt.source).toEqual({ type: "youtube", videoId: ID });
   });
@@ -171,7 +199,7 @@ describe("buildNewSong", () => {
     const song = buildNewSong({
       ...base,
       source: { kind: "spotify", trackUri: TRACK_URI },
-      choreo: { type: "auto" },
+      choreo: AUTO,
     });
     expect(SongSchema.safeParse(song).success).toBe(true);
     expect(song.source).toEqual({ type: "spotify", trackUri: TRACK_URI });
@@ -183,26 +211,26 @@ describe("buildNewSong", () => {
       buildNewSong({
         ...base,
         source: { kind: "spotify", trackUri: "spotify:track:kurz" },
-        choreo: { type: "auto" },
+        choreo: AUTO,
       }),
     ).toThrow();
   });
 
   it("rejects invalid data via the schema", () => {
     expect(() =>
-      buildNewSong({ ...base, title: " ", source: { kind: "file" }, choreo: { type: "auto" } }),
+      buildNewSong({ ...base, title: " ", source: { kind: "file" }, choreo: AUTO }),
     ).toThrow();
     expect(() =>
       buildNewSong({
         ...base,
         source: { kind: "youtube", videoId: "bad" },
-        choreo: { type: "auto" },
+        choreo: AUTO,
       }),
     ).toThrow();
   });
 
   it("import keeps moves and bpm, uses form title/artist/difficulty, and gets fresh ids", () => {
-    const original = makeSong(autoChoreo("Orig", 100, 40_000, ["#FF8A00", "#7CFF4F"]));
+    const original = makeSong(autoChoreo("Orig", 100, 40_000, ["#FF8A00", "#7CFF4F"], PACK));
     const file = {
       ...buildChoreoFile(original),
       song: { ...buildChoreoFile(original).song, syncOffsetMs: 40, startOffsetMs: 500, bpm: 100 },
@@ -226,7 +254,7 @@ describe("buildNewSong", () => {
   });
 
   it("round-trips export -> parse -> import", () => {
-    const original = makeSong(autoChoreo("Orig", 128, 50_000, ["#B13CFF", "#FFB800"]));
+    const original = makeSong(autoChoreo("Orig", 128, 50_000, ["#B13CFF", "#FFB800"], PACK));
     const file = parseChoreoFile(JSON.stringify(buildChoreoFile(original)));
     const song = buildNewSong({
       ...base,

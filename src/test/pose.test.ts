@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { computeAngles, figure } from "@/lib/pose";
+import { computeAngles, DENSE_FRAME_GAP_MS, figure, frameAt } from "@/lib/pose";
 import type { Landmark } from "@/lib/types";
 
 /** Simulates a camera frame: x normalized by a width that is `aspect` times the height. */
@@ -21,5 +21,25 @@ describe("computeAngles: Seitenverhältnis", () => {
     const distorted = computeAngles(squeeze(pose, 4 / 3));
     const diff = Math.abs((distorted.leftShoulder ?? 0) - (square.leftShoulder ?? 0));
     expect(diff).toBeGreaterThan(5);
+  });
+});
+
+describe("frameAt easing", () => {
+  const frame = (timeMs: number, x: number) => ({
+    timeMs,
+    landmarks: [[x, 0.5]] as Landmark[],
+    angles: { leftShoulder: x * 100 },
+  });
+
+  it("interpoliert dichte Frames linear (kein Abbremsen an jedem Frame)", () => {
+    const frames = [frame(0, 0), frame(DENSE_FRAME_GAP_MS, 1)];
+    const f = frameAt(frames, DENSE_FRAME_GAP_MS / 4)!;
+    expect(f.landmarks[0]![0]).toBeCloseTo(0.25, 12);
+    expect(f.angles.leftShoulder).toBeCloseTo(25, 9);
+  });
+
+  it("blendet weit auseinanderliegende Schlüsselposen mit Smoothstep", () => {
+    const frames = [frame(0, 0), frame(1000, 1)];
+    expect(frameAt(frames, 250)!.landmarks[0]![0]).toBeCloseTo(0.15625, 12); // 3k² − 2k³
   });
 });

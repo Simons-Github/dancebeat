@@ -1,7 +1,8 @@
 /** Pure logic for adding a song: link parsing, field validation and building the Song record. */
 import { autoChoreo } from "../../data/demo";
 import { SongSchema } from "../schema";
-import type { ChoreoFile, Choreography, Song, SourceSpec } from "../types";
+import type { EnergyCurve } from "../generator";
+import type { ChoreoFile, Choreography, MotionPack, Song, SourceSpec } from "../types";
 import { songFromChoreoFile } from "./choreoFile";
 
 export const BPM_MIN = 30;
@@ -103,7 +104,12 @@ export type NewSongSource =
   | { kind: "spotify"; trackUri: string };
 
 export type NewSongChoreo =
-  | { type: "auto" }
+  /**
+   * Generated (`autoChoreo`) from the motion pack (`loadMotionPack`), seeded with the song id.
+   * With the analysed audio file's onset envelope and beat phase the moves follow its beat and
+   * energy.
+   */
+  | { type: "auto"; pack: MotionPack; energy?: EnergyCurve; beatPhaseMs?: number }
   | { type: "import"; file: ChoreoFile }
   /** From the video import (videoImport.ts); `startOffsetMs` = start of the video section. */
   | { type: "video"; choreo: Choreography; startOffsetMs: number };
@@ -134,7 +140,7 @@ function sourceSpec(source: NewSongSource): SourceSpec {
 }
 
 /**
- * Builds a validated Song. Auto: generated moves from bpm and duration. Import: the file's moves
+ * Builds a validated Song. Auto: generated moves from bpm, duration and difficulty (seed = song id). Import: the file's moves
  * and timing (its bpm, sync and start offsets) are kept, title/artist/difficulty come from the
  * form. Video: the choreography's bpm and offset are kept, the song starts its audio at
  * `startOffsetMs`; colors come from the form like for auto choreographies. IDs are always fresh.
@@ -182,9 +188,16 @@ export function buildNewSong(input: NewSongInput, now = Date.now()): Song {
       updatedAt: now,
     };
   } else {
-    const choreo = autoChoreo(title, input.bpm, input.durationMs, input.colors);
+    const { pack, energy, beatPhaseMs } = input.choreo;
+    const id = crypto.randomUUID();
+    const choreo = autoChoreo(title, input.bpm, input.durationMs, input.colors, pack, {
+      seed: id,
+      difficulty: input.difficulty,
+      ...(energy && { energy }),
+      ...(beatPhaseMs !== undefined && { beatPhaseMs }),
+    });
     song = {
-      id: crypto.randomUUID(),
+      id,
       title,
       artist,
       bpm: input.bpm,

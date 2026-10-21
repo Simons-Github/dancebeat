@@ -8,10 +8,10 @@ import {
   lerpAngle,
   LEG_KEYS,
 } from "./pose";
+import { roundAngles, roundLandmark, roundSkeleton, roundTo as round } from "./precision";
 import { CHOREO_VERSION, ChoreographySchema } from "./schema";
 import { fromLandmarks3d } from "./skeleton/fromLandmarks3d";
-import { BONE_IDS, type Skeleton3D } from "./skeleton/types";
-import type { Vec3 } from "./skeleton/vec";
+import type { Skeleton3D } from "./skeleton/types";
 import type { Angles, Choreography, Frame, Landmark, Landmark3d, Move } from "./types";
 import { SONG_PALETTES } from "@/theme";
 
@@ -254,41 +254,14 @@ export function smoothTrack(
   });
 }
 
-const round = (v: number, digits: number) => {
-  const f = 10 ** digits;
-  return Math.round(v * f) / f + 0;
-};
-
-/**
- * Visibility is rounded down so a point below the 0.5 threshold never becomes visible in the
- * stored data. From 0.99 on it is dropped: `[x, y]` means fully visible and keeps files small.
- */
-function roundLandmark(p: Landmark): Landmark {
-  const x = round(p[0], 4),
-    y = round(p[1], 4);
-  if (p.length < 3) return [x, y];
-  const v = Math.floor((p[2] as number) * 100) / 100;
-  return v >= 0.99 ? [x, y] : [x, y, v];
-}
-
 function roundFrame(timeMs: number, lm: Landmark[], angles: Angles): Frame {
-  const landmarks = lm.map(roundLandmark);
-  const a: Angles = {};
-  for (const [k, v] of Object.entries(angles) as [keyof Angles, number][]) a[k] = round(v, 1);
-  const frame: Frame = { timeMs: round(timeMs, 1), landmarks, angles: a };
+  const frame: Frame = {
+    timeMs: round(timeMs, 1),
+    landmarks: lm.map(roundLandmark),
+    angles: roundAngles(angles),
+  };
   if (!TORSO.every((i) => isVisible(lm[i]))) frame.lowVisibility = true;
   return frame;
-}
-
-/** `pose3d` rounded for storage: positions and bone directions to 3 decimals, yaw to 0.1°. */
-function roundSkeleton(sk: Skeleton3D): Skeleton3D {
-  const rn = (v: Vec3, d: number): Vec3 => [round(v[0], d), round(v[1], d), round(v[2], d)];
-  const bones: Skeleton3D["bones"] = {};
-  for (const id of BONE_IDS) {
-    const v = sk.bones[id];
-    if (v) bones[id] = rn(v, 3);
-  }
-  return { root: { pos: rn(sk.root.pos, 3), yawDeg: round(sk.root.yawDeg, 1) }, bones };
 }
 
 /**

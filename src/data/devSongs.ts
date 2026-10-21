@@ -1,7 +1,7 @@
 import { parseYouTubeId } from "@/lib/audio/sources";
 import { SongSchema } from "@/lib/schema";
 import { SONG_PALETTES } from "@/theme";
-import type { Song } from "@/lib/types";
+import type { MotionPack, Song } from "@/lib/types";
 
 import { autoChoreo } from "./demo";
 
@@ -51,15 +51,24 @@ export function parseDevSong(search: Record<string, unknown>): DevSongSpec | nul
   return null;
 }
 
-export function buildDevSong(spec: Exclude<DevSongSpec, { kind: "clear" }>, now: number): Song {
+export function buildDevSong(
+  spec: Exclude<DevSongSpec, { kind: "clear" }>,
+  now: number,
+  pack: MotionPack,
+): Song {
   const title = spec.kind === "youtube" ? "Dev: YouTube" : "Dev: URL";
   const palette = SONG_PALETTES[spec.kind === "youtube" ? 0 : 1] ?? SONG_PALETTES[0];
-  const choreo = autoChoreo(title, spec.bpm, spec.lenSec * 1000, [
-    palette.accent,
-    palette.secondary,
-  ]);
+  const id = DEV_SONG_IDS[spec.kind];
+  const choreo = autoChoreo(
+    title,
+    spec.bpm,
+    spec.lenSec * 1000,
+    [palette.accent, palette.secondary],
+    pack,
+    { seed: id, difficulty: 1 },
+  );
   return SongSchema.parse({
-    id: DEV_SONG_IDS[spec.kind],
+    id,
     title,
     artist: "Testsong",
     bpm: spec.bpm,

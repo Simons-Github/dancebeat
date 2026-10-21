@@ -4,6 +4,7 @@ import { createFileRoute, useNavigate, useSearch } from "@tanstack/react-router"
 import { SongLibrary } from "@/components/SongLibrary";
 import { buildDevSong, DEV_SONG_IDS, parseDevSong } from "@/data/devSongs";
 import { useSongLibrary } from "@/hooks/useSongLibrary";
+import { loadMotionPack } from "@/lib/motionPack";
 
 export const Route = createFileRoute("/")({
   component: Index,
@@ -27,7 +28,7 @@ function Index() {
             const slots: string[] = Object.values(DEV_SONG_IDS);
             for (const s of songs.filter((x) => slots.includes(x.id))) await remove(s);
           } else if (spec) {
-            await save(buildDevSong(spec, Date.now()));
+            await save(buildDevSong(spec, Date.now(), await loadMotionPack()));
           } else {
             console.warn("Ungültiger devsong-Parameter");
           }

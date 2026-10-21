@@ -1,6 +1,8 @@
 import { frameAt } from "../pose";
 import type { AngleKey, Angles, Choreography } from "../types";
 
+export { seededRandom } from "../random";
+
 /**
  * Simulated player for tests and the dev-only simulation mode: the choreography's own angles at
  * time `t`, with Gaussian noise (`noiseDeg` = standard deviation) and a share of frames without any
@@ -12,18 +14,6 @@ export interface SimOptions {
   missRate: number;
   /** Random numbers in [0, 1). Pass a seeded one for reproducible tests. */
   random?: () => number;
-}
-
-/** Small deterministic PRNG (mulberry32). */
-export function seededRandom(seed: number) {
-  let a = seed >>> 0;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
 }
 
 function gaussian(random: () => number) {

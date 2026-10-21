@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { analyzeAudio, type OnsetEnvelope } from "@/lib/beat";
+import { analyzeAudio, estimateBeatPhaseMs, type OnsetEnvelope } from "@/lib/beat";
 import { parseChoreoFile } from "@/lib/library/choreoFile";
 import {
   ARTIST_MAX,
@@ -36,6 +36,7 @@ import {
 import { spotifyStatus, type SpotifyStatus } from "@/lib/audio/spotifyAuth";
 import { StorageFullError, requestPersistentStorage } from "@/lib/library/storage";
 import type { VideoImportResult } from "@/lib/library/videoImport";
+import { loadMotionPack } from "@/lib/motionPack";
 import type { PoseModel } from "@/lib/mediapipe";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import type { ChoreoFile, Song } from "@/lib/types";
@@ -362,7 +363,17 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 choreo: videoResult.choreo,
                 startOffsetMs: videoResult.startOffsetMs,
               }
-            : { type: "auto" };
+            : {
+                type: "auto",
+                pack: await loadMotionPack(),
+                // The analysed audio file sets beat phase and energy; other sources go without.
+                ...(kind === "file" &&
+                  analysis.status === "done" &&
+                  musicBeat && {
+                    energy: musicBeat,
+                    beatPhaseMs: estimateBeatPhaseMs(musicBeat, bpmNum, 0) ?? 0,
+                  }),
+              };
       const song = buildNewSong({
         source,
         title,

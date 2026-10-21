@@ -60,3 +60,6 @@ coverage
 .vercel
 
 *.posetrack.json
+
+# Evaluation bench output (bun run eval-choreo)
+eval-results/

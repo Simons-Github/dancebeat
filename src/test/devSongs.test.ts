@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import { buildDevSong, DEV_SONG_IDS, parseDevSong } from "@/data/devSongs";
-import { SongSchema } from "@/lib/schema";
+import packJson from "@/data/motion-pack.json";
+import { MotionPackSchema, SongSchema } from "@/lib/schema";
+
+const PACK = MotionPackSchema.parse(packJson);
 
 describe("parseDevSong", () => {
   it("returns null without or with unknown parameter", () => {
@@ -52,6 +55,7 @@ describe("buildDevSong", () => {
     const song = buildDevSong(
       { kind: "youtube", videoId: "aaaaaaaaaaa", bpm: 100, lenSec: 60 },
       1000,
+      PACK,
     );
     expect(SongSchema.safeParse(song).success).toBe(true);
     expect(song.id).toBe(DEV_SONG_IDS.youtube);
@@ -64,6 +68,7 @@ describe("buildDevSong", () => {
     const song = buildDevSong(
       { kind: "url", url: "https://example.com/a.mp3", bpm: 120, lenSec: 30 },
       1000,
+      PACK,
     );
     expect(song.id).toBe(DEV_SONG_IDS.url);
     expect(song.id).not.toBe(DEV_SONG_IDS.youtube);

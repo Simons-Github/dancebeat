@@ -1,7 +1,8 @@
 import { z } from "zod";
 
 import { computeAngles, figure, type FigureParams } from "@/lib/pose";
-import type { Choreography, Frame, Move, Song } from "@/lib/types";
+import { DEFAULT_STYLE, generateChoreo, type EnergyCurve } from "@/lib/generator";
+import type { Choreography, Frame, MotionPack, Move, Song } from "@/lib/types";
 import { CHOREO_VERSION } from "@/lib/schema";
 import type { SongRepository } from "@/lib/library/repository";
 
@@ -397,8 +398,12 @@ export function seedDemos(repo: SongRepository, synth: typeof synthTrack = synth
   return seeding;
 }
 
-/** Standard-Choreo für neu hinzugefügte Songs ohne eigene Choreografie. */
-export function autoChoreo(
+/**
+ * The former standard choreography for added songs (until Etappe 13f): every 2 beats one of the
+ * 11 demo poses in a fixed order, "Locker" in between. Kept only as the baseline of the
+ * evaluation bench (`bun run eval-choreo`); the app uses `autoChoreo` (generator).
+ */
+export function legacyAutoChoreo(
   title: string,
   bpm: number,
   durationMs: number,
@@ -412,4 +417,58 @@ export function autoChoreo(
   );
   const gold = [Math.floor(n * 0.3), Math.floor(n * 0.65), n - 1];
   return build(crypto.randomUUID(), title, bpm, seq, gold, colors);
+}
+
+export interface AutoChoreoOptions {
+  /** Generator seed; the song id, so the same song always gets the same choreography. */
+  seed?: string;
+  /** Choreography id; a fresh UUID when omitted. */
+  id?: string;
+  difficulty?: 1 | 2 | 3;
+  /** Time of a beat in the audio (ms), e.g. from `estimateBeatPhaseMs`; 0 when unknown. */
+  beatPhaseMs?: number;
+  /** Onset envelope of the audio (`analyzeAudio`), steers density, clip energy and gold moves. */
+  energy?: EnergyCurve;
+  style?: string;
+}
+
+/**
+ * Standard choreography for added songs without their own: built by the generator
+ * (src/lib/generator) from the motion pack (`loadMotionPack`), deterministic per seed.
+ */
+export function autoChoreo(
+  title: string,
+  bpm: number,
+  durationMs: number,
+  colors: [string, string],
+  pack: MotionPack,
+  opts: AutoChoreoOptions = {},
+): Choreography {
+  const id = opts.id ?? crypto.randomUUID();
+  const { frames, moves } = generateChoreo(
+    {
+      bpm,
+      beatPhaseMs: opts.beatPhaseMs ?? 0,
+      durationMs,
+      ...(opts.energy ? { energy: opts.energy } : {}),
+      style: opts.style ?? DEFAULT_STYLE,
+      difficulty: opts.difficulty ?? 2,
+      seed: opts.seed ?? id,
+    },
+    pack,
+  );
+  const now = Date.now();
+  return {
+    version: CHOREO_VERSION,
+    id,
+    title,
+    bpm,
+    offsetMs: 0,
+    accentColor: colors[0],
+    secondaryColor: colors[1],
+    frames,
+    moves,
+    createdAt: now,
+    updatedAt: now,
+  };
 }

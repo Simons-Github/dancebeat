@@ -66,3 +66,28 @@ export function slerp(a: Vec3, b: Vec3, t: number): Vec3 {
   const v = add(scale(a, Math.sin((1 - t) * th) / s), scale(b, Math.sin(t * th) / s));
   return normalize(v) ?? [a[0], a[1], a[2]];
 }
+
+/**
+ * Applies to `v` the shortest rotation that turns direction `fromDir` into direction `toDir`
+ * (Rodrigues). For (nearly) opposite directions, with the threshold of `slerp`, it turns by 180°
+ * about the axis perpendicular to `from` and to the half-way direction `slerp(from, to, 0.5)`,
+ * so it follows the same path as `slerp`.
+ */
+export function rotateBetween(fromDir: Vec3, toDir: Vec3, v: Vec3): Vec3 {
+  // Stored bones are rounded and only nearly unit length; normalize so the thresholds hold.
+  const from = normalize(fromDir),
+    to = normalize(toDir);
+  if (!from || !to) return [v[0], v[1], v[2]];
+  const c = dot(from, to);
+  if (c > 1 - EPS) return [v[0], v[1], v[2]];
+  // Same threshold as slerp's opposite case, so both turn about the same axis near 180°.
+  if (c < -1 + EPS) {
+    // 180° about the unit axis n: v' = 2 n (n·v) − v.
+    const n = normalize(cross(from, slerp(from, to, 0.5))) ?? [0, 0, 1];
+    return sub(scale(n, 2 * dot(n, v)), v);
+  }
+  // v cosθ + (k × v) + k (k·v)(1 − cosθ) / sin²θ, with k = from × to (|k| = sinθ).
+  const k = cross(from, to);
+  const s2 = dot(k, k);
+  return add(add(scale(v, c), cross(k, v)), scale(k, (dot(k, v) * (1 - c)) / s2));
+}

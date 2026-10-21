@@ -30,6 +30,11 @@ beschreibt Bedeutung und Konventionen.
 | `lowVisibility` | optional, bool   | Frame mit schlechter Erkennung (Video-Import)                        |
 | `pose3d`        | optional, Objekt | 3D-Pose als [`Skeleton3D`](#skeleton3d) (seit v2, Video-Import)      |
 
+Zwischen zwei Frames interpoliert `frameAt` Landmarks, Winkel und `pose3d`: bei höchstens
+`DENSE_FRAME_GAP_MS` (150 ms) Abstand linear (Video-Import alle 50 ms, Generator alle 100 ms),
+bei größerem Abstand mit Smoothstep (Schlüsselposen der Demo-Songs). Vor 13f-1 galt Smoothstep
+immer; bei dichten Frames bremste das die Bewegung an jedem Frame ab (10–20 Hz Ruckeln).
+
 ### Move
 
 | Feld     | Typ        | Bedeutung                                     |
@@ -130,7 +135,13 @@ Nullvektor). 2D (`landmarks`, `angles`) bleibt die Grundlage für Bewertung und 
   bei (0,5; 0,58). Tiefe entfällt. Nicht setzbare Punkte bekommen Sichtbarkeit 0. Ohne Hüften
   werden die Schultern aufrecht über dem Becken verankert (nur Lage, kein Rumpfwinkel).
 - **Interpolation:** slerp je Knochen, Wurzel linear, Gier über den kürzesten Bogen; fehlt ein
-  Knochen auf einer Seite, fehlt er im Ergebnis.
+  Knochen auf einer Seite, fehlt er im Ergebnis. Unterarme und Unterschenkel laufen seit 13f-1
+  relativ zum Elternknochen (Oberarm, Oberschenkel): Die Zielrichtung wird um die Drehung des
+  Elternknochens zurückgedreht, darin per slerp interpoliert und mit dem interpolierten
+  Elternknochen mitgedreht (`rotateBetween`). So beugt sich der Ellbogen gleichmäßig. Je Knochen
+  einzeln klappte etwa „Locker“ → „Muskeln“ den Unterarm (180° Drehung) durch die Blickachse,
+  der 2D-Ellbogenwinkel sprang dabei um 162° in 100 ms. Fehlt der Elternknochen, gilt slerp je
+  Knochen.
 - **Spiegeln** (`mirror3d`): links und rechts tauschen, x spiegeln, Gier umkehren. Die Winkel
   entsprechen `mirrorAngles` wie bei `mirrorChoreo`; anders als dort wird die Figur auch auf dem
   Bildschirm gespiegelt (x → 1 − x), damit die bewegte Seite im Spiegelraum richtig liegt.
@@ -231,6 +242,125 @@ Zwischen Keyframes wird mit `interpolate` überblendet.
 5. **Übergänge:** aufeinanderfolgende Paare der Quellsequenzen (Demo: die Moves der Demo-Songs),
    über die Gruppenvertreter abgebildet und pro Stil gezählt; Paare mit verworfenem Clip zählen
    nicht (keine Überbrückung).
+
+## Generator
+
+Erzeugt die Choreografie für Songs ohne eigene (`autoChoreo` in `src/data/demo.ts`, seit Etappe
+13f-1) aus dem Motion-Paket. Reine Funktionen in `src/lib/generator/`, deterministisch: Zufall
+nur über `randomFromString(seed)` (`src/lib/random.ts`, FNV-1a + mulberry32), Seed ist die
+Song-ID. Gleicher Song, gleiche Choreo. Drei austauschbare Stufen:
+
+```ts
+planStructure(input) → Plan                          // plan.ts
+selectMoves(plan, pack, input, random) → ClipRef[]   // select.ts
+realizeFrames(plan, clips, pack) → { frames, moves } // realize.ts
+generateChoreo(input, pack) = alle drei              // generate.ts
+```
+
+Eingabe `GenerationInput`: `bpm`, `beatPhaseMs` (Zeit eines Beats), `durationMs`, optional
+`energy` (Kurve mit `hopMs` und `values`, z. B. die Onset-Hüllkurve von `analyzeAudio`), `style`
+(bis 13f-2 immer `party`), `difficulty` (1–3), `seed`. `realizeFrames` geht auch ohne die ersten
+beiden Stufen (feste Clip-Folgen für die Demo-Songs aus Etappe 14).
+
+**Aufbau** (`planStructure`, ohne Zufall):
+
+- Beat k liegt bei `beatPhaseMs + k · Beat` (Phase auf einen Beat normiert). Intro 4 Beats ohne
+  Moves, 8, falls 4 Beats vor `MIN_INTRO_MS` (2 s) enden; kurze Songs kürzen das Intro, aber
+  nie unter 1 Beat (10 s bei 30 BPM: 3 Beats, ein Move). Der letzte Move liegt mindestens
+  `END_MARGIN_BEATS` (2) vor dem Ende. Ist dafür kein Platz, hat der Song keine Moves, und der
+  Coach steht durchgehend in der Ruhepose.
+- Phrasen zu 8 Beats, je 4 Phrasen eine Gruppe mit dem Muster A A B A. Gruppen wechseln zwischen
+  Strophe (eigene Phrasen je Strophe) und Refrain (jeder Refrain dieselben Phrasen,
+  `chorus-A`/`chorus-B`). Gleicher Schlüssel = exakt dieselbe Clip-Folge.
+- Dichte (Beats pro Move, 1, 2 oder 4): Grundwert nach Schwierigkeit (1: 2, 2: 2, 3: 1);
+  Phrasenenergie unter ⅓ verdoppelt, ab ⅔ halbiert (nur Schwierigkeit 2 und 3); danach wird
+  verdoppelt, bis Moves mindestens `MIN_STEP_MS` (400 ms) auseinanderliegen.
+- Phrasenenergie: mit Kurve der Rang (0–1) des Mittelwerts je Phrase unter allen Phrasen (vom
+  Pegel unabhängig); reicht die Kurve nicht über alle Phrasen, gilt die Struktur: Strophe A 0,3,
+  B 0,5, Refrain A 0,55, B 0,65 (bleibt unter ⅔, nur eine gemessene Kurve verdichtet
+  Schwierigkeit 2). Gleiche Schlüssel teilen den Mittelwert, damit Wiederholungen dieselben
+  Slots haben. Zielenergie der Clips 0,2 + 0,6 · Phrasenenergie.
+- Gold: letzter Slot jeder Refrain-B-Phrase (ohne Refrain: der ersten B-Phrase), mit Kurve
+  zusätzlich der letzte Slot der lautesten Phrase, und die Schlusspose. Die Schlusspose ersetzt
+  den letzten Slot und wird bis zum Songende gehalten.
+
+**Auswahl** (`selectMoves`): Kandidaten sind Clips des Stils (gibt es keinen, alle Stile) mit
+Schwierigkeit ≤ Eingabe, Energie ≥ `MIN_MOVE_ENERGY` (0,1; `neutral` ist nie ein Move) und, falls
+sie `sourceBpm` haben, höchstens `TEMPO_TOLERANCE` (±12 %) Tempounterschied; Länge ≤ Slot. Pro
+Phrasenschlüssel (in Reihenfolge des ersten Auftretens) eine gewichtete Markov-Kette:
+`(BASE_TRANSITION_WEIGHT + Anzahl im Paket) · Energiepassung · Spiegelbonus · Stufenbonus ·
+playability`. Energiepassung als Gauß-Glocke um die Zielenergie (σ = `ENERGY_SIGMA` 0,25); der
+Spiegelpartner des vorigen Clips zählt `MIRROR_BONUS` (4) mal, aber nicht zurück (kein L R L);
+Clips genau der gewählten Schwierigkeit zählen `LEVEL_BONUS` (2) mal. Kein Clip folgt direkt auf
+sich selbst, auch nicht über Phrasengrenzen und Wiederholungen: Der erste Slot meidet den letzten
+Clip jeder schon gewählten Vorgängerphrase, der letzte Slot den ersten Clip jeder schon gewählten
+Nachfolgerphrase (auch der eigenen). Bleibt bei sehr kleinen Paketen nichts übrig, werden die
+Ausschlüsse gelockert. Schlusspose: symmetrischer Clip (ohne `mirrorOf`), gewichtet nach
+Energie². Ohne passenden Clip bricht der Generator mit „Motion-Paket enthält keine passenden
+Clips“ ab.
+
+**Frames** (`realizeFrames`): Zeitleiste aus Keyframes. Im Intro steht die Ruhepose (Clip mit
+der geringsten Energie unter `MIN_MOVE_ENERGY`, die einen Stil mit dem ersten Move teilt, sonst
+dessen Ankerpose). Der Anker
+eines Clips liegt auf dem Slot-Beat (`ClipRef.beat`), der Clip beginnt also `anchorBeat` früher;
+so halten Moves Abstand und Endmarge, gleich welche Anker die Clips haben. Jeder Clip beginnt
+mit seinem ersten Keyframe; davor wird die vorige Pose gehalten und über `BLEND_BEATS`
+(1 Beat) mit Smoothstep hineingeblendet. Ein Clip behält seine Keyframes bis
+`BLEND_BEATS` vor dem Start des nächsten Clips (bei Anker 0: Slotlänge − 1 Beat), mindestens
+bis zum Anker; der letzte bis zum Songende. Frames liegen
+auf jedem Keyframe und Move und alle `FRAME_STEP_MS` (100 ms), solange sich die Pose ändert;
+gehaltene Posen brauchen keine Zwischenframes. Die Überblendung ist so schon geglättet
+abgetastet; `frameAt` interpoliert dazwischen linear (siehe Frame). Jeder Frame hat `pose3d` (gerundet wie beim
+Video-Import, `src/lib/precision.ts`), 33 Landmarks per `project` (4 Stellen) und Winkel per
+`computeAngles` mit `aspect` 1 (0,1°). Zeiten in ganzen Millisekunden. Moves liegen auf den
+Ankern, mit `label` und `iconId` (sonst `id`) des Clips.
+
+**Größe:** 3 Minuten bei 120 BPM ca. 0,9 MB (Schwierigkeit 1 und 2) bzw. 1,5 MB
+(Schwierigkeit 3); die alte `autoChoreo` ohne `pose3d` war kleiner, Video-Choreos liegen bei
+1,4–1,8 MB.
+
+**Aufruf in der App:** „Song hinzufügen“ mit automatischer Choreografie lädt das Paket per
+`loadMotionPack()` (eigener Chunk, vom Service Worker vorab gecacht) und übergibt
+`buildNewSong` die Schwierigkeit des Formulars. Bei einer analysierten Audiodatei kommen
+Onset-Hüllkurve (Energie) und Beat-Phase (`estimateBeatPhaseMs` über die ersten 10 s) dazu, die
+Moves liegen dann auf den Beats der Musik; bei URL, YouTube und Spotify ist die Phase 0. Dev-Songs
+(`?devsong=…`) nutzen Schwierigkeit 1. Die eingebauten Demo-Songs sind unverändert (Etappe 14).
+
+### Messplatz
+
+`bun run eval-choreo` (`scripts/eval-choreo.ts`, Kennzahlen in `src/lib/generator/metrics.ts`,
+Hilfen in `scripts/evalChoreo.ts`): je BPM 90, 110, 128, 150, Schwierigkeit 1–3 und 20 Seeds
+eine 3-Minuten-Choreo, verglichen mit der alten `autoChoreo` (jetzt `legacyAutoChoreo`, nur
+noch Basislinie). Tabelle in der Konsole, alle Läufe als JSON in `eval-results/` (ignoriert).
+Optionen: `--seeds`, `--bpm`, `--noise`, `--miss`, `--out`, `--baseline-only`.
+
+| Kennzahl    | Bedeutung                                                                                    |
+| ----------- | -------------------------------------------------------------------------------------------- |
+| Moves/min   | (Moves − 1) pro Minute zwischen erstem und letztem Move                                      |
+| Messbar     | Mittel je Move: Anteil der 8 Gliedmaßenwinkel, die sicher messbar sind (`measurableAngles`)  |
+| Schritt °   | mittlerer Winkelabstand aufeinanderfolgender Moves                                           |
+| Wiederh.    | Anteil aufeinanderfolgender Moves mit praktisch gleicher Pose (alle Winkel unter 5° Abstand) |
+| Abdeckung   | Anteil der Paket-Clips (ohne Ruheposen), die mindestens einmal vorkommen                     |
+| max/p95 °/s | höchste bzw. 95.-Perzentil-Winkelgeschwindigkeit einer Gliedmaße, `frameAt` alle 20 ms       |
+| Score sim   | simulierter Spieler (`simulatedAngles`, 30 Bilder/s, Standard 10° Rauschen, 10 % Ausfall)    |
+
+Stand 13f-1 nach dem Review (20 Seeds, 10° Rauschen, 10 % Ausfall; Generator-Spitzen vor der
+hierarchischen Interpolation bis 2400°/s, vor der linearen `frameAt`-Interpolation 525–813°/s):
+
+| BPM | alt: Moves/min | Generator 1 / 2 / 3: Moves/min | alt: max (p95) °/s | Generator: max °/s | Generator p95 °/s (1 / 2 / 3) |
+| --- | -------------- | ------------------------------ | ------------------ | ------------------ | ----------------------------- |
+| 90  | 45             | 36 / 36 / 72                   | 599 (493)          | 355                | 292 / 229 / 285               |
+| 110 | 55             | 45 / 45 / 89                   | 732 (597)          | 430                | 358 / 278 / 349               |
+| 128 | 64             | 52 / 52 / 103                  | 852 (700)          | 500                | 409 / 320 / 395               |
+| 150 | 75             | 61 / 61 / 121                  | 991 (774)          | 549                | 488 / 378 / 479               |
+
+Beide sind zu 100 % messbar und ohne direkte Wiederholung; Schrittweite alt 34°, Generator
+33–39°; Abdeckung alt 1, Generator 0,64 bei Schwierigkeit 1 (nur Arm-Moves, 7 von 11 Clips)
+und 0,99–1 sonst; Gold alt 3, Generator 5–8. Der simulierte Spieler holt bei 10° Rauschen in
+beiden Varianten jeden Move als PERFECT (der Scorer nimmt die beste Pose aus ±250 ms); erst
+`--noise=30 --miss=0.2` trennt etwas (PERFECT-Anteil alt 0,50–0,55, Generator 0,44–0,56, bei
+Schwierigkeit 3 am niedrigsten). Reaktionszeit simuliert er nicht: Ob dichte Stufe-3-Phrasen
+mitzumachen sind, zeigt nur ein Gerätetest.
 
 ## Video-Import
 

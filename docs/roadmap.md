@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13d, 13e-1 ✅)              | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13d, 13e-1, 13f-1, 13g ✅)  | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -995,6 +995,49 @@ Startpaket hat 12 statt 13 Posen (`DEMO_POSES` hat 12); `iconId` ist zusätzlich
 die Piktogramm-ID der Demo-Moves erhalten bleibt; Keyframe-Beats steigen streng (sonst wäre die
 Winkelgeschwindigkeit undefiniert). Tests: `src/test/motionPack.test.ts` (Schema, jeder Filter
 einzeln, Gruppierung, Spiegelpaare, Übergänge, Aktualität der JSON-Datei, Laden).
+
+**13g-0, 13f-1, 13g Generator und Messplatz – umgesetzt, Gerätetest offen.** Neue Songs mit
+automatischer Choreografie bekommen sie vom Generator (`src/lib/generator/`) statt von der festen
+Posenfolge. Reine Funktionen `planStructure` → `selectMoves` → `realizeFrames`, deterministisch
+über den Seed (Song-ID, `src/lib/random.ts`). Aufbau: Intro ohne Moves, Phrasen zu 8 Beats im
+Muster A A B A, Gruppen abwechselnd Strophe und Refrain (jeder Refrain identisch, Gold am Ende
+jeder Refrain-B-Phrase), Dichte aus Schwierigkeit und Energie, Schlusspose. Auswahl:
+gewichtete Markov-Kette über die Übergänge des Motion-Pakets mit Energiepassung,
+Spiegelpaar-Bonus und Stufenbonus, ohne direkt wiederholten Clip. Frames: Keyframe-Zeitleiste mit
+1 Beat Smoothstep-Überblendung, `pose3d` an jedem Frame, Landmarks per `project`, Winkel per
+`computeAngles`. `autoChoreo(title, bpm, durationMs, colors, pack, opts)` nimmt das Paket
+entgegen; „Song hinzufügen“ lädt es erst beim Speichern (`loadMotionPack`) und reicht Song-ID,
+Schwierigkeit und bei Audiodateien Onset-Hüllkurve und Beat-Phase durch, Dev-Songs nutzen
+Schwierigkeit 1. Die Demo-Songs sind unverändert. Details:
+[choreography-format.md](choreography-format.md#generator).
+Der Messplatz (`bun run eval-choreo`, `src/lib/generator/metrics.ts`) vergleicht mit der alten
+Choreo, die als `legacyAutoChoreo` nur noch Basislinie ist (13g-0); Zahlen in
+[choreography-format.md](choreography-format.md#messplatz). Er fand Geschwindigkeitsspitzen bis
+2400°/s: Bei 180° Unterarmdrehung (z. B. „Locker“ → „Muskeln“) lief slerp je Knochen durch die
+Blickachse. **Behoben** im Skeleton-Kern: `interpolate` führt Unterarm und Unterschenkel relativ
+zum Elternknochen (`rotateBetween`), seitdem liegt der Generator bei allen Tempi unter der alten
+Choreo (max 525–813°/s statt 599–991°/s, nach der `frameAt`-Korrektur unten 355–549°/s). Das betrifft auch `frameAt` für `pose3d` aus dem
+Video-Import (nur gespeichert, nicht angezeigt) und das Motion-Paket (unverändert).
+Rundungshelfer liegen jetzt gemeinsam in `src/lib/precision.ts`. Aus dem abschließenden
+Review: `frameAt` interpoliert Frames mit höchstens 150 ms Abstand linear statt mit Smoothstep
+(sonst ruckelte der Coach bei Generator- und Video-Choreos mit 10–20 Hz; Demo-Songs unverändert,
+Gerätetest offen), `rotateBetween` nutzt die Antipoden-Schwelle von `slerp` und normiert seine
+Eingaben, die Energiekurve überspringt nicht-endliche Werte. Abweichungen vom Plan: Refrain
+als Wiederholung ganzer Gruppen (der Plan nannte nur A A B A), Gold nur am Ende der Refrain-B-Phrasen statt jeder
+B-Phrase (sonst ~11 Gold-Moves in 3 Minuten), Mindestabstand zweier Moves `MIN_STEP_MS` (400 ms)
+statt `MIN_MOVE_GAP_MS`, Schwierigkeit 2 verdichtet nur mit gemessener Energiekurve. Der
+simulierte Spieler kann Varianten bei 10° Rauschen nicht unterscheiden (alle Moves PERFECT);
+dafür gibt es `--noise` und `--miss`. Tests: `src/test/generator.test.ts` (unabhängig vom Code geschrieben; fand den latenten Fehler, dass Clips mit Anker > 0 Endmarge und Abstand verletzen
+konnten, behoben: der Anker liegt auf dem Slot-Beat), `choreoMetrics.test.ts`, neue Fälle in
+`skeleton.test.ts`, `newSong.test.ts`, `devSongs.test.ts`. Playwright (projektlokaler Server,
+Flags per `ps` geprüft, 390×844 und 844×390): „Song hinzufügen“ (URL, Stufe 3, 128 BPM, 60 s)
+legt eine Choreo mit 95 Moves an, `pose3d` an allen 503 Frames, Konsole ohne Fehler. Das Spiel
+mit `?sim=1` konnte im Browser nicht geprüft werden (keine abspielbare Testdatei).
+13f-2 (Knopf „neu erzeugen“, Stil und Schwierigkeit)
+wartet auf Entscheidung 13-0.6; 13e-2 und 13h bleiben offen. **Nur am Gerät prüfbar, nicht
+getestet:** ob sich die Choreos besser anfühlen als die alte Posenfolge, ob dichte Stufe-3-Phrasen
+(bis 2 Moves/s) mitzumachen sind, ob die Beat-Phase aus der Audiodatei die Moves hörbar auf den
+Takt legt.
 
 ### 14. Neue Demo-Songs ⏳
 

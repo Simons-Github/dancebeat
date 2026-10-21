@@ -360,7 +360,12 @@ erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle
 - URL-Quellen nur `https:` (Ausnahme localhost), sonst blockiert der Browser sie auf der
   HTTPS-Seite als Mixed Content. YouTube-Links: `watch?v=`, `youtu.be`, `shorts`, `embed`,
   `youtube-nocookie.com` oder die blanke ID.
-- Choreografie: automatisch (`autoChoreo`, Farbpaar zufällig aus `SONG_PALETTES`), Import
+- Choreografie: automatisch (`autoChoreo` über den Generator, seit Etappe 13f-1, Farbpaar
+  zufällig aus `SONG_PALETTES`; siehe
+  [Generator](choreography-format.md#generator)). Erst beim Speichern lädt `loadMotionPack()`
+  das Motion-Paket als eigenen Chunk (vom Service Worker vorab gecacht, also auch offline, kein
+  externer Abruf). Seed ist die neue Song-ID, die Schwierigkeit kommt aus dem Formular, bei einer
+  analysierten Audiodatei auch Energie (Onset-Hüllkurve) und Beat-Phase. Import
   einer Exportdatei (`parseChoreoFile`) oder aus einem Tanzvideo (siehe
   [Video-Import im Dialog](#video-import-im-dialog-etappe-8c)). Beim Import gelten BPM, Sync- und Start-Offset der Datei
   (die Moves sind darauf getimt); Titel, Künstler und Schwierigkeit kommen aus dem Formular und
@@ -1038,6 +1043,10 @@ Adresse ab, deshalb gibt es keinen neuen Eintrag unter [Externe Abrufe](#externe
 ## Build und Werkzeuge
 
 - Pfad-Alias `@` → `src/` (tsconfig `paths`, in Vite über `resolve.tsconfigPaths`).
+- Offline-Skripte (Bun, nicht Teil des Builds): `bun run build-motion-pack` schreibt
+  `src/data/motion-pack.json`, `bun run eval-choreo` misst generierte Choreografien gegen die
+  alte Basislinie (Ausgabe in `eval-results/`, ignoriert), `bun run tune-video` sucht Parameter
+  für den Video-Import. Ihre Logik liegt testbar in `src/lib` bzw. `scripts/*.ts`-Hilfsmodulen.
 - `tsconfig.json` beschränkt globale Typen über `types`; neue `@types`-Pakete dort eintragen.
 - `bunfig.toml` setzt eine 24-Stunden-Schutzfrist für neue Paketversionen.
 - PWA (Etappe 7a): `public/manifest.webmanifest` und `public/icons/` werden unverändert nach

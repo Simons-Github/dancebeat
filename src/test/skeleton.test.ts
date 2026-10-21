@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { mirrorAngles, mirrorLandmarks } from "@/lib/choreo";
-import { angleDiff, computeAngles, figure, type FigureParams } from "@/lib/pose";
+import { angleDiff, computeAngles, figure, figure3d, type FigureParams } from "@/lib/pose";
 import {
   BONE_IDS,
   FIGURE_UNITS_PER_METER,
@@ -9,6 +9,7 @@ import {
   length,
   mirror3d,
   project,
+  rotateBetween,
   rotateYaw,
   slerp,
   type Landmark3d,
@@ -176,6 +177,34 @@ describe("slerp", () => {
   });
 });
 
+describe("rotateBetween", () => {
+  const close = (v: Vec3, w: Vec3) => v.forEach((x, i) => expect(x).toBeCloseTo(w[i]!, 12));
+
+  it("dreht from auf to und andere Vektoren mit", () => {
+    close(rotateBetween([1, 0, 0], [0, 1, 0], [1, 0, 0]), [0, 1, 0]);
+    close(rotateBetween([1, 0, 0], [0, 1, 0], [0, 1, 0]), [-1, 0, 0]);
+    close(rotateBetween([1, 0, 0], [0, 1, 0], [0, 0, 1]), [0, 0, 1]); // on the axis
+    const v: Vec3 = [0.3, -0.4, 0.5];
+    expect(length(rotateBetween([0, 0, 1], [0.6, 0.8, 0], v))).toBeCloseTo(length(v), 12);
+  });
+
+  it("verträgt gerundete, nicht ganz normierte Richtungen (kein NaN)", () => {
+    const thigh: Vec3 = [0.087, -0.996, 0]; // |v| ≈ 0.9998, as stored in the motion pack
+    close(rotateBetween(thigh, thigh, [0.3, 0.4, 0.5]), [0.3, 0.4, 0.5]);
+    const r = rotateBetween(thigh, [0, 0.5, 0], [1, 0, 0]);
+    expect(r.every(Number.isFinite)).toBe(true);
+  });
+
+  it("lässt bei gleicher Richtung unverändert und dreht entgegengesetzt wie slerp", () => {
+    close(rotateBetween([0, 1, 0], [0, 1, 0], [0.6, 0, 0.8]), [0.6, 0, 0.8]);
+    // 180° from up to down: same path as slerp, through the forward axis.
+    close(rotateBetween([0, 1, 0], [0, -1, 0], [0, 1, 0]), [0, -1, 0]);
+    // That is 180° about the x axis: forward turns backward, the axis stays.
+    close(rotateBetween([0, 1, 0], [0, -1, 0], [0, 0, 1]), [0, 0, -1]);
+    close(rotateBetween([0, 1, 0], [0, -1, 0], [1, 0, 0]), [1, 0, 0]);
+  });
+});
+
 describe("interpolate", () => {
   it("interpoliert Knochen, Wurzel und Gier über den kürzesten Bogen", () => {
     const a = upright();
@@ -188,6 +217,33 @@ describe("interpolate", () => {
     expect(m.root.pos[0]).toBeCloseTo(0.1, 12);
     expect(Math.abs(angleDiff(m.root.yawDeg, 180))).toBeLessThan(1e-9);
     expect(interpolate(a, b, 0)).toEqual(a);
+  });
+
+  it("beugt den Ellbogen gleichmäßig, wenn Ober- und Unterarm gegenläufig drehen", () => {
+    // Locker → Muskeln: the forearm turns by exactly 180° in the body system. Bone by bone it
+    // would pass the viewing axis and the projected elbow angle would flip; relative to the
+    // upper arm it bends evenly from 0° to 100°.
+    const a = figure3d({ la: 10, ra: 10 });
+    const b = figure3d({ la: 90, ra: 90, le: 100, re: 100 });
+    let prev = 0;
+    for (let i = 1; i <= 20; i++) {
+      const sk = interpolate(a, b, i / 20);
+      expect(Math.abs(sk.bones.leftForearm![2])).toBeLessThan(1e-9); // stays in the image plane
+      const elbow = computeAngles(project(sk)).leftElbow!;
+      expect(Math.abs(elbow - (100 * i) / 20)).toBeLessThan(1e-6);
+      expect(elbow).toBeGreaterThan(prev);
+      prev = elbow;
+    }
+  });
+
+  it("dreht den Unterarm mit dem Oberarm, wenn der Ellbogen gleich bleibt", () => {
+    const a = upright();
+    const b = upright();
+    b.bones.leftUpperArm = [1, 0, 0];
+    b.bones.leftForearm = [1, 0, 0];
+    const m = interpolate(a, b, 0.5);
+    expect(m.bones.leftForearm![0]).toBeCloseTo(Math.SQRT1_2, 12);
+    expect(m.bones.leftForearm![1]).toBeCloseTo(-Math.SQRT1_2, 12);
   });
 
   it("lässt Knochen weg, die auf einer Seite fehlen", () => {

@@ -158,7 +158,18 @@ export function bodyCheck(lm: Landmark[] | null) {
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
 /**
- * `pose3d` at time `t` between frames `lo` and `lo + 1`: interpolated (same smoothstep as the
+ * Frames at most this far apart are interpolated linearly. Easing (smoothstep) suits sparse key
+ * poses (demo choreos, ≥ 240 ms apart); on dense frames (video import every 50 ms, generator
+ * every 100 ms) it would stop the motion at every frame, a visible 10–20 Hz stutter.
+ */
+export const DENSE_FRAME_GAP_MS = 150;
+
+/** Interpolation weight for fraction `k` of a gap of `gapMs`: smoothstep, linear on dense frames. */
+const easeFor = (k: number, gapMs: number) =>
+  gapMs <= DENSE_FRAME_GAP_MS ? k : k * k * (3 - 2 * k);
+
+/**
+ * `pose3d` at time `t` between frames `lo` and `lo + 1`: interpolated (eased like the
  * landmarks) between the nearest frames with a 3D pose, which may skip at most one frame without
  * (the video import stores `pose3d` on every second frame). Otherwise there is none.
  */
@@ -171,7 +182,7 @@ function pose3dAt(frames: Frame[], lo: number, t: number): Skeleton3D | null {
   // On a frame with pose3d it is returned as is (interpolate would drop bones b lacks).
   if (k === 0) return a.pose3d;
   if (k === 1) return b.pose3d;
-  return interpolate(a.pose3d, b.pose3d, k * k * (3 - 2 * k));
+  return interpolate(a.pose3d, b.pose3d, easeFor(k, b.timeMs - a.timeMs));
 }
 
 export function frameAt(frames: Frame[], t: number): Frame | null {
@@ -193,7 +204,7 @@ export function frameAt(frames: Frame[], t: number): Frame | null {
     b = frames[hi];
   if (!a || !b) return null;
   const k = (t - a.timeMs) / (b.timeMs - a.timeMs || 1);
-  const e = k * k * (3 - 2 * k); // smoothstep für weiche Coach-Bewegung
+  const e = easeFor(k, b.timeMs - a.timeMs); // weiche Coach-Bewegung zwischen Schlüsselposen
   const landmarks = a.landmarks.map((p, i) => {
     const q = b.landmarks[i] ?? p;
     return [lerp(p[0], q[0], e), lerp(p[1], q[1], e), Math.min(vis(p), vis(q))] as Landmark;
