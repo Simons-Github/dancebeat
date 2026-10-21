@@ -1020,7 +1020,13 @@ Adresse ab, deshalb gibt es keinen neuen Eintrag unter [Externe Abrufe](#externe
   prüfen die API und schlagen still fehl; beide nur aus Effekten heraus aufgerufen.
 - Statisches Hosting braucht einen SPA-Fallback auf `index.html` für Deep Links
   (`vite preview` macht das bereits).
-- **Vercel:** `vercel.json` setzt Install (`bun install --frozen-lockfile`), Build
+- **Vercel:** Projekt `cool-joule/dancebeat`, Produktion unter
+  `https://dancebeat.berger-labs.com` (CNAME bei Porkbun auf den Vercel-Wert aus
+  `vercel domains verify`; Nameserver bleiben bei Porkbun, die Hauptdomain `berger-labs.com` ist
+  davon unabhängig). Push auf `main` deployt automatisch in Produktion, andere Branches als
+  Preview. Spotify-Redirect-URI: `https://dancebeat.berger-labs.com/spotify-callback`.
+  IndexedDB, Einstellungen und Service Worker gelten pro Origin; die `vercel.app`-Adresse hat
+  eine eigene, getrennte Bibliothek. `vercel.json` setzt Install (`bun install --frozen-lockfile`), Build
   (`bun run build`, lädt die Modelle auf dem Build-Server per `prebuild`) und Ausgabe `dist/`.
   Rewrite aller unbekannten Pfade auf `index.html` (vorhandene Dateien haben Vorrang).
   Header: `Content-Security-Policy: frame-ancestors 'none'` (geht als Meta-Tag nicht; mehrere
