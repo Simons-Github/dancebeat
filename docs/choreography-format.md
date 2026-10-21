@@ -138,6 +138,100 @@ Nullvektor). 2D (`landmarks`, `angles`) bleibt die Grundlage für Bewertung und 
   die Landmarks dort nur umbenannt werden, zeigen Projektion und gespeicherte Landmarks danach
   dieselbe Bewegung.
 
+## Motion-Paket
+
+Alle Moves, die der Generator (Etappe 13f) verwenden darf, als eigenes Datenartefakt mit eigener
+Version (seit Etappe 13e-1): `src/data/motion-pack.json`, erzeugt mit `bun run build-motion-pack`
+(`scripts/build-motion-pack.ts`, Logik in `src/lib/motionPack.ts`), zur Laufzeit erst bei Bedarf
+per dynamischem `import()` geladen (`loadMotionPack`) und gegen `MotionPackSchema`
+(`src/lib/schema.ts`) geprüft. Die Datei ist generiert: nicht von Hand bearbeiten (in
+`.prettierignore`); ein Test schlägt fehl, wenn sie nicht mehr zum Erzeugungsergebnis passt.
+
+```json
+{
+  "version": 1,
+  "clips": [
+    {
+      "id": "demo:left-up",
+      "label": "Links hoch",
+      "iconId": "left-up",
+      "styles": ["party"],
+      "difficulty": 1,
+      "energy": 0.352,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        { "beat": 0, "pose3d": { "…": "…" } },
+        { "beat": 1, "pose3d": { "…": "…" } }
+      ],
+      "mirrorOf": "demo:right-up",
+      "playability": 1,
+      "source": "demo"
+    }
+  ],
+  "transitions": { "party": { "demo:left-up": { "demo:right-up": 3 } } }
+}
+```
+
+| Feld          | Bedeutung                                                                                                                               |
+| ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | eindeutig, mit Quellpräfix (`demo:<Pose-ID>`)                                                                                           |
+| `label`       | Anzeigename (Deutsch)                                                                                                                   |
+| `iconId`      | optional, wird `Move.iconId` (Demo: Pose-ID wie bisher)                                                                                 |
+| `styles`      | mindestens ein Stil; Demo-Posen: `party`                                                                                                |
+| `difficulty`  | 1–3: 2, wenn ein Beinknochen mehr als `LEG_DIFFICULTY_DEG` (15°) von `neutral` abweicht, sonst 1; 3 bleibt späteren Quellen vorbehalten |
+| `energy`      | 0–1: mittlerer Knochenwinkel zu `neutral` / `ENERGY_FULL_DEG` (90°)                                                                     |
+| `beats`       | Länge 1–4 Beats                                                                                                                         |
+| `anchorBeat`  | Beat in [0, `beats`], an dem bewertet wird                                                                                              |
+| `keyframes`   | mindestens einer, `{ beat, pose3d }`, Beats streng steigend in [0, `beats`]                                                             |
+| `mirrorOf`    | ID des Spiegel-Clips, immer gegenseitig; fehlt bei symmetrischen Clips                                                                  |
+| `playability` | Anteil der 8 Arm- und Beinwinkel, die in der Frontalprojektion sicher messbar sind                                                      |
+| `sourceBpm`   | optional, Tempo der Quelle; fehlt bei Posen ohne eigenes Tempo                                                                          |
+| `source`      | Kennung der Quelle (Credits, Filter), Demo: `demo`                                                                                      |
+
+`transitions`: pro Stil Gewichte `von → nach` (positive Zahlen, dünn besetzt, fehlendes Paar =
+Grundgewicht des Generators). Das Schema prüft eindeutige IDs, gegenseitige `mirrorOf` und dass
+jeder Übergang auf vorhandene Clips zeigt, die den Stil des Übergangs tragen. Version: `MOTION_PACK_VERSION` = 1.
+
+**Anker und Keyframes:** Ein Clip beginnt mit der Ankunft in seiner Pose; die Überblendung vom
+vorigen Move hinein erledigt der Generator vor dem Clip. Demo-Posen sind gehaltene Posen: 1 Beat,
+Keyframes bei Beat 0 und 1 mit derselben `figure3d`-Pose, Anker bei Beat 0, ohne `sourceBpm`.
+`neutral` ist als Clip enthalten (Energie 0); ob er verwendet wird, entscheidet der Generator.
+Zwischen Keyframes wird mit `interpolate` überblendet.
+
+**Erzeugung** (`buildMotionPack`), alle Zahlen auf 3 Stellen gerundet, Clips nach ID sortiert:
+
+1. **Maße:** Abstand zweier Posen = größter Winkel zwischen entsprechenden Knochenrichtungen
+   (Maximum, nicht Mittelwert: `disco-l` und `left-up` unterscheiden sich fast nur in einem
+   Unterarm); der Unterschied der Blickrichtung (Gier) zählt als weiterer Winkel, eine um 40°
+   gedrehte Pose ist also nicht gleich der frontalen. Fehlt einer der 12 Knochen, ist der
+   Abstand unendlich. Ein Winkel ist „sicher
+   messbar“, wenn `computeAngles(project(pose))` ihn liefert und Segment und Bezugssegment (für
+   Schulter und Hüfte der Rumpf) nach der Projektion mindestens `MIN_PROJECTED_FRACTION` (50 %)
+   ihrer Länge behalten.
+2. **Filter** (je einer mit Begründung, das Skript gibt verworfene Clips aus): am Anker mindestens
+   `MIN_MEASURABLE_ANGLES` (4) sicher messbare Winkel; an allen Keyframes Gier höchstens
+   `MAX_YAW_DEG` (±45°); keine Bodenarbeit an irgendeinem Keyframe: Rumpf höchstens 45° aus der
+   Senkrechten (`MIN_TORSO_UP` = cos 45°, sonst Liegen), mittlere Kniehöhe mindestens
+   `KNEE_MARGIN_M` (0,1 m) unter dem Becken (sonst Sitzen), Becken mindestens
+   `MIN_PELVIS_HEIGHT_FRACTION` (0,55) der Beinlänge über dem tiefsten Knöchel (Knien ergibt
+   0,5, die Demo-Hocke etwa 0,8); Höhen aus Hüftachse, Ober- und Unterschenkeln mit
+   `BONE_LENGTHS` (das Körpersystem ist nur um die Senkrechte gedreht, y ist also Welt-oben),
+   fehlende Knochen überspringen die jeweilige Prüfung. Schnellster Knochen zwischen zwei
+   Keyframes höchstens `MAX_BONE_SPEED_DEG_PER_S` (720°/s), Knochen in Weltrichtung verglichen
+   und die Gieränderung als eigene Drehung gezählt; Beats über `sourceBpm` umgerechnet, ohne mit
+   `FALLBACK_BPM` (150).
+3. **Gruppieren:** Leader-Clustering nach ID sortiert, Ankerabstand höchstens `GROUP_MAX_DEG`
+   (20°), nur unter Clips mit gleichem `beats` und gleicher Stilmenge (sonst änderte das
+   Zusammenfassen die Länge oder hängte Übergänge an einen Clip ohne diesen Stil); von jeder
+   Gruppe bleibt das Medoid (kleinste Abstandssumme).
+4. **Spiegelpaare:** Partner ist der Clip gleicher Länge, dessen Anker dem gespiegelten eigenen
+   Anker (`mirror3d`) am nächsten liegt, höchstens `MIRROR_MAX_DEG` (5°); ist das der Clip
+   selbst, ist er symmetrisch. Nur gegenseitige Paare bleiben.
+5. **Übergänge:** aufeinanderfolgende Paare der Quellsequenzen (Demo: die Moves der Demo-Songs),
+   über die Gruppenvertreter abgebildet und pro Stil gezählt; Paare mit verworfenem Clip zählen
+   nicht (keine Überbrückung).
+
 ## Video-Import
 
 `choreoFromPoseTrack` (`src/lib/videoChoreo.ts`) baut aus einer Pose-Spur eines Videos eine

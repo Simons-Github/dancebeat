@@ -147,3 +147,85 @@ export const ChoreoFileSchema = z.object({
   song: ExportedSongSchema,
   choreo: ChoreographySchema,
 });
+
+export const MOTION_PACK_VERSION = 1;
+
+const unit = z.number().finite().min(0).max(1);
+
+export const MotionKeyframeSchema = z.object({
+  beat: z.number().finite().nonnegative(),
+  pose3d: Skeleton3DSchema,
+});
+
+/**
+ * One move of the motion pack: a short pose sequence of `beats` beats, scored at `anchorBeat`.
+ * Keyframe beats ascend strictly within [0, beats]. See docs/choreography-format.md#motion-paket.
+ */
+export const MotionClipSchema = z
+  .object({
+    id: z.string().min(1).max(80),
+    label: z.string().max(60),
+    /** Pictogram id for `Move.iconId` (demo clips: the pose id). */
+    iconId: z.string().max(60).optional(),
+    styles: z.array(z.string().min(1)).min(1),
+    difficulty: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+    energy: unit,
+    beats: z.number().int().min(1).max(4),
+    anchorBeat: z.number().finite().nonnegative(),
+    keyframes: z.array(MotionKeyframeSchema).min(1),
+    /** Id of the mirrored clip; absent for symmetric clips. */
+    mirrorOf: z.string().min(1).optional(),
+    playability: unit,
+    sourceBpm: z.number().finite().positive().optional(),
+    source: z.string().min(1),
+  })
+  .superRefine((c, ctx) => {
+    if (c.anchorBeat > c.beats)
+      ctx.addIssue({ code: "custom", path: ["anchorBeat"], message: "Anker nach Clipende" });
+    c.keyframes.forEach((k, i) => {
+      const prev = c.keyframes[i - 1];
+      if (k.beat > c.beats || (prev && prev.beat >= k.beat))
+        ctx.addIssue({
+          code: "custom",
+          path: ["keyframes", i, "beat"],
+          message: "Keyframe-Beats müssen streng steigen und in [0, beats] liegen",
+        });
+    });
+  });
+
+const weights = z.record(z.string(), z.number().finite().positive());
+
+export const MotionPackSchema = z
+  .object({
+    version: z.literal(MOTION_PACK_VERSION),
+    clips: z.array(MotionClipSchema),
+    /** Per style: weight of `from → to` (sparse; missing pairs use the base weight). */
+    transitions: z.record(z.string(), z.record(z.string(), weights)),
+  })
+  .superRefine((pack, ctx) => {
+    const byId = new Map<string, z.infer<typeof MotionClipSchema>>();
+    pack.clips.forEach((c, i) => {
+      if (byId.has(c.id))
+        ctx.addIssue({ code: "custom", path: ["clips", i, "id"], message: `Doppelte ID ${c.id}` });
+      byId.set(c.id, c);
+    });
+    pack.clips.forEach((c, i) => {
+      if (c.mirrorOf === undefined) return;
+      const other = byId.get(c.mirrorOf);
+      if (c.mirrorOf === c.id || other?.mirrorOf !== c.id)
+        ctx.addIssue({
+          code: "custom",
+          path: ["clips", i, "mirrorOf"],
+          message: `mirrorOf ${c.mirrorOf} fehlt oder ist nicht gegenseitig`,
+        });
+    });
+    for (const [style, from] of Object.entries(pack.transitions))
+      for (const [a, to] of Object.entries(from))
+        for (const b of Object.keys(to))
+          if (![a, b].every((id) => byId.get(id)?.styles.includes(style)))
+            ctx.addIssue({
+              code: "custom",
+              path: ["transitions", style, a, b],
+              message: `Übergang ${a} → ${b}: unbekannter Clip oder Clip ohne Stil ${style}`,
+            });
+  });

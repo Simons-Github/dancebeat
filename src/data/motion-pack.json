@@ -1,0 +1,2055 @@
+{
+  "version": 1,
+  "clips": [
+    {
+      "id": "demo:arms-up",
+      "label": "Arme hoch",
+      "iconId": "arms-up",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 1,
+      "energy": 0.593,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.174,
+                0.985,
+                0
+              ],
+              "leftForearm": [
+                0.174,
+                0.985,
+                0
+              ],
+              "rightUpperArm": [
+                -0.174,
+                0.985,
+                0
+              ],
+              "rightForearm": [
+                -0.174,
+                0.985,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.174,
+                0.985,
+                0
+              ],
+              "leftForearm": [
+                0.174,
+                0.985,
+                0
+              ],
+              "rightUpperArm": [
+                -0.174,
+                0.985,
+                0
+              ],
+              "rightForearm": [
+                -0.174,
+                0.985,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:disco-l",
+      "label": "Disco",
+      "iconId": "disco-l",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 1,
+      "energy": 0.397,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0.174,
+                0.985,
+                0
+              ],
+              "neck": [
+                0.153,
+                0.988,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.5,
+                0.866,
+                0
+              ],
+              "leftForearm": [
+                0.5,
+                0.866,
+                0
+              ],
+              "rightUpperArm": [
+                -0.5,
+                -0.866,
+                0
+              ],
+              "rightForearm": [
+                -0.866,
+                0.5,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0.174,
+                0.985,
+                0
+              ],
+              "neck": [
+                0.153,
+                0.988,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.5,
+                0.866,
+                0
+              ],
+              "leftForearm": [
+                0.5,
+                0.866,
+                0
+              ],
+              "rightUpperArm": [
+                -0.5,
+                -0.866,
+                0
+              ],
+              "rightForearm": [
+                -0.866,
+                0.5,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "mirrorOf": "demo:disco-r",
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:disco-r",
+      "label": "Disco",
+      "iconId": "disco-r",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 1,
+      "energy": 0.397,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                -0.174,
+                0.985,
+                0
+              ],
+              "neck": [
+                -0.153,
+                0.988,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.5,
+                -0.866,
+                0
+              ],
+              "leftForearm": [
+                0.866,
+                0.5,
+                0
+              ],
+              "rightUpperArm": [
+                -0.5,
+                0.866,
+                0
+              ],
+              "rightForearm": [
+                -0.5,
+                0.866,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                -0.174,
+                0.985,
+                0
+              ],
+              "neck": [
+                -0.153,
+                0.988,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.5,
+                -0.866,
+                0
+              ],
+              "leftForearm": [
+                0.866,
+                0.5,
+                0
+              ],
+              "rightUpperArm": [
+                -0.5,
+                0.866,
+                0
+              ],
+              "rightForearm": [
+                -0.5,
+                0.866,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "mirrorOf": "demo:disco-l",
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:flex",
+      "label": "Muskeln",
+      "iconId": "flex",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 1,
+      "energy": 0.481,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                1,
+                0,
+                0
+              ],
+              "leftForearm": [
+                -0.174,
+                0.985,
+                0
+              ],
+              "rightUpperArm": [
+                -1,
+                0,
+                0
+              ],
+              "rightForearm": [
+                0.174,
+                0.985,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                1,
+                0,
+                0
+              ],
+              "leftForearm": [
+                -0.174,
+                0.985,
+                0
+              ],
+              "rightUpperArm": [
+                -1,
+                0,
+                0
+              ],
+              "rightForearm": [
+                0.174,
+                0.985,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:kick-l",
+      "label": "Kick",
+      "iconId": "kick-l",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 2,
+      "energy": 0.282,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                -0.139,
+                0.99,
+                0
+              ],
+              "neck": [
+                -0.123,
+                0.992,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.866,
+                -0.5,
+                0
+              ],
+              "leftForearm": [
+                0.866,
+                -0.5,
+                0
+              ],
+              "rightUpperArm": [
+                -0.866,
+                -0.5,
+                0
+              ],
+              "rightForearm": [
+                -0.866,
+                -0.5,
+                0
+              ],
+              "leftThigh": [
+                0.766,
+                -0.643,
+                0
+              ],
+              "leftShin": [
+                0.766,
+                -0.643,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                -0.139,
+                0.99,
+                0
+              ],
+              "neck": [
+                -0.123,
+                0.992,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.866,
+                -0.5,
+                0
+              ],
+              "leftForearm": [
+                0.866,
+                -0.5,
+                0
+              ],
+              "rightUpperArm": [
+                -0.866,
+                -0.5,
+                0
+              ],
+              "rightForearm": [
+                -0.866,
+                -0.5,
+                0
+              ],
+              "leftThigh": [
+                0.766,
+                -0.643,
+                0
+              ],
+              "leftShin": [
+                0.766,
+                -0.643,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "mirrorOf": "demo:kick-r",
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:kick-r",
+      "label": "Kick",
+      "iconId": "kick-r",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 2,
+      "energy": 0.282,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0.139,
+                0.99,
+                0
+              ],
+              "neck": [
+                0.123,
+                0.992,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.866,
+                -0.5,
+                0
+              ],
+              "leftForearm": [
+                0.866,
+                -0.5,
+                0
+              ],
+              "rightUpperArm": [
+                -0.866,
+                -0.5,
+                0
+              ],
+              "rightForearm": [
+                -0.866,
+                -0.5,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.766,
+                -0.643,
+                0
+              ],
+              "rightShin": [
+                -0.766,
+                -0.643,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0.139,
+                0.99,
+                0
+              ],
+              "neck": [
+                0.123,
+                0.992,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.866,
+                -0.5,
+                0
+              ],
+              "leftForearm": [
+                0.866,
+                -0.5,
+                0
+              ],
+              "rightUpperArm": [
+                -0.866,
+                -0.5,
+                0
+              ],
+              "rightForearm": [
+                -0.866,
+                -0.5,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.766,
+                -0.643,
+                0
+              ],
+              "rightShin": [
+                -0.766,
+                -0.643,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "mirrorOf": "demo:kick-l",
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:left-up",
+      "label": "Links hoch",
+      "iconId": "left-up",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 1,
+      "energy": 0.352,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.342,
+                0.94,
+                0
+              ],
+              "leftForearm": [
+                0.342,
+                0.94,
+                0
+              ],
+              "rightUpperArm": [
+                -0.342,
+                -0.94,
+                0
+              ],
+              "rightForearm": [
+                -0.985,
+                -0.174,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.342,
+                0.94,
+                0
+              ],
+              "leftForearm": [
+                0.342,
+                0.94,
+                0
+              ],
+              "rightUpperArm": [
+                -0.342,
+                -0.94,
+                0
+              ],
+              "rightForearm": [
+                -0.985,
+                -0.174,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "mirrorOf": "demo:right-up",
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:neutral",
+      "label": "Locker",
+      "iconId": "neutral",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 1,
+      "energy": 0,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.174,
+                -0.985,
+                0
+              ],
+              "leftForearm": [
+                0.174,
+                -0.985,
+                0
+              ],
+              "rightUpperArm": [
+                -0.174,
+                -0.985,
+                0
+              ],
+              "rightForearm": [
+                -0.174,
+                -0.985,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.174,
+                -0.985,
+                0
+              ],
+              "leftForearm": [
+                0.174,
+                -0.985,
+                0
+              ],
+              "rightUpperArm": [
+                -0.174,
+                -0.985,
+                0
+              ],
+              "rightForearm": [
+                -0.174,
+                -0.985,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:right-up",
+      "label": "Rechts hoch",
+      "iconId": "right-up",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 1,
+      "energy": 0.352,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.342,
+                -0.94,
+                0
+              ],
+              "leftForearm": [
+                0.985,
+                -0.174,
+                0
+              ],
+              "rightUpperArm": [
+                -0.342,
+                0.94,
+                0
+              ],
+              "rightForearm": [
+                -0.342,
+                0.94,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.342,
+                -0.94,
+                0
+              ],
+              "leftForearm": [
+                0.985,
+                -0.174,
+                0
+              ],
+              "rightUpperArm": [
+                -0.342,
+                0.94,
+                0
+              ],
+              "rightForearm": [
+                -0.342,
+                0.94,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "mirrorOf": "demo:left-up",
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:squat",
+      "label": "Tief!",
+      "iconId": "squat",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 2,
+      "energy": 0.389,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                -0.136,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.985,
+                -0.174,
+                0
+              ],
+              "leftForearm": [
+                0.985,
+                -0.174,
+                0
+              ],
+              "rightUpperArm": [
+                -0.985,
+                -0.174,
+                0
+              ],
+              "rightForearm": [
+                -0.985,
+                -0.174,
+                0
+              ],
+              "leftThigh": [
+                0.423,
+                -0.906,
+                0
+              ],
+              "leftShin": [
+                -0.707,
+                -0.707,
+                0
+              ],
+              "rightThigh": [
+                -0.423,
+                -0.906,
+                0
+              ],
+              "rightShin": [
+                0.707,
+                -0.707,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                -0.136,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.985,
+                -0.174,
+                0
+              ],
+              "leftForearm": [
+                0.985,
+                -0.174,
+                0
+              ],
+              "rightUpperArm": [
+                -0.985,
+                -0.174,
+                0
+              ],
+              "rightForearm": [
+                -0.985,
+                -0.174,
+                0
+              ],
+              "leftThigh": [
+                0.423,
+                -0.906,
+                0
+              ],
+              "leftShin": [
+                -0.707,
+                -0.707,
+                0
+              ],
+              "rightThigh": [
+                -0.423,
+                -0.906,
+                0
+              ],
+              "rightShin": [
+                0.707,
+                -0.707,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:star",
+      "label": "Stern",
+      "iconId": "star",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 2,
+      "energy": 0.537,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.707,
+                0.707,
+                0
+              ],
+              "leftForearm": [
+                0.707,
+                0.707,
+                0
+              ],
+              "rightUpperArm": [
+                -0.707,
+                0.707,
+                0
+              ],
+              "rightForearm": [
+                -0.707,
+                0.707,
+                0
+              ],
+              "leftThigh": [
+                0.423,
+                -0.906,
+                0
+              ],
+              "leftShin": [
+                0.423,
+                -0.906,
+                0
+              ],
+              "rightThigh": [
+                -0.423,
+                -0.906,
+                0
+              ],
+              "rightShin": [
+                -0.423,
+                -0.906,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                0.707,
+                0.707,
+                0
+              ],
+              "leftForearm": [
+                0.707,
+                0.707,
+                0
+              ],
+              "rightUpperArm": [
+                -0.707,
+                0.707,
+                0
+              ],
+              "rightForearm": [
+                -0.707,
+                0.707,
+                0
+              ],
+              "leftThigh": [
+                0.423,
+                -0.906,
+                0
+              ],
+              "leftShin": [
+                0.423,
+                -0.906,
+                0
+              ],
+              "rightThigh": [
+                -0.423,
+                -0.906,
+                0
+              ],
+              "rightShin": [
+                -0.423,
+                -0.906,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "playability": 1,
+      "source": "demo"
+    },
+    {
+      "id": "demo:t-pose",
+      "label": "Flieger",
+      "iconId": "t-pose",
+      "styles": [
+        "party"
+      ],
+      "difficulty": 1,
+      "energy": 0.296,
+      "beats": 1,
+      "anchorBeat": 0,
+      "keyframes": [
+        {
+          "beat": 0,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                1,
+                0,
+                0
+              ],
+              "leftForearm": [
+                1,
+                0,
+                0
+              ],
+              "rightUpperArm": [
+                -1,
+                0,
+                0
+              ],
+              "rightForearm": [
+                -1,
+                0,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        },
+        {
+          "beat": 1,
+          "pose3d": {
+            "root": {
+              "pos": [
+                0,
+                0,
+                0
+              ],
+              "yawDeg": 0
+            },
+            "bones": {
+              "torso": [
+                0,
+                1,
+                0
+              ],
+              "neck": [
+                0,
+                1,
+                0
+              ],
+              "shoulders": [
+                1,
+                0,
+                0
+              ],
+              "hips": [
+                1,
+                0,
+                0
+              ],
+              "leftUpperArm": [
+                1,
+                0,
+                0
+              ],
+              "leftForearm": [
+                1,
+                0,
+                0
+              ],
+              "rightUpperArm": [
+                -1,
+                0,
+                0
+              ],
+              "rightForearm": [
+                -1,
+                0,
+                0
+              ],
+              "leftThigh": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "leftShin": [
+                0.087,
+                -0.996,
+                0
+              ],
+              "rightThigh": [
+                -0.087,
+                -0.996,
+                0
+              ],
+              "rightShin": [
+                -0.087,
+                -0.996,
+                0
+              ]
+            }
+          }
+        }
+      ],
+      "playability": 1,
+      "source": "demo"
+    }
+  ],
+  "transitions": {
+    "party": {
+      "demo:arms-up": {
+        "demo:t-pose": 1,
+        "demo:squat": 1,
+        "demo:star": 1,
+        "demo:left-up": 1
+      },
+      "demo:t-pose": {
+        "demo:left-up": 1,
+        "demo:star": 1,
+        "demo:squat": 1
+      },
+      "demo:left-up": {
+        "demo:right-up": 3
+      },
+      "demo:right-up": {
+        "demo:flex": 2
+      },
+      "demo:flex": {
+        "demo:star": 1,
+        "demo:arms-up": 1,
+        "demo:kick-l": 1
+      },
+      "demo:star": {
+        "demo:disco-l": 1,
+        "demo:left-up": 1,
+        "demo:flex": 1,
+        "demo:arms-up": 1
+      },
+      "demo:disco-l": {
+        "demo:disco-r": 3
+      },
+      "demo:disco-r": {
+        "demo:arms-up": 1,
+        "demo:squat": 1,
+        "demo:star": 1
+      },
+      "demo:squat": {
+        "demo:t-pose": 1,
+        "demo:arms-up": 1,
+        "demo:disco-l": 1
+      },
+      "demo:kick-l": {
+        "demo:kick-r": 2
+      },
+      "demo:kick-r": {
+        "demo:disco-l": 1,
+        "demo:t-pose": 1
+      }
+    }
+  }
+}

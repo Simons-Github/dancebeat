@@ -235,6 +235,9 @@ const DEMOS = [
 
 export const DEMO_IDS: readonly string[] = DEMOS.map((d) => d.id);
 
+/** Pose id sequences of the demo songs; source of the motion pack's transition counts (13e). */
+export const DEMO_SEQUENCES: readonly (readonly string[])[] = DEMOS.map((d) => d.seq);
+
 export const isDemoId = (id: string) => DEMO_IDS.includes(id);
 
 const DELETED_KEY = "dancebeat.deletedDemos";

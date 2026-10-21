@@ -8,6 +8,7 @@
   "scripts": {
     "fetch-models": "bun scripts/fetch-models.ts",
     "tune-video": "bun scripts/tune-video-choreo.ts",
+    "build-motion-pack": "bun scripts/build-motion-pack.ts",
     "predev": "bun scripts/fetch-models.ts",
     "dev": "vite dev",
     "prebuild": "bun scripts/fetch-models.ts",

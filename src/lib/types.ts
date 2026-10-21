@@ -6,6 +6,9 @@ import type {
   FrameSchema,
   Landmark3dSchema,
   LandmarkSchema,
+  MotionClipSchema,
+  MotionKeyframeSchema,
+  MotionPackSchema,
   MoveSchema,
   SongSchema,
   SourceSpecSchema,
@@ -32,6 +35,9 @@ export type Choreography = z.infer<typeof ChoreographySchema>;
 export type SourceSpec = z.infer<typeof SourceSpecSchema>;
 export type Song = z.infer<typeof SongSchema>;
 export type ChoreoFile = z.infer<typeof ChoreoFileSchema>;
+export type MotionKeyframe = z.infer<typeof MotionKeyframeSchema>;
+export type MotionClip = z.infer<typeof MotionClipSchema>;
+export type MotionPack = z.infer<typeof MotionPackSchema>;
 
 export type Rating = "PERFECT" | "SUPER" | "GOOD" | "OK" | "X";
 

@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13d ✅)                     | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13d, 13e-1 ✅)              | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -973,6 +973,28 @@ kleiner sein, gemessen ist das nicht. Tests: `src/test/choreoV2.test.ts` (Schema
 `pose3d`, Migration 1 → 2, `frameAt` mit gemischten Frames, Spiegeln, Import einer v1-Datei,
 Video-Import mit und ohne Weltpunkte, Größe), IndexedDB-Upgrade von Version 2 in
 `repository.test.ts`.
+
+**13e-1 Motion-Paket (Startpaket) – umgesetzt.** `MotionClipSchema` und `MotionPackSchema`
+(`MOTION_PACK_VERSION` 1) in `src/lib/schema.ts`, Typen in `types.ts`; reine Logik in
+`src/lib/motionPack.ts` (Abstand als größter Knochenwinkel, `playability`, `energy`,
+`difficulty`, vier Filter mit Begründung, Leader-Clustering mit Medoid, Spiegelpaare,
+Übergangszählung, `buildMotionPack`, `loadMotionPack` per dynamischem `import()`, noch ohne
+Aufrufer). `scripts/build-motion-pack.ts` (`bun run build-motion-pack`) schreibt
+`src/data/motion-pack.json` aus `DEMO_POSES` und den neu exportierten `DEMO_SEQUENCES`: 12 Clips
+(alle Demo-Posen inkl. `neutral`, keine verworfen), Spiegelpaare genau `left-up`/`right-up`,
+`disco-l`/`disco-r`, `kick-l`/`kick-r`, Übergänge im Stil `party` aus den Demo-Songs. Schwellen
+als benannte Konstanten, siehe [choreography-format.md](choreography-format.md#motion-paket).
+Nach dem Gegenlesen verschärft: Bodenarbeit erkennt Liegen (Rumpf über 45° geneigt), Sitzen
+(Knie nicht mindestens 0,1 m unter dem Becken) und Knien (Becken unter 0,55 Beinlängen über dem
+Knöchel); der Posenabstand und die Geschwindigkeitsprüfung berücksichtigen die Gier; gruppiert
+wird nur bei gleicher Länge und gleichen Stilen, und das Schema verlangt, dass Übergänge nur
+Clips ihres Stils verbinden. Das Demo-Paket bleibt dabei unverändert.
+Spiel, Bewertung und UI unverändert. Abweichungen vom Plan: 13e ist geteilt, Pose-Spuren aus dem
+Video-Import als Quelle (Segmentierung an Haltepunkten) folgen in **13e-2 (offen)**; das
+Startpaket hat 12 statt 13 Posen (`DEMO_POSES` hat 12); `iconId` ist zusätzlich im Clip, damit
+die Piktogramm-ID der Demo-Moves erhalten bleibt; Keyframe-Beats steigen streng (sonst wäre die
+Winkelgeschwindigkeit undefiniert). Tests: `src/test/motionPack.test.ts` (Schema, jeder Filter
+einzeln, Gruppierung, Spiegelpaare, Übergänge, Aktualität der JSON-Datei, Laden).
 
 ### 14. Neue Demo-Songs ⏳
 
