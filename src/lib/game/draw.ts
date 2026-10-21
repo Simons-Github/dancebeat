@@ -1,8 +1,8 @@
-import { GAME, GOLD, GOLD_DEEP } from "@/theme";
+import { COACH, GAME, GOLD, GOLD_DEEP, PIKTO_FIGURE } from "@/theme";
 
 import { BONES, isVisible } from "../pose";
 import type { Landmark } from "../types";
-import { PIKTO, type PiktoItem, type StickFigure } from "./pikto";
+import { PIKTO, type MoveArrow, type MoveFigure, type PiktoItem } from "./pikto";
 
 /** Keeps the canvas backing store at CSS size × devicePixelRatio. Returns the CSS size. */
 export function fitCanvas(canvas: HTMLCanvasElement) {
@@ -20,94 +20,108 @@ export function fitCanvas(canvas: HTMLCanvasElement) {
   return { ctx, w, h };
 }
 
-interface FigureStyle {
-  color: string;
-  arrowColor?: string;
-  outline?: string;
-  glow?: string;
-  /** Line width as a fraction of the figure height. */
-  weight?: number;
+/** Pictogram look: gold moves in gold with a halo, others in the song colors. */
+interface PiktoStyle {
+  fill: string;
+  rim: string;
+  arrow: string;
+  gold: boolean;
 }
 
-/** Draws a unit stick figure with its top center at (cx, top), `height` pixels tall. */
-export function drawStickFigure(
+function piktoStyle(gold: boolean, colors: { accent: string; secondary: string }): PiktoStyle {
+  return gold
+    ? { fill: GOLD, rim: GOLD_DEEP, arrow: GOLD, gold }
+    : { fill: colors.accent, rim: GAME.outline, arrow: colors.secondary, gold };
+}
+
+/** One curved arrow: dark outline pass, colored pass, filled head along the end tangent. */
+function drawArrow(
   ctx: CanvasRenderingContext2D,
-  fig: StickFigure,
+  a: MoveArrow,
+  X: (v: number) => number,
+  Y: (v: number) => number,
+  height: number,
+  color: string,
+) {
+  const A = PIKTO_FIGURE.arrow;
+  const x1 = X(a.x1),
+    y1 = Y(a.y1);
+  let tx = x1 - X(a.cx),
+    ty = y1 - Y(a.cy);
+  const tl = Math.hypot(tx, ty) || 1;
+  tx /= tl;
+  ty /= tl;
+  const len = A.headLength * height,
+    half = A.headHalfWidth * height;
+  const bx = x1 - tx * len,
+    by = y1 - ty * len;
+  const path = () => {
+    ctx.beginPath();
+    ctx.moveTo(X(a.x0), Y(a.y0));
+    ctx.quadraticCurveTo(X(a.cx), Y(a.cy), bx, by);
+  };
+  const head = () => {
+    ctx.beginPath();
+    ctx.moveTo(x1, y1);
+    ctx.lineTo(bx - ty * half, by + tx * half);
+    ctx.lineTo(bx + ty * half, by - tx * half);
+    ctx.closePath();
+  };
+  const w = A.width * height,
+    o = A.outline * height;
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = GAME.outline;
+  ctx.fillStyle = GAME.outline;
+  ctx.lineWidth = w + o * 2;
+  path();
+  ctx.stroke();
+  head();
+  ctx.stroke();
+  ctx.strokeStyle = color;
+  ctx.fillStyle = color;
+  ctx.lineWidth = w;
+  path();
+  ctx.stroke();
+  head();
+  ctx.fill();
+}
+
+/**
+ * Draws a pictogram with its unit-space origin at (cx, top), `height` px tall: optional gold halo,
+ * dark rim, fill, then the movement arrows. No shadowBlur anywhere (cheap on every frame).
+ */
+function drawPikto(
+  ctx: CanvasRenderingContext2D,
+  fig: MoveFigure,
   cx: number,
   top: number,
   height: number,
-  style: FigureStyle,
+  style: PiktoStyle,
 ) {
   const X = (v: number) => cx + v * height;
   const Y = (v: number) => top + v * height;
-  const lw = height * (style.weight ?? 0.075);
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  const path = new Path2D();
-  for (const [x0, y0, x1, y1] of fig.lines) {
-    path.moveTo(X(x0), Y(y0));
-    path.lineTo(X(x1), Y(y1));
+  const toPx = (p: Landmark) => [X(p[0]), Y(p[1])] as const;
+  const unit = height * PIKTO_FIGURE.unit;
+  if (style.gold) {
+    const base = ctx.globalAlpha;
+    ctx.globalAlpha = base * PIKTO_FIGURE.halo.alpha;
+    drawFigure(ctx, fig.landmarks, {
+      toPx,
+      unit,
+      fill: GOLD,
+      grow: PIKTO_FIGURE.halo.grow * height,
+    });
+    ctx.globalAlpha = base;
   }
-  const head = fig.head;
-  if (style.outline) {
-    ctx.strokeStyle = style.outline;
-    ctx.lineWidth = lw * 1.7;
-    ctx.stroke(path);
-    if (head) {
-      ctx.fillStyle = style.outline;
-      ctx.beginPath();
-      ctx.arc(X(head.x), Y(head.y), head.r * height + lw * 0.35, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  ctx.save();
-  if (style.glow) {
-    ctx.shadowColor = style.glow;
-    ctx.shadowBlur = lw * 2.5;
-  }
-  ctx.strokeStyle = style.color;
-  ctx.lineWidth = lw;
-  ctx.stroke(path);
-  if (head) {
-    ctx.fillStyle = style.color;
-    ctx.beginPath();
-    ctx.arc(X(head.x), Y(head.y), head.r * height, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-  if (style.arrowColor) {
-    ctx.strokeStyle = style.arrowColor;
-    ctx.fillStyle = style.arrowColor;
-    ctx.lineWidth = lw * 0.55;
-    for (const [x0, y0, x1, y1] of fig.arrows) {
-      const ax = X(x0),
-        ay = Y(y0),
-        bx = X(x1),
-        by = Y(y1);
-      // Shortened so the arrow does not cover the hand.
-      const ex = ax + (bx - ax) * 0.8,
-        ey = ay + (by - ay) * 0.8;
-      ctx.beginPath();
-      ctx.moveTo(ax + (bx - ax) * 0.15, ay + (by - ay) * 0.15);
-      ctx.lineTo(ex, ey);
-      ctx.stroke();
-      const ang = Math.atan2(ey - ay, ex - ax);
-      const s = lw * 1.4;
-      ctx.beginPath();
-      ctx.moveTo(ex + Math.cos(ang) * s, ey + Math.sin(ang) * s);
-      ctx.lineTo(ex + Math.cos(ang + 2.4) * s, ey + Math.sin(ang + 2.4) * s);
-      ctx.lineTo(ex + Math.cos(ang - 2.4) * s, ey + Math.sin(ang - 2.4) * s);
-      ctx.closePath();
-      ctx.fill();
-    }
-  }
-}
-
-/** Pictogram look: gold moves in gold with glow, others in the song colors. */
-function piktoStyle(gold: boolean, colors: { accent: string; secondary: string }): FigureStyle {
-  return gold
-    ? { color: GOLD, outline: GOLD_DEEP, glow: GOLD, arrowColor: GOLD }
-    : { color: colors.accent, outline: GAME.outline, arrowColor: colors.secondary };
+  drawFigure(ctx, fig.landmarks, {
+    toPx,
+    unit,
+    fill: style.rim,
+    grow: PIKTO_FIGURE.rim * unit * 2,
+  });
+  drawFigure(ctx, fig.landmarks, { toPx, unit, fill: style.fill, grow: 0 });
+  for (const a of fig.arrows) drawArrow(ctx, a, X, Y, height, style.arrow);
 }
 
 /**
@@ -116,7 +130,7 @@ function piktoStyle(gold: boolean, colors: { accent: string; secondary: string }
  */
 export function drawMoveFigure(
   canvas: HTMLCanvasElement,
-  fig: StickFigure | null,
+  fig: MoveFigure | null,
   gold: boolean,
   colors: { accent: string; secondary: string },
 ) {
@@ -125,21 +139,21 @@ export function drawMoveFigure(
   ctx.clearRect(0, 0, w, h);
   if (!fig) return;
   // Fit height and width (the figure is `aspect` times as wide as tall).
-  const fh = Math.min(h * 0.82, (w * 0.82) / Math.max(fig.aspect, 0.01));
-  drawStickFigure(ctx, fig, w / 2, (h - fh) / 2, fh, piktoStyle(gold, colors));
+  const fh = Math.min(h * 0.9, (w * 0.9) / Math.max(fig.aspect, 0.01));
+  drawPikto(ctx, fig, w / 2, (h - fh) / 2, fh, piktoStyle(gold, colors));
 }
 
 /** Pictograms on the bar canvas (the bar shape and marker are DOM; only figures move). */
 export function drawPiktos(
   canvas: HTMLCanvasElement,
   items: readonly PiktoItem[],
-  figures: readonly (StickFigure | null)[],
+  figures: readonly (MoveFigure | null)[],
   colors: { accent: string; secondary: string },
 ) {
   const { ctx, w, h } = fitCanvas(canvas);
   if (!ctx) return;
   ctx.clearRect(0, 0, w, h);
-  const fh = h * 0.8;
+  const fh = h * 0.9;
   const top = (h - fh) / 2;
   const markerPx = PIKTO.markerX * w;
   // Draw from right to left so the figure on the marker is on top.
@@ -151,13 +165,160 @@ export function drawPiktos(
       markerPx + ((it.x - PIKTO.markerX) / (1 - PIKTO.markerX)) * (w - markerPx - fh * 0.3);
     ctx.globalAlpha = it.alpha;
     const style = piktoStyle(it.gold, colors);
-    if (it.flash > 0) style.color = mix(style.color, GAME.flash, it.flash);
-    drawStickFigure(ctx, fig, cx, top, fh, style);
+    if (it.flash > 0) style.fill = mix(style.fill, GAME.flash, it.flash);
+    drawPikto(ctx, fig, cx, top, fh, style);
   }
   ctx.globalAlpha = 1;
 }
 
-/** Coach: the interpolated choreography pose, one color with glow, in a fixed view. */
+/** Look of {@link drawFigure}. All sizes in px. */
+export interface CoachFigureStyle {
+  /** Landmark (normalized) to canvas px. */
+  toPx: (p: Landmark) => readonly [number, number];
+  /** Px per body unit; COACH widths are multiplied by it. */
+  unit: number;
+  fill: string | CanvasGradient;
+  /** Extra px added to every width and radius (rim/mask pass). */
+  grow: number;
+}
+
+/**
+ * Silhouette of a pose: filled torso, round-capped limb capsules, head, hands and feet. Parts with
+ * a landmark below the visibility threshold are left out, never drawn at 0/0. Uses only path
+ * primitives and sets no shadow, so the caller decides about glow. Few stroke() calls: one per
+ * width class.
+ */
+export function drawFigure(
+  ctx: CanvasRenderingContext2D,
+  landmarks: readonly Landmark[],
+  style: CoachFigureStyle,
+) {
+  const { toPx, unit, fill, grow } = style;
+  const W = COACH.width;
+  const pt = (i: number) => {
+    const p = landmarks[i];
+    return p && isVisible(p) ? toPx(p) : null;
+  };
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = fill;
+  ctx.fillStyle = fill;
+
+  const strokeGroup = (segs: readonly (readonly [number, number])[], width: number) => {
+    let any = false;
+    ctx.beginPath();
+    for (const [a, b] of segs) {
+      const pa = pt(a),
+        pb = pt(b);
+      if (!pa || !pb) continue;
+      ctx.moveTo(pa[0], pa[1]);
+      ctx.lineTo(pb[0], pb[1]);
+      any = true;
+    }
+    if (!any) return;
+    ctx.lineWidth = width * unit + grow;
+    ctx.stroke();
+  };
+  const disc = (c: readonly [number, number], r: number) => {
+    ctx.beginPath();
+    ctx.arc(c[0], c[1], r * unit + grow / 2, 0, Math.PI * 2);
+    ctx.fill();
+  };
+
+  // Torso: filled quad, corners rounded by the round-join stroke.
+  const ls = pt(11),
+    rs = pt(12),
+    rh = pt(24),
+    lh = pt(23);
+  if (ls && rs && rh && lh) {
+    ctx.beginPath();
+    ctx.moveTo(ls[0], ls[1]);
+    ctx.lineTo(rs[0], rs[1]);
+    ctx.lineTo(rh[0], rh[1]);
+    ctx.lineTo(lh[0], lh[1]);
+    ctx.closePath();
+    ctx.fill();
+    ctx.lineWidth = W.upperArm * unit + grow;
+    ctx.stroke();
+  }
+
+  // Head: center between the ears, else the nose.
+  const le = pt(7),
+    re = pt(8);
+  const head = le && re ? ([(le[0] + re[0]) / 2, (le[1] + re[1]) / 2] as const) : pt(0);
+
+  // Neck: shoulder midpoint to head.
+  if (ls && rs && head) {
+    ctx.beginPath();
+    ctx.moveTo((ls[0] + rs[0]) / 2, (ls[1] + rs[1]) / 2);
+    ctx.lineTo(head[0], head[1]);
+    ctx.lineWidth = W.neck * unit + grow;
+    ctx.stroke();
+  }
+
+  strokeGroup(
+    [
+      [11, 13],
+      [12, 14],
+    ],
+    W.upperArm,
+  );
+  strokeGroup(
+    [
+      [13, 15],
+      [14, 16],
+    ],
+    W.forearm,
+  );
+  strokeGroup(
+    [
+      [23, 25],
+      [24, 26],
+    ],
+    W.thigh,
+  );
+  strokeGroup(
+    [
+      [25, 27],
+      [26, 28],
+    ],
+    W.shin,
+  );
+  strokeGroup(
+    [
+      [27, 31],
+      [28, 32],
+    ],
+    W.foot,
+  );
+
+  if (head) disc(head, COACH.headRadius);
+  for (const i of [15, 16]) {
+    const h = pt(i);
+    if (h) disc(h, COACH.handRadius);
+  }
+}
+
+/** Offscreen rim layers, one per coach canvas; created lazily on first use. */
+const rimLayers = new WeakMap<HTMLCanvasElement, HTMLCanvasElement>();
+
+function rimLayer(canvas: HTMLCanvasElement) {
+  let layer = rimLayers.get(canvas);
+  if (!layer) {
+    layer = document.createElement("canvas");
+    rimLayers.set(canvas, layer);
+  }
+  if (layer.width !== canvas.width || layer.height !== canvas.height) {
+    layer.width = canvas.width;
+    layer.height = canvas.height;
+  }
+  return layer;
+}
+
+/**
+ * Coach: the interpolated choreography pose as a filled silhouette in the song color (vertical
+ * gradient), with a light rim and one glow per frame, in a fixed view.
+ */
 export function drawCoach(
   canvas: HTMLCanvasElement,
   landmarks: Landmark[] | null,
@@ -171,38 +332,33 @@ export function drawCoach(
   const s = Math.min(w, h) / view.size;
   const ox = (w - view.size * s) / 2,
     oy = (h - view.size * s) / 2;
-  const P = (p: Landmark) => [ox + (p[0] - view.x) * s, oy + (p[1] - view.y) * s] as const;
-  const lw = Math.max(3, Math.min(w, h) * 0.045);
-  const path = new Path2D();
-  for (const [a, b] of BONES) {
-    const pa = landmarks[a],
-      pb = landmarks[b];
-    if (!pa || !pb || !isVisible(pa) || !isVisible(pb)) continue;
-    const [ax, ay] = P(pa),
-      [bx, by] = P(pb);
-    path.moveTo(ax, ay);
-    path.lineTo(bx, by);
+  const toPx = (p: Landmark) => [ox + (p[0] - view.x) * s, oy + (p[1] - view.y) * s] as const;
+  const unit = Math.min(w, h);
+
+  // Glow + rim: the rimmed figure goes through an offscreen layer, so the blur runs once per frame.
+  const layer = rimLayer(canvas);
+  const lctx = layer.getContext("2d");
+  if (lctx) {
+    lctx.setTransform(1, 0, 0, 1, 0, 0);
+    lctx.clearRect(0, 0, layer.width, layer.height);
+    lctx.setTransform(layer.width / w, 0, 0, layer.height / h, 0, 0);
+    drawFigure(lctx, landmarks, { toPx, unit, fill: COACH.rimColor, grow: COACH.rim * unit * 2 });
+    ctx.save();
+    ctx.shadowColor = color;
+    ctx.shadowBlur = COACH.glowBlur * unit * (layer.width / w);
+    ctx.drawImage(layer, 0, 0, w, h);
+    ctx.restore();
   }
-  ctx.lineCap = "round";
-  ctx.lineJoin = "round";
-  ctx.strokeStyle = GAME.outline;
-  ctx.lineWidth = lw * 1.6;
-  ctx.stroke(path);
-  ctx.save();
-  ctx.shadowColor = color;
-  ctx.shadowBlur = lw * 2;
-  ctx.strokeStyle = color;
-  ctx.lineWidth = lw;
-  ctx.stroke(path);
-  const head = landmarks[0];
-  if (head && isVisible(head)) {
-    const [hx, hy] = P(head);
-    ctx.fillStyle = color;
-    ctx.beginPath();
-    ctx.arc(hx, hy, lw * 1.5, 0, Math.PI * 2);
-    ctx.fill();
+
+  // Fill: lighter at the top, song color at the bottom. Falls back to flat for non-#RRGGBB input.
+  let fill: string | CanvasGradient = color;
+  if (/^#[0-9a-fA-F]{6}$/.test(color)) {
+    const g = ctx.createLinearGradient(0, oy, 0, oy + view.size * s);
+    g.addColorStop(0, mix(color, "#FFFFFF", COACH.gradientLight));
+    g.addColorStop(1, color);
+    fill = g;
   }
-  ctx.restore();
+  drawFigure(ctx, landmarks, { toPx, unit, fill, grow: 0 });
 }
 
 /**

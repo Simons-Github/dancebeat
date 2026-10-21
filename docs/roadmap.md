@@ -20,6 +20,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 9. Typen und Lint                            | ✅                                  | –                                                                     |
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
+| 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
 | 13. 3D-Kern und Choreo-Generator             | ⏳                                  | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
@@ -867,6 +868,42 @@ Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 
 Siehe N-Befunde unten. Optional später: Cloud-Sync der Bibliothek über einen noch offenen
 Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
+
+### 12. Coach und Piktogramme ✅ (Gerätetest offen)
+
+Coach als gefüllte, leuchtende Silhouette; Piktogramme im selben Stil mit Bewegungspfeilen.
+Gilt für alle Songs, ohne Format- oder Bewertungswechsel, von nichts abhängig. Plan:
+[plans/etappe-12.md](plans/etappe-12.md).
+
+**12a Coach als Silhouette – umgesetzt, Gerätetest offen.** `drawCoach` zeichnet über das neue
+`drawFigure` (`src/lib/game/draw.ts`) eine gefüllte Figur: Rumpf als abgerundetes Viereck, Gliedmaßen
+als Kapseln (Oberarm/Oberschenkel dicker), Kopf, Hände, Füße; Verlauf von hellerer Songfarbe (oben)
+zur Songfarbe, heller Rand und ein Glow pro Frame (Rand-Ebene auf Offscreen-Canvas, ein
+`shadowBlur`). Landmarks mit `visibility < 0.5` lassen nur die betroffenen Teile weg. Maße, Rand,
+Glow und Größe (Hoch 44vw/32dvh, Quer 30vw/48dvh) stehen als `COACH` in `src/theme.ts`. Tests:
+`src/test/draw.test.ts`. Offen am Gerät: Bildrate (iPhone 11, Android Mittelklasse, mit Kamera und
+Pose-Tracking), Lesbarkeit in 2 bis 3 m Abstand, Freiraum zu Score, Combo, Piktoleiste und
+YouTube-Box in Hoch- und Querformat.
+
+**12b Piktogramme mit Pfeilen – umgesetzt, Gerätetest offen.** `moveFigure` (`pikto.ts`, ersetzt
+`stickFigure`) liefert die Landmarks im Einheitsraum (Höhe 1, zentriert, Rand `PIKTO.pad` = 0,07
+für Kapselbreiten und Kopf; Sichtbarkeit bleibt erhalten). `selectArrows` wählt aus Händen,
+Knöcheln und Hüftmitte die Wege zwischen vorigem und diesem Move: ab `PIKTO.arrowMinDist` (0,15
+Figurhöhen), höchstens `PIKTO.maxArrows` (2, längste zuerst), quadratische Kurve mit
+`PIKTO.arrowBend` (0,25 der Länge) vom Rumpf weg, Enden um `PIKTO.arrowTrim` (0,04) gekürzt;
+unsichere Landmarks in einer der beiden Posen werden übersprungen. Gezeichnet über `drawFigure`
+(Rand, Füllung in Songfarbe) mit Pfeilen in der Zweitfarbe mit dunkler Kontur und Pfeilspitze;
+Gold mit breiterem, durchscheinendem Halo statt `shadowBlur` (kein Blur im Pikto-Pfad). Maße als
+`PIKTO_FIGURE` in `src/theme.ts`. `createMoveFigureCache` unverändert. Tests: `pikto.test.ts`
+(Einheitsbox, Pfeilauswahl, Biegung), `draw.test.ts` (Silhouetten, Bögen, kein Blur). Offen am
+Gerät: Lesbarkeit der Pfeile auf Armlänge und aus 2 bis 3 m, Bildrate mit bis zu fünf Piktogrammen
+in der Leiste.
+
+**12c Prüfung – erledigt.** typecheck, test (1045), lint und build sauber. Playwright (projektlokaler
+Server, Flags per `ps` geprüft) mit `?sim=1` in 390×844 und 844×390: Coach-Silhouette und
+Piktogramme mit Pfeilen sichtbar, Score, Combo und Piktoleiste frei, Konsole ohne Fehler und
+Warnungen. **Nur am Gerät prüfbar, nicht getestet:** FPS auf iPhone 11 und Android Mittelklasse,
+Lesbarkeit aus 2 bis 3 m. Editor und Vorschau in Playwright nicht geprüft.
 
 ### 13. 3D-Kern und Choreo-Generator ⏳
 

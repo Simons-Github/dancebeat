@@ -15,6 +15,19 @@ export const PIKTO = {
   fadeOutMs: 500,
   /** Flashes closer than this are skipped: never more than 3 flashes per second. */
   minFlashGapMs: 334,
+  /** Inset of the body inside the figure's unit box: room for capsule widths, head disc and rim. */
+  pad: 0.07,
+  /**
+   * Shortest path (in figure heights) that gets an arrow. 0.15 is roughly an arm's length third:
+   * smaller paths are hand jitter between two similar poses and would only clutter the figure.
+   */
+  arrowMinDist: 0.15,
+  /** At most this many arrows per figure (the longest paths), to stay readable at 2 to 3 m. */
+  maxArrows: 2,
+  /** Arrow ends are pulled in by this much (figure heights) so they do not cover hand or foot. */
+  arrowTrim: 0.04,
+  /** Curve bulge as a fraction of the arrow length, away from the torso. */
+  arrowBend: 0.25,
 } as const;
 
 export interface PiktoItem {
@@ -82,13 +95,28 @@ export function piktoLayout(
   return out;
 }
 
-/** A stick figure in its own unit space: height 1, centered at x = 0, top at y = 0. */
-export interface StickFigure {
-  lines: [number, number, number, number][];
-  head: { x: number; y: number; r: number } | null;
-  /** Wrist movement since the previous move (arrows in the secondary color). */
-  arrows: [number, number, number, number][];
-  /** Width / height of the figure's bounding box. */
+/** A curved movement arrow in figure unit space (quadratic curve, already shortened at both ends). */
+export interface MoveArrow {
+  x0: number;
+  y0: number;
+  /** Control point. */
+  cx: number;
+  cy: number;
+  x1: number;
+  y1: number;
+}
+
+/**
+ * A pictogram figure in its own unit space: the pose's landmarks scaled to height 1 (head
+ * included), centered at x = 0, top at y = 0. Landmarks keep their visibility, so the drawer skips
+ * unsure ones. The body is inset by `PIKTO.pad` on every side to leave room for the silhouette's
+ * widths, so a drawn figure stays within the unit box.
+ */
+export interface MoveFigure {
+  landmarks: Landmark[];
+  /** Strongest movements since the previous move (at most `PIKTO.maxArrows`, longest first). */
+  arrows: MoveArrow[];
+  /** Width / height of the unit box. */
   aspect: number;
 }
 
@@ -122,11 +150,89 @@ export function bodyBox(poses: readonly Landmark[][]): Box | null {
 
 const HEAD_R = 0.07;
 
+/** Landmark indices whose path between two moves may become an arrow (hip midpoint is extra). */
+const TRACKED = [15, 16, 27, 28];
+
+type Pt = readonly [number, number];
+
+/** Maps a landmark-space point into figure unit space. */
+type ToUnit = (x: number, y: number) => Pt;
+
+const mid = (a: Pt, b: Pt): Pt => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+
+/** Point of a pose in unit space, or null when the landmark is missing or unsure. */
+function unitPoint(lm: readonly Landmark[], i: number, to: ToUnit): Pt | null {
+  const p = lm[i];
+  return p && isVisible(p) ? to(p[0], p[1]) : null;
+}
+
+/** Hip midpoint (both hips visible) of a pose in unit space. */
+function hipMid(lm: readonly Landmark[], to: ToUnit): Pt | null {
+  const a = unitPoint(lm, 23, to),
+    b = unitPoint(lm, 24, to);
+  return a && b ? mid(a, b) : null;
+}
+
+/** Torso center in unit space: middle of shoulder and hip midpoints, whichever exist. */
+function torsoCenter(lm: readonly Landmark[], to: ToUnit): Pt | null {
+  const a = unitPoint(lm, 11, to),
+    b = unitPoint(lm, 12, to);
+  const sh = a && b ? mid(a, b) : null;
+  const hip = hipMid(lm, to);
+  if (sh && hip) return mid(sh, hip);
+  return sh ?? hip;
+}
+
 /**
- * Turns landmarks into a stick figure that fits a unit-height box (the head included). Invisible
- * landmarks are skipped. `prev` (the previous move's pose) adds wrist arrows when a hand moved far.
+ * Movement arrows between two poses, already in the current figure's unit space (`to` maps
+ * landmark space into it). Tracked: both hands, both ankles and the hip midpoint. A path shorter
+ * than `PIKTO.arrowMinDist` is dropped, the longest `PIKTO.maxArrows` remain (longest first). A
+ * point that is unsure in either pose is skipped. Each arrow is a quadratic curve bending away
+ * from the torso center (to a fixed side when it is unknown), trimmed by `PIKTO.arrowTrim` at both
+ * ends so it does not cover the hand or foot.
  */
-export function stickFigure(lm: Landmark[], prev?: Landmark[] | null): StickFigure | null {
+export function selectArrows(
+  prev: readonly Landmark[],
+  cur: readonly Landmark[],
+  to: ToUnit,
+): MoveArrow[] {
+  const paths: { a: Pt; b: Pt; len: number }[] = [];
+  const add = (a: Pt | null, b: Pt | null) => {
+    if (!a || !b) return;
+    const len = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (len >= PIKTO.arrowMinDist) paths.push({ a, b, len });
+  };
+  for (const i of TRACKED) add(unitPoint(prev, i, to), unitPoint(cur, i, to));
+  add(hipMid(prev, to), hipMid(cur, to));
+  paths.sort((p, q) => q.len - p.len);
+
+  const center = torsoCenter(cur, to);
+  return paths.slice(0, PIKTO.maxArrows).map(({ a, b, len }) => {
+    const ux = (b[0] - a[0]) / len,
+      uy = (b[1] - a[1]) / len;
+    const t = PIKTO.arrowTrim;
+    const x0 = a[0] + ux * t,
+      y0 = a[1] + uy * t,
+      x1 = b[0] - ux * t,
+      y1 = b[1] - uy * t;
+    const mx = (x0 + x1) / 2,
+      my = (y0 + y1) / 2;
+    let nx = -uy,
+      ny = ux;
+    if (center && nx * (mx - center[0]) + ny * (my - center[1]) < 0) {
+      nx = -nx;
+      ny = -ny;
+    }
+    const bend = (len - 2 * t) * PIKTO.arrowBend;
+    return { x0, y0, cx: mx + nx * bend, cy: my + ny * bend, x1, y1 };
+  });
+}
+
+/**
+ * Turns landmarks into a figure that fits a unit-height box (head and the `PIKTO.pad` inset
+ * included). `prev` (the previous move's pose) adds movement arrows.
+ */
+export function moveFigure(lm: Landmark[], prev?: Landmark[] | null): MoveFigure | null {
   const box = bodyBox([lm]);
   if (!box) return null;
   const head = lm[0];
@@ -136,43 +242,24 @@ export function stickFigure(lm: Landmark[], prev?: Landmark[] | null): StickFigu
   );
   const h = box.maxY - top;
   if (h <= 0) return null;
+  const s = (1 - 2 * PIKTO.pad) / h;
   const cx = (box.minX + box.maxX) / 2;
-  const tx = (x: number) => (x - cx) / h;
-  const ty = (y: number) => (y - top) / h;
-  const lines: StickFigure["lines"] = [];
-  for (const [a, b] of BONES) {
-    const pa = lm[a],
-      pb = lm[b];
-    if (!pa || !pb || !isVisible(pa) || !isVisible(pb)) continue;
-    lines.push([tx(pa[0]), ty(pa[1]), tx(pb[0]), ty(pb[1])]);
-  }
-  const arrows: StickFigure["arrows"] = [];
-  if (prev) {
-    for (const i of [15, 16]) {
-      const p = prev[i],
-        q = lm[i];
-      if (!p || !q || !isVisible(p) || !isVisible(q)) continue;
-      const x0 = tx(p[0]),
-        y0 = ty(p[1]),
-        x1 = tx(q[0]),
-        y1 = ty(q[1]);
-      if (Math.hypot(x1 - x0, y1 - y0) > 0.18) arrows.push([x0, y0, x1, y1]);
-    }
-  }
+  const to: ToUnit = (x, y) => [(x - cx) * s, (y - top) * s + PIKTO.pad];
+  const landmarks = lm.map((p): Landmark => {
+    const [x, y] = to(p[0], p[1]);
+    return p.length > 2 ? [x, y, p[2] as number] : [x, y];
+  });
   return {
-    lines,
-    head: head && isVisible(head) ? { x: tx(head[0]), y: ty(head[1]), r: HEAD_R } : null,
-    arrows,
-    aspect: (box.maxX - box.minX) / h,
+    landmarks,
+    arrows: prev ? selectArrows(prev, lm, to) : [],
+    aspect: (box.maxX - box.minX) * s + 2 * PIKTO.pad,
   };
 }
 
-/** Pose of each move (interpolated once) and its stick figure. */
-export function moveFigures(
-  choreo: Pick<Choreography, "moves" | "frames">,
-): (StickFigure | null)[] {
+/** Pose of each move (interpolated once) and its figure. */
+export function moveFigures(choreo: Pick<Choreography, "moves" | "frames">): (MoveFigure | null)[] {
   const poses = choreo.moves.map((m) => frameAt(choreo.frames, m.timeMs)?.landmarks ?? null);
-  return poses.map((lm, i) => (lm ? stickFigure(lm, i > 0 ? poses[i - 1] : null) : null));
+  return poses.map((lm, i) => (lm ? moveFigure(lm, i > 0 ? poses[i - 1] : null) : null));
 }
 
 /**
@@ -183,14 +270,14 @@ export function moveFigures(
  */
 export function createMoveFigureCache() {
   let lastFrames: Choreography["frames"] | null = null;
-  let entries = new Map<string, StickFigure | null>();
+  let entries = new Map<string, MoveFigure | null>();
   return {
-    figures(choreo: Pick<Choreography, "moves" | "frames">): (StickFigure | null)[] {
+    figures(choreo: Pick<Choreography, "moves" | "frames">): (MoveFigure | null)[] {
       if (choreo.frames !== lastFrames) {
         lastFrames = choreo.frames;
         entries = new Map();
       }
-      const next = new Map<string, StickFigure | null>();
+      const next = new Map<string, MoveFigure | null>();
       const pose = (timeMs: number) => frameAt(choreo.frames, timeMs)?.landmarks ?? null;
       const result = choreo.moves.map((m, i) => {
         const prevTime = choreo.moves[i - 1]?.timeMs ?? null;
@@ -199,7 +286,7 @@ export function createMoveFigureCache() {
           if (entries.has(key)) next.set(key, entries.get(key) ?? null);
           else {
             const lm = pose(m.timeMs);
-            next.set(key, lm ? stickFigure(lm, prevTime !== null ? pose(prevTime) : null) : null);
+            next.set(key, lm ? moveFigure(lm, prevTime !== null ? pose(prevTime) : null) : null);
           }
         }
         return next.get(key) ?? null;

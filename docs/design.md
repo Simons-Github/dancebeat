@@ -26,17 +26,18 @@ Piktogramme. Alle Farben, Fonts und Animationskonstanten stehen in `src/theme.ts
 - Gespiegeltes Vollbild-Kamerabild mit leichtem Farbfilter in Songfarbe (ca. 20 %) und Vignette.
   Halbtransparentes Skelett-Overlay des Spielers (abschaltbar).
 - **Piktoleiste:** stark abgerundete, halbtransparente weiße oder songfarbene Leiste am oberen
-  Rand mit kleinem Dreieck als Zielmarke. Dicke, einfarbige Strichfiguren laufen von rechts zur
-  Marke, blitzen dort weiß auf und verblassen. Körper in Songfarbe, Pfeile und Wackellinien in der
-  Zweitfarbe. Piktogramme werden automatisch aus den Landmarks des Moves gezeichnet.
-- **Gold Moves:** Piktogramm komplett golden mit goldener Kontur und pulsierendem Glow,
+  Rand mit kleinem Dreieck als Zielmarke. Gefüllte Silhouetten (wie der Coach, mit dunklem Rand)
+  laufen von rechts zur Marke, blitzen dort weiß auf und verblassen. Körper in Songfarbe, gebogene
+  Bewegungspfeile (höchstens zwei, vom Rumpf weg) in der Zweitfarbe mit dunkler Kontur. Piktogramme
+  werden automatisch aus den Landmarks des Moves gezeichnet.
+- **Gold Moves:** Piktogramm komplett golden mit goldenem Rand und Halo (breitere, durchscheinende Silhouette dahinter),
   Partikel-Effekt um den Spieler, großer Schriftzug „GOLD MOVE“; bei Erfolg „YEAH!“ mit
   Sternenexplosion, bei Misserfolg rotes „X“.
 - **Wertungs-Popups** (PERFECT, SUPER, GOOD, OK, X): große animierte Schriftzüge, die aufsteigen
   und ausblenden. Farben: `RATING_COLORS`.
-- Oben Score, Combo und Sternleiste mit Fortschritt. Coach-Silhouette (einfarbig in Songfarbe mit
-  Glow) in einer Ecke, flüssig aus Landmarks bzw. Winkeln interpoliert. Bei YouTube-Songs sitzt
-  dort der sichtbare YouTube-Player (Box `max(200px, …)` mit der Größe der Coach-Ecke, also mindestens 200 × 200 px, Vorgabe der YouTube-API).
+- Oben Score, Combo und Sternleiste mit Fortschritt. Coach-Silhouette (gefüllt, Verlauf in Songfarbe, heller Rand,
+  Glow; Maße in `COACH`) in der linken unteren Ecke, flüssig aus Landmarks bzw. Winkeln interpoliert. Bei YouTube-Songs sitzt
+  dort der sichtbare YouTube-Player (Box `max(200px, …)` in der rechten unteren Ecke, also mindestens 200 × 200 px, Vorgabe der YouTube-API).
 - Dezenter Beat-Puls am Rand. Countdown 3-2-1, Pause-Button. Kein Scrollen.
 
 ## Ergebnis-Screen

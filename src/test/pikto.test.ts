@@ -7,9 +7,9 @@ import {
   coachPose,
   coachView,
   flashSchedule,
+  moveFigure,
   moveFigures,
   piktoLayout,
-  stickFigure,
 } from "@/lib/game/pikto";
 import { popupContent } from "@/lib/game/popup";
 import { figure } from "@/lib/pose";
@@ -67,33 +67,93 @@ describe("Piktoleiste: Positionen", () => {
   });
 });
 
-describe("Strichfiguren", () => {
+describe("Piktogramm-Figuren", () => {
+  const dist = (a: number[], b: number[]) => Math.hypot(a[0]! - b[0]!, a[1]! - b[1]!);
+  const hide = (lm: Landmark[], i: number, v: number) =>
+    lm.map((p, k): Landmark => (k === i ? [p[0], p[1], v] : p));
+  const shift = (lm: Landmark[], idx: number[], dx: number) =>
+    idx.forEach((i) => {
+      const p = lm[i]!;
+      lm[i] = [p[0] + dx, p[1], p[2] ?? 1];
+    });
+  const rest = { la: 10, ra: 10 };
+
   it("passt die Figur in eine Box der Höhe 1, zentriert", () => {
-    const fig = stickFigure(figure({ la: 170, ra: 170 }))!;
-    const ys = fig.lines.flatMap(([, y0, , y1]) => [y0, y1]);
-    expect(Math.max(...ys)).toBeCloseTo(1);
-    expect(Math.min(...ys, fig.head!.y - fig.head!.r)).toBeGreaterThanOrEqual(-0.001);
-    const xs = fig.lines.flatMap(([x0, , x1]) => [x0, x1]);
-    expect(Math.max(...xs) + Math.min(...xs)).toBeCloseTo(0, 1);
+    const fig = moveFigure(figure({ la: 170, ra: 170 }))!;
+    const pts = [0, 11, 12, 13, 14, 15, 16, 23, 24, 25, 26, 27, 28].map((i) => fig.landmarks[i]!);
+    const ys = pts.map((p) => p[1]);
+    expect(Math.max(...ys)).toBeCloseTo(1 - PIKTO.pad);
+    expect(Math.min(...ys)).toBeGreaterThanOrEqual(PIKTO.pad - 1e-9);
+    const xs = pts.map((p) => p[0]);
+    expect(Math.max(...xs) + Math.min(...xs)).toBeCloseTo(0, 5);
+    expect(Math.max(...xs)).toBeCloseTo(fig.aspect / 2 - PIKTO.pad);
   });
 
-  it("lässt unsichere Landmarks weg statt sie bei 0 zu zeichnen", () => {
-    const lm = figure({ la: 90, ra: 90 }).map((p, i): Landmark =>
-      i === 15 ? [p[0], p[1], 0.2] : p,
-    );
-    const full = stickFigure(figure({ la: 90, ra: 90 }))!;
-    const missing = stickFigure(lm)!;
-    expect(missing.lines.length).toBe(full.lines.length - 1);
+  it("behält unsichere Landmarks unsicher statt sie bei 0 zu setzen", () => {
+    const fig = moveFigure(hide(figure({ la: 90, ra: 90 }), 15, 0.2))!;
+    expect(fig.landmarks[15]![2]).toBe(0.2);
+    expect(fig.landmarks[15]!.slice(0, 2)).not.toEqual([0, 0]);
+    expect(fig.landmarks[11]![2]).toBe(1);
   });
 
-  it("Pfeil, wenn eine Hand seit dem letzten Move weit gewandert ist", () => {
-    const c = makeChoreo([
-      { la: 10, ra: 10 },
-      { la: 170, ra: 10 },
-    ]);
-    const [first, second] = moveFigures(c);
+  it("kein Pfeil beim ersten Move", () => {
+    const [first] = moveFigures(makeChoreo([rest, { la: 170, ra: 10 }]));
     expect(first?.arrows).toEqual([]);
-    expect(second?.arrows.length).toBe(1);
+  });
+
+  it("kein Pfeil unter der Mindeststrecke", () => {
+    const cur = figure(rest);
+    const prev = figure(rest);
+    shift(prev, [15], 0.02);
+    expect(moveFigure(cur, prev)!.arrows).toEqual([]);
+    expect(moveFigure(cur, figure(rest))!.arrows).toEqual([]);
+  });
+
+  it("Hand-, Fuß- und Hüftbewegung ergeben je einen Pfeil", () => {
+    expect(moveFigure(figure(rest), figure({ la: 170, ra: 10 }))!.arrows.length).toBe(1);
+    expect(moveFigure(figure(rest), figure({ ...rest, ll: 70 }))!.arrows.length).toBe(1);
+    const prevHip = figure(rest);
+    shift(prevHip, [23, 24], 0.2);
+    expect(moveFigure(figure(rest), prevHip)!.arrows.length).toBe(1);
+  });
+
+  it("höchstens zwei Pfeile, die längsten zuerst", () => {
+    const prev = figure({ la: 170, ra: 120, ll: 70, rl: 40 });
+    const arrows = moveFigure(figure(rest), prev)!.arrows;
+    expect(arrows.length).toBe(PIKTO.maxArrows);
+    const len = (a: (typeof arrows)[number]) => dist([a.x0, a.y0], [a.x1, a.y1]);
+    expect(len(arrows[0]!)).toBeGreaterThan(len(arrows[1]!));
+  });
+
+  it("überspringt Punkte, die in einer der Posen unsicher sind", () => {
+    const far = figure({ la: 170, ra: 10 });
+    expect(moveFigure(figure(rest), hide(far, 15, 0.1))!.arrows).toEqual([]);
+    expect(moveFigure(hide(figure(rest), 15, 0.1), far)!.arrows).toEqual([]);
+    const prevHip = figure(rest);
+    shift(prevHip, [23, 24], 0.3);
+    expect(moveFigure(hide(figure(rest), 24, 0), prevHip)!.arrows).toEqual([]);
+  });
+
+  it("der Bogen biegt vom Rumpf weg und die Enden sind gekürzt", () => {
+    for (const [side, prevParams, hand] of [
+      ["links", { la: 170, ra: 10 }, 15],
+      ["rechts", { la: 10, ra: 170 }, 16],
+    ] as const) {
+      const fig = moveFigure(figure(rest), figure(prevParams))!;
+      const a = fig.arrows[0]!;
+      const lm = fig.landmarks;
+      const center = [
+        (lm[11]![0] + lm[12]![0] + lm[23]![0] + lm[24]![0]) / 4,
+        (lm[11]![1] + lm[12]![1] + lm[23]![1] + lm[24]![1]) / 4,
+      ];
+      const chordMid = [(a.x0 + a.x1) / 2, (a.y0 + a.y1) / 2];
+      expect(dist([a.cx, a.cy], center), side).toBeGreaterThan(dist(chordMid, center));
+      expect(dist([a.cx, a.cy], chordMid)).toBeCloseTo(
+        dist([a.x0, a.y0], [a.x1, a.y1]) * PIKTO.arrowBend,
+      );
+      // The arrow ends `arrowTrim` before the hand's current position.
+      expect(dist([a.x1, a.y1], lm[hand]!)).toBeCloseTo(PIKTO.arrowTrim, 5);
+    }
   });
 });
 

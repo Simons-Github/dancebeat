@@ -256,8 +256,14 @@ Abbrechen im Countdown ──▶ /setup/$songId
   ist der Endstand weg; der Ergebnis-Screen zeigt dann „Kein Ergebnis“.
 - Auf `/play/…` blendet `AppShell` Kopfzeile und Dekor-Hintergrund aus.
 - Piktogramme (`src/lib/game/pikto.ts`): reine Funktionen für Positionen (`piktoLayout`),
-  Blitzplan (höchstens 3 pro Sekunde), Strichfiguren aus Landmarks (`stickFigure`) und die feste
-  Coach-Ansicht (`coachView`). Gezeichnet wird in `src/lib/game/draw.ts`.
+  Blitzplan (höchstens 3 pro Sekunde), Piktogramm-Figuren aus Landmarks (`moveFigure`: Landmarks im
+  Einheitsraum der Höhe 1 mit Rand `PIKTO.pad`, Sichtbarkeit bleibt erhalten) mit Bewegungspfeilen
+  (`selectArrows`) und die feste Coach-Ansicht (`coachView`). Pfeile: Weg von Händen, Knöcheln und
+  Hüftmitte zwischen vorigem und diesem Move; ab `PIKTO.arrowMinDist` (0,15 Figurhöhen), höchstens
+  `PIKTO.maxArrows` (2, die längsten), als quadratische Kurve vom Rumpf weg gebogen. Gezeichnet wird
+  in `src/lib/game/draw.ts` mit `drawFigure` (gleiche Silhouette wie der Coach, Maße in
+  `PIKTO_FIGURE`): Rand, Füllung, Pfeile mit dunkler Kontur; Gold mit zusätzlicher breiterer,
+  durchscheinender Halo-Silhouette statt `shadowBlur`.
 - **Bewegungsmodus** (alle Builds): `/play/<id>?mode=motion` (`parsePlayMode` in
   `src/lib/motion.ts`). Die Aufstellhilfe startet ihn über „Ohne Kamera spielen“ (in der
   Startkarte und neben dem Kamera-Fehler); der Tipp ruft `unlockAudio()` und
@@ -847,7 +853,7 @@ Browser (`beforeunload`).
   auf k · Beatlänge in Choreografie-Zeit. Ungültiges wird abgelehnt (gleiches Objekt); der Screen
   sperrt die Knöpfe und nennt die Gründe. Die Pose eines Moves wird aus den Frames interpoliert,
   neue Pose-Daten sind nicht nötig. `isEdited` vergleicht auch `label` und `iconId`.
-- Timeline: waagerecht scrollende Move-Karten mit Strichfigur der Referenzpose
+- Timeline: waagerecht scrollende Move-Karten mit Piktogramm (Silhouette und Pfeile) der Referenzpose
   (Figuren aus `createMoveFigureCache`, unveränderte Moves behalten ihre Figur, sodass nur geänderte
   Karten neu zeichnen; `drawMoveFigure` auf Canvas, gezeichnet nur bei Änderung, kein rAF), Zeit in
   Musikzeit (`move.timeMs + offsetMs`, ohne Latenz und Sync-Offset), Gold-Markierung.

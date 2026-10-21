@@ -129,6 +129,41 @@ export const GAME = {
   pulse: 0.35,
 } as const;
 
+/**
+ * Coach silhouette (in-game, drawn by drawCoach/drawFigure). All lengths are fractions of the
+ * shorter canvas side, so the figure scales with the canvas.
+ */
+export const COACH = {
+  /** Limb capsule widths (stroke width, round caps). Upper limbs are thicker than lower ones. */
+  width: { upperArm: 0.07, forearm: 0.055, thigh: 0.088, shin: 0.066, neck: 0.04, foot: 0.045 },
+  headRadius: 0.068,
+  handRadius: 0.036,
+  /** Extra width of the light rim around the body (added to every width, radius and the torso). */
+  rim: 0.012,
+  rimColor: "#FFFFFF",
+  /** Glow blur radius, applied once per frame to the whole rim layer. */
+  glowBlur: 0.05,
+  /** Gradient top: how far the song color is mixed toward white (0..1). Bottom is the song color. */
+  gradientLight: 0.45,
+  /** CSS size of the coach canvas. Must leave the YouTube box (min 200 px) at the bottom right free. */
+  size: { portrait: "min(44vw, 32dvh)", landscape: "min(30vw, 48dvh)" },
+} as const;
+
+/**
+ * Pictogram figure and movement arrows (drawn by drawPiktos/drawMoveFigure with drawFigure, so the
+ * silhouette matches COACH). Lengths are fractions of the figure height (unit-space height 1).
+ */
+export const PIKTO_FIGURE = {
+  /** Body unit in figure heights: multiplies the COACH widths (a little thicker than the coach for small sizes). */
+  unit: 1.1,
+  /** Width of the dark rim around the silhouette (added to every width, radius and the torso). */
+  rim: 0.014,
+  /** Gold halo instead of shadowBlur: an extra, wider, translucent gold silhouette beneath. */
+  halo: { grow: 0.07, alpha: 0.35 },
+  /** Arrow stroke width, dark outline width on each side, and arrow head length / half width. */
+  arrow: { width: 0.045, outline: 0.015, headLength: 0.13, headHalfWidth: 0.075 },
+} as const;
+
 /** Rating popups: rise distance (vh) and duration (s). */
 export const POPUP = { riseVh: 6, seconds: 0.9 } as const;
 

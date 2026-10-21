@@ -573,13 +573,14 @@ describe("Spielscreen im Bewegungsmodus", () => {
 });
 
 describe("Spielscreen mit YouTube-Quelle", () => {
-  it("zeigt den Player-Container statt des Coach-Canvas und reicht ihn an die Quelle", async () => {
+  it("zeigt den Player-Container unten rechts neben dem Coach und reicht ihn an die Quelle", async () => {
     const song = library.songs[0];
     if (!song) throw new Error("no song");
     library.songs = [{ ...song, source: { type: "youtube", videoId: "aaaaaaaaaaa" } }];
     await renderAt(`/play/${SONG_ID}?sim=1`);
     const host = screen.getByLabelText("YouTube-Video");
-    expect(screen.queryByRole("img", { name: "Coach" })).toBeNull();
+    expect(host).toHaveClass("bottom-0", "right-0");
+    expect(screen.getByRole("img", { name: "Coach" })).toHaveClass("bottom-0", "left-0");
     expect(audio.opts?.container).toBe(host);
     await advance(5100);
     expect(phase()).toBe("playing");

@@ -37,7 +37,7 @@ import {
 } from "@/lib/choreoEditor";
 import { scrollIntoBoxDelta } from "@/lib/editorPreview";
 import { drawMoveFigure } from "@/lib/game/draw";
-import { createMoveFigureCache, type StickFigure } from "@/lib/game/pikto";
+import { createMoveFigureCache, type MoveFigure } from "@/lib/game/pikto";
 import { StorageFullError } from "@/lib/library/storage";
 import { formatOffsetMs } from "@/lib/sync";
 import type { Song } from "@/lib/types";
@@ -73,7 +73,7 @@ function MoveCanvas({
   secondary,
   className,
 }: {
-  fig: StickFigure | null;
+  fig: MoveFigure | null;
   gold: boolean;
   accent: string;
   secondary: string;
