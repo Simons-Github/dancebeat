@@ -20,6 +20,8 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 9. Typen und Lint                            | ✅                                  | –                                                                     |
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
+| 13. 3D-Kern und Choreo-Generator             | ⏳                                  | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
 
@@ -865,6 +867,20 @@ Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 
 Siehe N-Befunde unten. Optional später: Cloud-Sync der Bibliothek über einen noch offenen
 Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
+
+### 13. 3D-Kern und Choreo-Generator ⏳
+
+Bewegung intern als `Skeleton3D` (Knochenrichtungen), 2D abgeleitet; Pose-Spur v2 und
+Choreografie v2 mit optionalem `pose3d`; Motion-Paket aus Demo-Posen, Video-Import und AIST++
+(Konverter in 13h); Generator mit Phrasen, Wiederholungen und Spiegelpaaren statt `autoChoreo`;
+Messplatz. Kein 3D-Coach und keine 3D-Bewertung (Ausblick Etappen 15 und 16). Plan:
+[plans/etappe-13.md](plans/etappe-13.md).
+
+### 14. Neue Demo-Songs ⏳
+
+Zwei bis drei Demos mit eigener Musik; Songaufbau per Manifest über den Generator aus 13
+(fester Plan, Refrain identisch, Gold Moves am Höhepunkt); Credits. Braucht die Lizenzklärung
+14-0 und die Etappen 12 und 13. Plan: [plans/etappe-14.md](plans/etappe-14.md).
 
 ## Offene Befunde
 
