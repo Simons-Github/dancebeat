@@ -103,6 +103,8 @@ abgeleitet und bleibt die Grundlage für Bewertung und Anzeige.
   Ober- und Unterschenkel je links und rechts. Ohne Drehung entlang des Knochens, ohne Hände und
   Füße. Ist ein Gelenk unsicher (`visibility < 0.5`), fehlt der Knochen; er wird nie als 0
   gesetzt.
+- **Demo-Posen** (seit 13b): `figure3d(p)` baut die Strichfigur der eingebauten Posen als
+  flaches Skelett (z = 0, Gier 0); `figure()` ist dessen Projektion.
 - **Projektion** (`project`): Standardlängen `BONE_LENGTHS` (Proportionen von `figure()`,
   0,44 Einheiten je Meter), frontal orthografisch in den quadratischen Spiegelraum, Beckenmitte
   bei (0,5; 0,58). Tiefe entfällt. Nicht setzbare Punkte bekommen Sichtbarkeit 0. Ohne Hüften

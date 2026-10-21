@@ -5,7 +5,8 @@ import type { Choreography, Frame, Move, Song } from "@/lib/types";
 import { CHOREO_VERSION } from "@/lib/schema";
 import type { SongRepository } from "@/lib/library/repository";
 
-const POSES: Record<string, { label: string; p: FigureParams }> = {
+/** Built-in poses (id → label and figure); also the first source of the motion pack (13e). */
+export const DEMO_POSES: Readonly<Record<string, { label: string; p: FigureParams }>> = {
   neutral: { label: "Locker", p: { la: 10, ra: 10 } },
   "arms-up": { label: "Arme hoch", p: { la: 170, ra: 170 } },
   "t-pose": { label: "Flieger", p: { la: 90, ra: 90 } },
@@ -32,10 +33,10 @@ function build(
   const frames: Frame[] = [];
   const moves: Move[] = [];
   const intro = beat * 4;
-  const neutral = POSES["neutral"];
+  const neutral = DEMO_POSES["neutral"];
   if (!neutral) throw new Error("Missing 'neutral' pose");
   seq.forEach((id, i) => {
-    const pose = POSES[id];
+    const pose = DEMO_POSES[id];
     if (!pose) {
       console.warn(`Unknown pose id "${id}", skipped`);
       return;
@@ -400,7 +401,7 @@ export function autoChoreo(
   durationMs: number,
   colors: [string, string],
 ): Choreography {
-  const ids = Object.keys(POSES).filter((k) => k !== "neutral");
+  const ids = Object.keys(DEMO_POSES).filter((k) => k !== "neutral");
   const beat = 60000 / bpm;
   const n = Math.max(4, Math.floor((durationMs - beat * 4) / (beat * 2)));
   const seq = Array.from({ length: n }, (_, i) => ids[(i * 7 + 3) % ids.length]).filter(

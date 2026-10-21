@@ -1,3 +1,7 @@
+// Direct module imports: the skeleton index re-exports `interpolate`, which imports this file.
+import { project } from "./skeleton/project";
+import { FIGURE_UNITS_PER_METER, type Skeleton3D } from "./skeleton/types";
+import { normalize, type Vec3 } from "./skeleton/vec";
 import type { AngleKey, Angles, Frame, Landmark } from "./types";
 
 export const L = {
@@ -192,7 +196,7 @@ export function frameAt(frames: Frame[], t: number): Frame | null {
   return { timeMs: t, landmarks, angles };
 }
 
-/** Einfache 2D-Strichfigur aus Gliedmaßen-Winkeln (für eingebaute Demo-Choreos). */
+/** Einfache Strichfigur aus Gliedmaßen-Winkeln (für eingebaute Demo-Choreos). */
 export interface FigureParams {
   la: number;
   ra: number;
@@ -205,44 +209,46 @@ export interface FigureParams {
   lean?: number;
   dy?: number;
 }
-export function figure(p: FigureParams): Landmark[] {
+
+/**
+ * The stick figure of `FigureParams` as a flat `Skeleton3D` (z = 0, facing the viewer). Limb
+ * angles are measured in the screen plane from straight down, outward positive; `lean` tilts
+ * the torso toward the dancer's right on screen, `dy` lowers the pelvis (square landmark units).
+ */
+export function figure3d(p: FigureParams): Skeleton3D {
   const rad = (d: number) => (d * Math.PI) / 180;
+  // Screen direction (x right, y down, mirror space) to the body system (x dancer-left, y up).
+  const dir = (sx: number, sy: number): Vec3 => normalize([0 - sx, 0 - sy, 0]) ?? [0, -1, 0]; // 0 − x avoids −0
   const lean = rad(p.lean ?? 0);
-  const dy = p.dy ?? 0;
-  const pts: Landmark[] = Array.from({ length: 33 }, () => [0.5, 0.5, 0]);
-  const hipY = 0.58 + dy;
-  const hipC: [number, number] = [0.5, hipY];
-  const torso = 0.22;
-  const shC: [number, number] = [
-    hipC[0] + Math.sin(lean) * torso,
-    hipC[1] - Math.cos(lean) * torso,
-  ];
-  const set = (i: number, x: number, y: number) => (pts[i] = [x, y, 1]);
-  set(11, shC[0] - 0.08, shC[1]);
-  set(12, shC[0] + 0.08, shC[1]);
-  set(23, hipC[0] - 0.05, hipC[1]);
-  set(24, hipC[0] + 0.05, hipC[1]);
-  set(0, shC[0] + Math.sin(lean) * 0.08, shC[1] - 0.09);
-  const limb = (
-    from: number,
-    mid: number,
-    end: number,
-    ang: number,
-    bend: number,
-    side: -1 | 1,
-    len: number,
-  ) => {
+  const limb = (ang: number, bend: number, side: -1 | 1): [Vec3, Vec3] => {
     const a = rad(ang) * side;
-    const o = pts[from];
-    if (!o) return;
-    const m: [number, number] = [o[0] + Math.sin(a) * len, o[1] + Math.cos(a) * len];
     const b = a + rad(bend) * side;
-    set(mid, m[0], m[1]);
-    set(end, m[0] + Math.sin(b) * len, m[1] + Math.cos(b) * len);
+    return [dir(Math.sin(a), Math.cos(a)), dir(Math.sin(b), Math.cos(b))];
   };
-  limb(11, 13, 15, p.la, p.le ?? 0, -1, 0.13);
-  limb(12, 14, 16, p.ra, p.re ?? 0, 1, 0.13);
-  limb(23, 25, 27, p.ll ?? 5, -(p.lk ?? 0), -1, 0.17);
-  limb(24, 26, 28, p.rl ?? 5, -(p.rk ?? 0), 1, 0.17);
-  return pts;
+  const [leftUpperArm, leftForearm] = limb(p.la, p.le ?? 0, -1);
+  const [rightUpperArm, rightForearm] = limb(p.ra, p.re ?? 0, 1);
+  const [leftThigh, leftShin] = limb(p.ll ?? 5, -(p.lk ?? 0), -1);
+  const [rightThigh, rightShin] = limb(p.rl ?? 5, -(p.rk ?? 0), 1);
+  return {
+    root: { pos: [0, 0 - (p.dy ?? 0) / FIGURE_UNITS_PER_METER, 0], yawDeg: 0 },
+    bones: {
+      torso: dir(Math.sin(lean), -Math.cos(lean)),
+      // Nose 0.09 above the shoulder centre, shifted along the lean (as in the old 2D figure;
+      // with the fixed neck length the nose moves by < 0.002 up to 10° lean, ~0.0024 at 15°).
+      neck: dir(Math.sin(lean) * 0.08, -0.09),
+      shoulders: [1, 0, 0],
+      hips: [1, 0, 0],
+      leftUpperArm,
+      leftForearm,
+      rightUpperArm,
+      rightForearm,
+      leftThigh,
+      leftShin,
+      rightThigh,
+      rightShin,
+    },
+  };
 }
+
+/** 2D landmarks of `figure3d(p)` (frontal projection, hip centre at y = 0.58 + dy). */
+export const figure = (p: FigureParams): Landmark[] => project(figure3d(p));

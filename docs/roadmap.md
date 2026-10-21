@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a ✅)                         | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a, 13b ✅)                    | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -922,6 +922,15 @@ orthografisch, Hüfte bei y = 0,58, optionale Zusatzgier für Seitenansicht), `i
 Projektion mit x → 1 − x (gleiche Winkel wie `mirrorChoreo`), weil eine reine Umbenennung die
 Figur von hinten zeigen würde. Konvention: [choreography-format.md](choreography-format.md#skeleton3d).
 Tests: `src/test/skeleton.test.ts`.
+
+**13b Demo-Posen über Skeleton3D – umgesetzt.** `figure3d(p)` (`src/lib/pose.ts`) liefert die
+Strichfigur als flaches `Skeleton3D` (z = 0, Gier 0, `dy` als tiefere Wurzel); `figure()` ist
+jetzt `project(figure3d(p))`. Die Posentabelle heißt `DEMO_POSES` und ist exportiert (erste
+Quelle des Motion-Pakets in 13e); `build` und `autoChoreo` sind äußerlich gleich. Einzige
+Abweichung: Die Nase liegt mit fester Halslänge statt „0,09 über den Schultern plus
+Neigungsversatz“, bei den Demo-Posen (Neigung höchstens 10°) unter 0,002 verschoben; alle
+anderen Gelenke und alle Winkel sind gleich. Tests: `src/test/figure3d.test.ts` (gegen eine
+eingefrorene Kopie des alten `figure()`).
 
 ### 14. Neue Demo-Songs ⏳
 
