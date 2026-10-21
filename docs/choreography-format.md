@@ -84,6 +84,36 @@ Winkel-Schlüssel) und kehrt `torsoLean` um; die Positionen bleiben. Das braucht
 Ein Tänzer, der frontal zur Kamera tanzt, wird ungespiegelt gezeigt, und der Spieler tanzt
 spiegelbildlich mit. Zweimal angewendet ergibt sich das Original.
 
+## Skeleton3D
+
+Interne 3D-Darstellung einer Pose (`src/lib/skeleton/`, seit Etappe 13a). Noch **nicht Teil des
+gespeicherten Formats**; Choreografien bleiben v1. 2D (`landmarks`, `angles`) wird daraus
+abgeleitet und bleibt die Grundlage für Bewertung und Anzeige.
+
+- **Welt:** Meter, x zur linken Körperseite des Tänzers bei Gier 0, y nach oben, z zum
+  Betrachter. `fromLandmarks3d` rechnet MediaPipe-Weltpunkte (x Bild rechts, y unten, z von der
+  Kamera weg) um: x bleibt, y und z kehren sich um.
+- **Wurzel:** `root.pos` = Beckenmitte relativ zum Startpunkt, `root.yawDeg` = Blickrichtung um
+  die Senkrechte; 0 = zum Betrachter, positiv = zur eigenen linken Seite gedreht. Die Gier kommt
+  aus der waagerechten Hüftachse, ohne Hüften aus der Schulterachse.
+- **Körpersystem:** x links, y oben (immer senkrecht, keine Neigung in der Wurzel), z vorn.
+  Rumpfneigung steckt im Knochen `torso`.
+- **12 Knochen** als Einheitsvektoren im Körpersystem: `torso` (Becken → Schultermitte), `neck`
+  (Schultermitte → Nase), `shoulders` und `hips` (rechtes → linkes Gelenk), Ober- und Unterarm,
+  Ober- und Unterschenkel je links und rechts. Ohne Drehung entlang des Knochens, ohne Hände und
+  Füße. Ist ein Gelenk unsicher (`visibility < 0.5`), fehlt der Knochen; er wird nie als 0
+  gesetzt.
+- **Projektion** (`project`): Standardlängen `BONE_LENGTHS` (Proportionen von `figure()`,
+  0,44 Einheiten je Meter), frontal orthografisch in den quadratischen Spiegelraum, Beckenmitte
+  bei (0,5; 0,58). Tiefe entfällt. Nicht setzbare Punkte bekommen Sichtbarkeit 0. Ohne Hüften
+  werden die Schultern aufrecht über dem Becken verankert (nur Lage, kein Rumpfwinkel).
+- **Interpolation:** slerp je Knochen, Wurzel linear, Gier über den kürzesten Bogen; fehlt ein
+  Knochen auf einer Seite, fehlt er im Ergebnis.
+- **Spiegeln** (`mirror3d`): links und rechts tauschen, x spiegeln, Gier umkehren. Die Winkel
+  entsprechen `mirrorAngles` wie bei `mirrorChoreo`; anders als dort wird die Figur auch auf dem
+  Bildschirm gespiegelt (x → 1 − x), damit die bewegte Seite im Spiegelraum richtig liegt.
+  Zweimal angewendet ergibt sich das Original.
+
 ## Video-Import
 
 `choreoFromPoseTrack` (`src/lib/videoChoreo.ts`) baut aus einer Pose-Spur eines Videos eine

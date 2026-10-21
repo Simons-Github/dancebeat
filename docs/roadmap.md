@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳                                  | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a ✅)                         | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -912,6 +912,16 @@ Choreografie v2 mit optionalem `pose3d`; Motion-Paket aus Demo-Posen, Video-Impo
 (Konverter in 13h); Generator mit Phrasen, Wiederholungen und Spiegelpaaren statt `autoChoreo`;
 Messplatz. Kein 3D-Coach und keine 3D-Bewertung (Ausblick Etappen 15 und 16). Plan:
 [plans/etappe-13.md](plans/etappe-13.md).
+
+**13a Skeleton-Kern – umgesetzt.** Reine Logik in `src/lib/skeleton/`, kein Formatwechsel, Spiel,
+Bewertung und UI unverändert: `Skeleton3D` mit Wurzel (Position, Gier) und 12 Knochenrichtungen,
+`BONE_LENGTHS` passend zu `figure()`, Vektor-Helfer mit slerp (Gegenrichtung über die Vorderseite),
+`fromLandmarks3d` (MediaPipe-Weltpunkte, unsichere Gelenke ohne Knochen), `project` (frontal
+orthografisch, Hüfte bei y = 0,58, optionale Zusatzgier für Seitenansicht), `interpolate` und
+`mirror3d`. Abweichung vom Plan: Die Projektion von `mirror3d` ist `mirrorLandmarks` der
+Projektion mit x → 1 − x (gleiche Winkel wie `mirrorChoreo`), weil eine reine Umbenennung die
+Figur von hinten zeigen würde. Konvention: [choreography-format.md](choreography-format.md#skeleton3d).
+Tests: `src/test/skeleton.test.ts`.
 
 ### 14. Neue Demo-Songs ⏳
 
