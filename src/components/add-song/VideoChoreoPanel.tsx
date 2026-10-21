@@ -38,7 +38,7 @@ import { drawPersonPicker } from "@/lib/overlay";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import { formatStartOffsetSeconds } from "@/lib/sync";
 import { DEFAULT_INTERVAL_MS } from "@/lib/videoAnalysis";
-import { MOVE_PLACEMENTS, type MovePlacement } from "@/lib/videoChoreo";
+import { DEFAULT_MOVE_PLACEMENT, MOVE_PLACEMENTS, type MovePlacement } from "@/lib/videoChoreo";
 import {
   defaultTarget,
   hasMultiplePersons,
@@ -161,7 +161,7 @@ export function VideoChoreoPanel({
   /** Model of the next analysis, and the one the last started analysis used. */
   const [model, setModel] = useState<PoseModel>("lite");
   const [analyzedModel, setAnalyzedModel] = useState<PoseModel | null>(null);
-  const [placement, setPlacement] = useState<MovePlacement>("grid");
+  const [placement, setPlacement] = useState<MovePlacement>(DEFAULT_MOVE_PLACEMENT);
   /** Dev diagnostics only: duration of the last finished analysis. */
   const [analysisMs, setAnalysisMs] = useState<number | null>(null);
   const analysisToken = useRef(0);

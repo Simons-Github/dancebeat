@@ -629,7 +629,7 @@ Aufteilung:
     - [ ] Tracking über Kreuzungen und kurze Verdeckungen: die Choreografie bleibt bei der
           gewählten Person (im Editor oder Spiel prüfen)
     - [ ] Dauer der Analyse mit `numPoses` 3 gegenüber vorher (1) für denselben Abschnitt
-- **8g Qualität mit echten Tanzvideos – 8g-2 und 8g-3 umgesetzt.** Ziel: aus YouTube-Videos (lokal per
+- **8g Qualität mit echten Tanzvideos – 8g-2, 8g-3 und 8g-5 umgesetzt.** Ziel: aus YouTube-Videos (lokal per
   yt-dlp als MP4) zuverlässig gute Choreografien für Party-Klassiker, K-Pop Mirrored, Zumba und
   TikTok-Trends. Erst messen, dann gezielt verbessern.
   - **8g-1 Testset (offen, kein Code):** 4 Referenzvideos lokal außerhalb des Repos (fester
@@ -645,9 +645,7 @@ Aufteilung:
     Parameter und `maxGapMs` (wahlweise `beatsPerMove`) und ordnet nach Holdout-Fehler, je Video
     und gemittelt. Details:
     [architecture.md](architecture.md#tuning-skript-etappe-8g-3). Tests `tuning.test.ts`,
-    Holdout in `videoChoreo.test.ts`. **Offen:** Lauf mit den echten Rohdaten aus 8g-1, danach
-    neue Standardwerte mit Begründung in
-    [choreography-format.md](choreography-format.md#video-import).
+    Holdout in `videoChoreo.test.ts`. Lauf mit echten Rohdaten: siehe 8g-5.
   - **8g-4a Bruchteil-BPM – umgesetzt.** `refineBpm` (`src/lib/beat.ts`) verfeinert die
     ganzzahlige Schätzung auf 0,1 BPM: Kandidaten ±3 BPM in 0,02er-Schritten, phasenkohärenter
     Kammfilter über die ersten 300 s der Hüllkurve; echte ganzzahlige Tempi bleiben exakt.
@@ -693,10 +691,21 @@ Aufteilung:
     [choreography-format.md](choreography-format.md#video-import). Tests `videoChoreo.test.ts`
     (Haltepunkte statt Raster, Anzahl, Mindestabstand bei 240 BPM, Beat-Phase 600 und −400 ms, Randbeats, Standard unverändert,
     Kennzahl), `tuning.test.ts`, `poseTrackFile.test.ts`, `video-choreo-panel.test.tsx`. Kein
-    Formatwechsel. Standard bleibt „Fester Takt“ bis zur Messung mit dem Testset (8g-1).
+    Formatwechsel. Seit 8g-5 sind Haltepunkte Standard.
     - **Gerätetest 8g-4c (offen):**
       - [ ] Fühlen sich Moves mit „Haltepunkte“ im Spiel besser an als mit „Fester Takt“
             (gleiches Video, gleicher Abschnitt)?
+  - **8g-5 Standardwerte aus der Messung – umgesetzt.** Zwei echte Videos (BTS Dance Practice,
+    TikTok-Tanz, Modell „full“) mit `bun run tune-video`: One-Euro jetzt `minCutoff` 2,
+    `beta` 40 statt 1 / 10 (Holdout-Fehler im Mittel 10,11° statt 10,41°; die alten Werte
+    waren beim TikTok-Tanz schlechter als keine Glättung), Haltepunkte statt fester Takt als
+    Standard (`DEFAULT_MOVE_PLACEMENT`, ruhigere Zielposen, bei BTS 33 statt 31 Moves). Alte
+    Dev-Rohdaten ohne `movePlacement` rechnen weiter mit „grid“. `*.posetrack.json` in
+    `.gitignore`. Details:
+    [choreography-format.md](choreography-format.md#standardwerte-aus-der-messung-etappe-8g-5).
+    Kein Formatwechsel.
+    - **Offen:** weitere Videos (Party-Klassiker, Zumba) messen; Gerätetest 8g-4c
+      (Spielgefühl mit Haltepunkte).
   - **8g-4d Selfie-Schalter bei Mirrored-Videos – umgesetzt.** `looksMirrored`
     (`src/lib/library/videoImport.ts`) erkennt gespiegelte Videos am Dateinamen („Mirrored“,
     „mirror“, „gespiegelt“ und „spiegelverkehrt“ als ganze Wörter, auch neben `_` und Ziffern

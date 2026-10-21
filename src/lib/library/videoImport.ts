@@ -94,7 +94,7 @@ export interface VideoImportOptions {
   beatPhaseMs: number;
   /** See VideoChoreoOptions.mirror. Default true. */
   mirror?: boolean;
-  /** See VideoChoreoOptions.movePlacement. Default "grid". */
+  /** See VideoChoreoOptions.movePlacement. Default DEFAULT_MOVE_PLACEMENT ("holds"). */
   movePlacement?: MovePlacement;
   colors?: [string, string];
   /** Video duration for the range check; null/omitted skips the end check. */

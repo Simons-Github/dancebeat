@@ -65,7 +65,7 @@ describe("buildVideoChoreo", () => {
   });
 
   it("start 3000, P 250: offset 3250, first move at choreo time 0", () => {
-    const { choreo } = buildVideoChoreo(base());
+    const { choreo } = buildVideoChoreo(base({ movePlacement: "grid" }));
     expect(choreo.offsetMs).toBe(3250);
     expect(choreo.moves[0]?.timeMs).toBe(0);
     expect(choreo.bpm).toBe(120);

@@ -57,7 +57,8 @@ describe("poseTrackFile", () => {
     expect(importOptions(withHolds).opts.movePlacement).toBe("holds");
     const old = parsePoseTrackFile(JSON.stringify(buildPoseTrackFile(input)));
     expect(old.movePlacement).toBeUndefined();
-    expect(importOptions(old).opts).not.toHaveProperty("movePlacement");
+    // Older exports were built on the fixed grid; the new default must not change them.
+    expect(importOptions(old).opts.movePlacement).toBe("grid");
     expect(() =>
       parsePoseTrackFile(JSON.stringify({ ...withHolds, movePlacement: "raster" })),
     ).toThrow();

@@ -5,6 +5,7 @@ import { ChoreographySchema } from "@/lib/schema";
 import type { AngleKey, Angles, Frame, Landmark, Move } from "@/lib/types";
 import {
   choreoFromPoseTrack,
+  DEFAULT_MOVE_PLACEMENT,
   MIN_MOVE_GAP_MS,
   OneEuroFilter,
   poseMotionAt,
@@ -67,7 +68,8 @@ function makeTrack(spec: TrackSpec = {}): PoseTrack {
   return { aspect, samples };
 }
 
-const opts = { title: "Video", bpm: 120, now: 1_760_000_000_000 };
+// Most tests check the fixed grid; the hold-point default has its own tests below.
+const opts = { title: "Video", bpm: 120, now: 1_760_000_000_000, movePlacement: "grid" as const };
 
 const meanErr = (a: Angles[], b: Angles[], keys: AngleKey[]) => {
   let sum = 0,
@@ -107,7 +109,8 @@ describe("smoothTrack", () => {
     const keys = ARM_KEYS;
     const eRaw = meanErr(raw.slice(from), truth.slice(from), keys);
     const eSmooth = meanErr(smooth.slice(from), truth.slice(from), keys);
-    expect(eSmooth).toBeLessThan(eRaw * 0.6);
+    // Since 8g-3 the default smooths less (fast moves keep their peaks), so less noise goes.
+    expect(eSmooth).toBeLessThan(eRaw * 0.7);
     expect(eSmooth).toBeLessThan(2.5);
   });
 
@@ -445,10 +448,12 @@ describe("Haltepunkt-Moves (movePlacement)", () => {
     expect(holds.moves.filter((m) => m.gold).length).toBeGreaterThanOrEqual(2);
   });
 
-  it("ohne Option bleibt alles beim festen Raster", () => {
+  it("ohne Option gilt DEFAULT_MOVE_PLACEMENT (Haltepunkte)", () => {
+    expect(DEFAULT_MOVE_PLACEMENT).toBe("holds");
     const track = makeTrack({ pose: oddHolds });
-    expect(choreoFromPoseTrack(track, { ...base, movePlacement: "grid" })).toEqual({
-      ...choreoFromPoseTrack(track, base),
+    const noOption = { title: base.title, bpm: base.bpm, now: base.now, mirror: false };
+    expect(choreoFromPoseTrack(track, { ...noOption, movePlacement: "holds" })).toEqual({
+      ...choreoFromPoseTrack(track, noOption),
       id: expect.any(String),
     });
   });

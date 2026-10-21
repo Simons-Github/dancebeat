@@ -62,10 +62,10 @@ describe("tuning", () => {
   it("baut das Raster als Kreuzprodukt", () => {
     const points = gridPoints({
       minCutoff: [1, 2],
-      beta: [5, 10, 20],
+      beta: [10, 20, 40],
       maxGapMs: [250],
       beatsPerMove: [2],
-      placement: ["grid"],
+      placement: ["holds"],
     });
     expect(points).toHaveLength(6);
     expect(points.some((p) => sameParams(p, CURRENT))).toBe(true);
@@ -88,10 +88,10 @@ describe("tuning", () => {
   it("mittelt über alle Videos und markiert die aktuellen Werte", () => {
     const points = gridPoints({
       minCutoff: [1, 2],
-      beta: [10],
+      beta: [40],
       maxGapMs: [250],
       beatsPerMove: [2],
-      placement: ["grid"],
+      placement: ["holds"],
     });
     const a = noisyFile(0.01, 1, "a.mp4");
     const b = noisyFile(0.02, 2, "b.mp4");
@@ -109,11 +109,11 @@ describe("tuning", () => {
   });
 
   it("vergleicht die Move-Platzierung und zeigt die Bewegung an den Moves", () => {
-    expect(CURRENT.placement).toBe("grid");
-    expect(DEFAULT_GRID.placement).toEqual(["grid"]);
+    expect(CURRENT).toMatchObject({ minCutoff: 2, beta: 40, placement: "holds" });
+    expect(DEFAULT_GRID.placement).toEqual(["holds"]);
     const points = gridPoints({
-      minCutoff: [1],
-      beta: [10],
+      minCutoff: [2],
+      beta: [40],
       maxGapMs: [250],
       beatsPerMove: [2],
       placement: ["grid", "holds"],
@@ -131,7 +131,7 @@ describe("tuning", () => {
     expect(report).toContain("Bew. °/s");
     expect(report).toContain(grid.moveMotionDegPerS!.toFixed(2));
     expect(report).toContain("Beats/Move 2, holds");
-    expect(report).toMatch(/Beats\/Move 2, grid ← aktuell/);
+    expect(report).toMatch(/Beats\/Move 2, holds ← aktuell/);
   });
 
   it("lehnt ungültige Platzierungen ab", () => {

@@ -61,7 +61,8 @@ export function importOptions(file: PoseTrackFile): { track: PoseTrack; opts: Vi
       range: file.range,
       beatOffsetMs: file.beatPhaseMs - file.range.startMs,
       mirror: file.mirror,
-      ...(file.movePlacement && { movePlacement: file.movePlacement }),
+      // Older exports predate the placement choice and were built on the fixed grid.
+      movePlacement: file.movePlacement ?? "grid",
       now: file.exportedAt,
     },
   };

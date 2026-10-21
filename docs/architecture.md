@@ -522,8 +522,9 @@ Zielperson (`trackTarget`, siehe [Zielperson](#zielperson-etappe-8f)). Ablauf un
 
 - Glättung: One-Euro-Filter je Koordinate, vorwärts und rückwärts gerechnet und gemittelt. Die
   Analyse läuft offline; ein einseitiger Filter würde die Referenzposen hinter den Beat
-  verschieben. Startwerte `minCutoff` 1 Hz, `beta` 10, `dCutoff` 1 Hz, Neustart nach Lücken über
-  250 ms. Ob die Werte zu echten Tanzvideos passen, zeigt sich erst mit 8b.
+  verschieben. Werte `minCutoff` 2 Hz, `beta` 40, `dCutoff` 1 Hz (seit 8g-5, gemessen an echten
+  Videos; vorher 1 / 10), Neustart nach Lücken über 250 ms. Messung:
+  [choreography-format.md](choreography-format.md#standardwerte-aus-der-messung-etappe-8g-5).
 - `suggestGoldMoves` ist eigenständig exportiert, damit der Editor (8d-1, `suggestGold`)
   den Vorschlag wiederverwendet.
 - Fehlermeldungen sind deutsch, weil der Import-Dialog sie direkt zeigt.
@@ -718,8 +719,8 @@ Live-Erkennung der Kamera bleibt immer bei „lite“.
 ### Haltepunkt-Moves (Etappe 8g-4c)
 
 Unter „Modell“ wählt „Moves“ die Platzierung (`movePlacement` in `VideoChoreoOptions` und
-`VideoImportOptions`): „Fester Takt“ (`"grid"`, Standard, alle 2 Beats) oder „Haltepunkte“
-(`"holds"`, je Fenster von 2 Beats der Beat, an dem die Pose am ruhigsten ist; Regeln in
+`VideoImportOptions`): „Fester Takt“ (`"grid"`, alle 2 Beats) oder „Haltepunkte“
+(`"holds"`, Standard seit 8g-5 über `DEFAULT_MOVE_PLACEMENT`, je Fenster von 2 Beats der Beat, an dem die Pose am ruhigsten ist; Regeln in
 [choreography-format.md](choreography-format.md#video-import)). Höchstens ein Move je
 Fenster, etwa so viele wie beim festen Takt.
 
@@ -731,8 +732,9 @@ Fenster, etwa so viele wie beim festen Takt.
   zeigt sie als „Bewegung an den Moves“.
 - Dev-Rohdaten enthalten `movePlacement` (optional, alte Exporte ohne Feld = „grid“),
   `importOptions` gibt es weiter.
-- Standard bleibt „Fester Takt“, bis Messungen mit dem Testset (8g-1) und das Spielgefühl am
-  Gerät etwas anderes nahelegen.
+- Standard ist seit 8g-5 „Haltepunkte“ (Messung:
+  [choreography-format.md](choreography-format.md#standardwerte-aus-der-messung-etappe-8g-5));
+  der Dialog startet damit, „Fester Takt“ bleibt wählbar.
 
 ### Zielperson (Etappe 8f)
 
@@ -806,12 +808,12 @@ wird:
 
 `bun run tune-video <a.posetrack.json> [b.posetrack.json …]` (`scripts/tune-video-choreo.ts`,
 Logik in `scripts/tuning.ts`) rechnet für jede Datei ein Raster aus One-Euro-`minCutoff`
-(Standard 0,5/1/2/4), `beta` (2/5/10/20/40) und `maxGapMs` (150/250/400) durch und gibt je Video
+(Standard 0,5/1/2/4/8), `beta` (2/10/20/40/80) und `maxGapMs` (150/250/400) durch und gibt je Video
 eine Tabelle nach Holdout-Fehler aus (Zittern, Moves je Rasterpunkte, Parameter; die aktuellen
 Standardwerte sind markiert). Bei mehreren Dateien folgt die mittlere Wertung über alle Videos;
 Einstellungen, die an einem Video scheitern, fallen dort heraus. Raster per Komma-Liste
 änderbar: `--min-cutoff`, `--beta`, `--max-gap`, `--beats-per-move`, `--placement` (`grid`,
-`holds`; Standard `grid`), dazu `--top` (Zeilen je Tabelle, Standard 10). Die Spalte „Bew. °/s“
+`holds`; Standard `holds`), dazu `--top` (Zeilen je Tabelle, Standard 10). Die Spalte „Bew. °/s“
 zeigt `moveMotionDegPerS`; die Platzierung ändert den Holdout-Fehler nicht und wird über diese
 Spalte verglichen. Die Rohdaten bleiben lokal und kommen nicht ins Repo. Laufzeit etwa 2 s je
 Minute Video beim Standardraster. Neue Standardwerte vor dem Übernehmen im Spiel gegenprüfen.

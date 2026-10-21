@@ -21,15 +21,20 @@ export interface PoseTrack {
 }
 
 export interface OneEuroParams {
-  /** Cutoff frequency at rest in Hz; lower = smoother. Default 1. */
+  /** Cutoff frequency at rest in Hz; lower = smoother. Default 2. */
   minCutoff: number;
-  /** Speed coefficient; higher = less lag on fast movement. Default 10 (coordinates in 0..1). */
+  /** Speed coefficient; higher = less lag on fast movement. Default 40 (coordinates in 0..1). */
   beta: number;
   /** Cutoff for the derivative in Hz. Default 1. */
   dCutoff: number;
 }
 
-export const DEFAULT_ONE_EURO: OneEuroParams = { minCutoff: 1, beta: 10, dCutoff: 1 };
+/**
+ * Tuned on real dance videos (Etappe 8g-3, `bun run tune-video`): lowest hold-out error over a
+ * BTS dance practice and a TikTok dance. The former 1 / 10 cut off fast moves (worse than no
+ * smoothing on the TikTok dance); see docs/choreography-format.md#video-import.
+ */
+export const DEFAULT_ONE_EURO: OneEuroParams = { minCutoff: 2, beta: 40, dCutoff: 1 };
 
 /**
  * Where the video import puts the moves: "grid" every `beatsPerMove` beats, "holds" on the beat
@@ -37,6 +42,11 @@ export const DEFAULT_ONE_EURO: OneEuroParams = { minCutoff: 1, beta: 10, dCutoff
  */
 export const MOVE_PLACEMENTS = ["grid", "holds"] as const;
 export type MovePlacement = (typeof MOVE_PLACEMENTS)[number];
+/**
+ * Default since Etappe 8g-3: same hold-out error as "grid", but calmer target poses at the move
+ * times (lower moveMotionDegPerS) and on the BTS video more usable moves.
+ */
+export const DEFAULT_MOVE_PLACEMENT: MovePlacement = "holds";
 
 /**
  * Minimum distance between two moves: a playability limit that keeps the order strict and allows
@@ -60,7 +70,7 @@ export interface VideoChoreoOptions {
   /** Beats between two scored moves. Default 2. */
   beatsPerMove?: number;
   /**
-   * "grid" (default): a move every `beatsPerMove` beats. "holds": windows of k beats, k =
+   * Default DEFAULT_MOVE_PLACEMENT ("holds"). "grid": a move every `beatsPerMove` beats. "holds": windows of k beats, k =
    * `beatsPerMove` rounded to a whole number (at least 1); each window starts on a grid point
    * offset + n · k beats inside [0, duration], so there are as many windows as grid points with
    * step k beats. Per window the beat with the least pose motion, at least max(MIN_MOVE_GAP_MS,
@@ -413,7 +423,7 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
   };
   const beatMs = 60000 / opts.bpm;
   const times =
-    opts.movePlacement === "holds"
+    (opts.movePlacement ?? DEFAULT_MOVE_PLACEMENT) === "holds"
       ? holdTimes(frames, offset, beatMs, Math.max(1, Math.round(beatsPerMove)), durationMs, usable)
       : beatSlots(offset, step, durationMs).filter(usable);
   const moves: Move[] = times.map((t) => ({

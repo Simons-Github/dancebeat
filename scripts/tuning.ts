@@ -7,6 +7,7 @@
 import type { PoseTrackFile } from "../src/lib/poseTrackFile.ts";
 import { importOptions } from "../src/lib/poseTrackFile.ts";
 import {
+  DEFAULT_MOVE_PLACEMENT,
   DEFAULT_ONE_EURO,
   MOVE_PLACEMENTS,
   trackMetrics,
@@ -31,15 +32,15 @@ export const CURRENT: TuningParams = {
   beta: DEFAULT_ONE_EURO.beta,
   maxGapMs: 250,
   beatsPerMove: 2,
-  placement: "grid",
+  placement: DEFAULT_MOVE_PLACEMENT,
 };
 
 export const DEFAULT_GRID: TuningGrid = {
-  minCutoff: [0.5, 1, 2, 4],
-  beta: [2, 5, 10, 20, 40],
+  minCutoff: [0.5, 1, 2, 4, 8],
+  beta: [2, 10, 20, 40, 80],
   maxGapMs: [150, 250, 400],
   beatsPerMove: [2],
-  placement: ["grid"],
+  placement: [DEFAULT_MOVE_PLACEMENT],
 };
 
 export function gridPoints(grid: TuningGrid): TuningParams[] {

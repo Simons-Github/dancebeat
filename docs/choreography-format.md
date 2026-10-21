@@ -90,8 +90,10 @@ spiegelbildlich mit. Zweimal angewendet ergibt sich das Original.
 Choreografie im Format v1:
 
 1. Zeitbereich zuschneiden; der Anfang des Bereichs wird 0.
-2. Glätten (One-Euro, vorwärts und rückwärts). Punkte mit `visibility < 0.5` laufen nie durch den
-   Filter und bleiben unsichtbar; nach einer Lücke beginnt der Filter des Punkts neu.
+2. Glätten (One-Euro, vorwärts und rückwärts; Standard `minCutoff` 2 Hz, `beta` 40, `dCutoff`
+   1 Hz). Punkte mit `visibility < 0.5` laufen nie durch den Filter und bleiben unsichtbar; nach
+   einer Lücke beginnt der Filter des Punkts neu. Begründung der Werte: siehe
+   [Standardwerte](#standardwerte-aus-der-messung-etappe-8g-5).
 3. Winkel über `computeAngles(…, { aspect })` aus den Rohkoordinaten. Gespeichert werden die
    Landmarks im quadratischen Raum: mit `s = max(aspect, 1)` gilt
    `x' = 0.5 + (x − 0.5) · aspect / s` und `y' = 0.5 + (y − 0.5) / s`. Die längere Bildseite
@@ -108,9 +110,9 @@ Choreografie im Format v1:
    beide Schultern und beide Hüften sichtbar sind. Drei Minuten ergeben etwa 1,3 MB JSON.
 6. Moves nach `movePlacement` (Etappe 8g-4c). Ein Kandidat entfällt, wenn der Frame dort
    fehlt, `lowVisibility` hat oder weniger als 4 Arm- und Beinwinkel trägt.
-   - `"grid"` (Standard, „Fester Takt“): Moves alle `beatsPerMove` Beats (Standard 2) ab
+   - `"grid"` („Fester Takt“): Moves alle `beatsPerMove` Beats (Standard 2) ab
      `beatOffsetMs`.
-   - `"holds"` („Haltepunkte“): Die Beats werden in Fenster zu k Beats geteilt, k =
+   - `"holds"` (Standard seit 8g-5, „Haltepunkte“): Die Beats werden in Fenster zu k Beats geteilt, k =
      `beatsPerMove` gerundet, mindestens 1. Jedes Fenster beginnt an einem Rasterpunkt
      `beatOffsetMs + n · k Beats` im Abschnitt (bei ganzzahligem `beatsPerMove` genau die
      Rasterpunkte von `"grid"`); Beats vor dem ersten Rasterpunkt gehören zu keinem Fenster. Je
@@ -150,6 +152,31 @@ gilt Videozeit = Audiozeit. Für den Bereich `[start, ende]` und eine Beat-Phase
   Onset-Hüllkurve der Musikdatei oder der Tonspur des Videos (`estimateBeatPhaseMs`, siehe
   [architecture.md](architecture.md#bpm-schätzung-und-beat-phase)). Jeder Beat ist als `P`
   gleichwertig, der Wert ab `start` ist nur leichter zu lesen.
+
+### Standardwerte aus der Messung (Etappe 8g-5)
+
+Gemessen mit `bun run tune-video` an zwei echten Videos (Modell „full“): einer BTS Dance
+Practice (36 s, 119 BPM) und einem TikTok-Tanz (18 s, 122 BPM). Holdout-Fehler in Grad,
+niedriger ist besser:
+
+| Einstellung                    | BTS   | TikTok | Mittel |
+| ------------------------------ | ----- | ------ | ------ |
+| bisher `minCutoff 1, beta 10`  | 12,64 | 8,19   | 10,41  |
+| ungeglättet                    | 12,71 | 7,79   | 10,25  |
+| **neu `minCutoff 2, beta 40`** | 12,58 | 7,64   | 10,11  |
+
+- Die bisherigen Werte glätteten zu stark: Beim TikTok-Tanz waren sie schlechter als gar keine
+  Glättung, weil schnelle Moves abgeschnitten wurden. `minCutoff 2, beta 40` lag bei beiden
+  Videos vorn und innerhalb eines erweiterten Rasters (`minCutoff` bis 1000, `beta` bis 320),
+  also nicht am Rand. Bei BTS ist der Abstand (0,06°) nicht aussagekräftig.
+- `maxGapMs` hatte keine Wirkung (keine längeren Lücken in den Videos) und bleibt 250.
+- Haltepunkte (`"holds"`) sind jetzt Standard: gleicher Holdout-Fehler wie `"grid"`, aber
+  ruhigere Zielposen an den Moves (`moveMotionDegPerS` 98 statt 107 °/s bei BTS, 116 statt
+  155 °/s beim TikTok) und bei BTS mehr brauchbare Moves (33 statt 31 von 36).
+- Kein Formatwechsel: Gespeicherte Choreografien bleiben unverändert, die Werte gelten für neue
+  Importe. Dev-Rohdaten ohne `movePlacement` (vor 8g-4c) werden weiter mit `"grid"` gerechnet.
+- Zwei Videos sind eine kleine Basis; mit weiteren Videos (Party-Klassiker, Zumba) erneut
+  prüfen. Ob sich Haltepunkte im Spiel besser anfühlen, bleibt ein Gerätetest.
 
 ## Editor
 
