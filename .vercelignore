@@ -1,0 +1,23 @@
+# Not uploaded by `vercel deploy`: Vercel builds from source and fetches the models itself.
+node_modules
+dist
+.tanstack
+public/mediapipe/models
+.claude/settings.local.json
+.playwright-mcp
+.env
+.env.*
+*.local
+
+# Personal data and media (raw pose tracks of real videos, audio/video files)
+Rohdaten
+*.posetrack.json
+*.mp3
+*.m4a
+*.wav
+*.ogg
+*.flac
+*.mp4
+*.mov
+*.webm
+*.mkv

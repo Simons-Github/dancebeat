@@ -1020,3 +1020,14 @@ Adresse ab, deshalb gibt es keinen neuen Eintrag unter [Externe Abrufe](#externe
   prüfen die API und schlagen still fehl; beide nur aus Effekten heraus aufgerufen.
 - Statisches Hosting braucht einen SPA-Fallback auf `index.html` für Deep Links
   (`vite preview` macht das bereits).
+- **Vercel:** `vercel.json` setzt Install (`bun install --frozen-lockfile`), Build
+  (`bun run build`, lädt die Modelle auf dem Build-Server per `prebuild`) und Ausgabe `dist/`.
+  Rewrite aller unbekannten Pfade auf `index.html` (vorhandene Dateien haben Vorrang).
+  Header: `Content-Security-Policy: frame-ancestors 'none'` (geht als Meta-Tag nicht; mehrere
+  Policies gelten gemeinsam, die Meta-CSP bleibt maßgeblich), `X-Content-Type-Options: nosniff`,
+  `Referrer-Policy`, `no-cache` für `index.html`, `sw.js` und das Manifest, `immutable` für
+  `/assets/`, `application/wasm` für `.wasm`. `.vercelignore` hält bei `vercel deploy`
+  `Rohdaten/`, Pose-Spuren, Medien, Modelle und `dist/` vom Upload fern. Vercel sieht als Hoster
+  die Seitenabrufe (IP-Adresse), keine Kamera- oder Bibliotheksdaten. Die Vercel-Toolbar auf
+  Preview-Deployments blockiert die CSP (`vercel.live`); sie lässt sich in den
+  Projekteinstellungen abschalten.
