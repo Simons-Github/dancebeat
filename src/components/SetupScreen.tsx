@@ -136,6 +136,7 @@ export function SetupScreen({
     lowLight,
     cameras,
     activeDeviceId,
+    fallback,
     aspect,
   } = usePoseTracking({
     enabled: started,
@@ -176,6 +177,8 @@ export function SetupScreen({
   };
   const retry = () => setRetryKey((k) => k + 1);
   const pickCamera = (id: string) => {
+    // The same camera again (it failed before): the id does not change, so start over explicitly.
+    if (id === cameraId) retry();
     setCameraId(id);
     saveSettings({ cameraId: id });
   };
@@ -329,6 +332,11 @@ export function SetupScreen({
                     : "Einen Moment, die Kamera startet."}
                 </p>
                 {lowLight && <p className="text-base">{LIGHT_HINT}</p>}
+                {fallback && (
+                  <p className="text-base">
+                    Die gespeicherte Kamera ist nicht erreichbar, es läuft die Standardkamera.
+                  </p>
+                )}
                 {autoStart ? (
                   <p className="text-base">Sobald alles passt, geht es von selbst los.</p>
                 ) : settings.autoStart ? (

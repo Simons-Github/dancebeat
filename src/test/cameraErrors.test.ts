@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   cameraError,
   checkCameraSupport,
-  isStaleCameraError,
+  isPermissionError,
   mapCameraError,
 } from "@/lib/cameraErrors";
 
@@ -48,13 +48,14 @@ describe("Kamerafehler", () => {
     expect(mapCameraError("boom").kind).toBe("unknown");
   });
 
-  it("erkennt eine veraltete Kamera-ID nur über die deviceId-Vorgabe", () => {
-    const over = (constraint?: string) =>
-      Object.assign(err("OverconstrainedError"), constraint ? { constraint } : {});
-    expect(isStaleCameraError(over("deviceId"))).toBe(true);
-    expect(isStaleCameraError(over("width"))).toBe(false);
-    expect(isStaleCameraError(over())).toBe(false);
-    expect(isStaleCameraError(err("NotAllowedError"))).toBe(false);
+  it("erkennt nur Berechtigungsfehler als Grund, keine andere Kamera zu versuchen", () => {
+    expect(isPermissionError(err("NotAllowedError"))).toBe(true);
+    expect(isPermissionError(err("PermissionDeniedError"))).toBe(true);
+    expect(isPermissionError(err("SecurityError"))).toBe(true);
+    expect(isPermissionError(err("NotReadableError"))).toBe(false);
+    expect(isPermissionError(err("NotFoundError"))).toBe(false);
+    expect(isPermissionError(err("OverconstrainedError"))).toBe(false);
+    expect(isPermissionError(undefined)).toBe(false);
   });
 });
 

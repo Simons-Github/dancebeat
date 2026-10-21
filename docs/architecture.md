@@ -498,8 +498,13 @@ Google Fonts oder ein anderes CDN.
   500 ms kein Frame kam; die Freigabe bleibt. Liefert außerdem Abstand (Schulter-Knöchel-Höhe
   0.4 bis 0.85 der Bildhöhe) und Hinweistexte.
 - Fehler der Kamera: `src/lib/cameraErrors.ts` ordnet `getUserMedia`-Fehler deutschen Meldungen zu.
-  Eine veraltete gespeicherte Kamera-ID (`OverconstrainedError` mit `constraint === "deviceId"`) fällt auf die Standardkamera
-  zurück und löscht die gespeicherte ID.
+  Die gespeicherte Kamera ist ein Wunsch, keine Bedingung: Startet sie nicht (abgesteckt, eine
+  Continuity-Kamera, die macOS noch listet, die aber nicht erreichbar ist, belegt), fällt die App
+  auf die Standardkamera zurück und zeigt einen Hinweis. Nur Berechtigungsfehler
+  (`isPermissionError`) lösen keinen Rückfall aus. Die gespeicherte ID bleibt erhalten, damit
+  ein kurzer Aussetzer die Wahl nicht kostet; gelöscht wird sie erst, wenn die Kamera auch in
+  `enumerateDevices` fehlt. Die Kamera-Auswahl wird auch angeboten, wenn gar keine Kamera
+  startet; dieselbe Kamera erneut zu wählen startet einen neuen Versuch.
 - Diagnose (`src/lib/frameStats.ts`): Bildrate der Erkennung (letzte Sekunde), geglättete
   Inferenzzeit und Delegate; das Diagnosefeld liest sie zweimal pro Sekunde aus einer Ref.
 - Aufstellhilfe: Das Bild wird nur per CSS gespiegelt, die Erkennung bekommt das Rohbild. Das

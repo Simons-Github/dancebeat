@@ -121,6 +121,25 @@ describe("Aufstellhilfe", () => {
     expect(await screen.findByText("Keine Kamera gefunden")).toBeInTheDocument();
   });
 
+  it("bietet die Kamera-Auswahl auch an, wenn keine Kamera startet, und behält die gespeicherte", async () => {
+    localStorage.setItem("dancebeat.settings", JSON.stringify({ cameraId: "iphone" }));
+    (navigator.mediaDevices as { enumerateDevices: () => Promise<unknown[]> }).enumerateDevices =
+      async () => [
+        { kind: "videoinput", deviceId: "mac", label: "FaceTime HD" },
+        { kind: "videoinput", deviceId: "iphone", label: "iPhone" },
+      ];
+    getUserMedia.mockRejectedValue(new DOMException("x", "NotReadableError"));
+    await renderAt("/setup/song-1");
+    fireEvent.click(await screen.findByRole("button", { name: "Kamera starten" }));
+    expect(await screen.findByText("Kamera wird bereits verwendet")).toBeInTheDocument();
+    expect(await screen.findByRole("combobox", { name: "Kamera" })).toBeInTheDocument();
+    // Tried the stored camera, then the default one.
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(JSON.parse(localStorage.getItem("dancebeat.settings") ?? "{}")).toMatchObject({
+      cameraId: "iphone",
+    });
+  });
+
   it("meldet einen unbekannten Song", async () => {
     await renderAt("/setup/gibt-es-nicht");
     expect(await screen.findByText("Song nicht gefunden")).toBeInTheDocument();

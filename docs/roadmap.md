@@ -875,5 +875,6 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | W6  | Spotify: Code erledigt (10a, 10b), Gerätetest mit echtem Konto offen   | 10b    |
 | W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                 | 3b     |
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen) | 3b     |
+| W13 | Kamera-Rückfall: Continuity-Kamera am Mac prüfen (Fehler, Hänger)      | 2      |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht               | 11     |
 | N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen           | 11     |

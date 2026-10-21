@@ -5,7 +5,7 @@ import {
   cameraError,
   checkCameraSupport,
   isOverconstrained,
-  isStaleCameraError,
+  isPermissionError,
   mapCameraError,
   type CameraError,
 } from "@/lib/cameraErrors";
@@ -54,7 +54,7 @@ export interface PoseStatsRef {
 }
 
 export interface PoseTrackingOptions {
-  /** Stored camera id; a stale id falls back to the default camera (see `onStaleCamera`). */
+  /** Stored camera id; when it cannot be opened the default camera is used (see `fallback`). */
   cameraId?: string;
   /** Nothing starts (and no permission prompt appears) until this is true. */
   enabled: boolean;
@@ -62,7 +62,7 @@ export interface PoseTrackingOptions {
   retryKey?: number;
   /** Called from the detection loop for every processed frame. Never triggers a render. */
   onFrame?: (frame: FrameInfo) => void;
-  /** The requested cameraId no longer exists and the default camera was used instead. */
+  /** The requested cameraId could not be opened and is no longer listed: the caller may forget it. */
   onStaleCamera?: () => void;
   /** `delegate` is set when the hook falls back to a specific delegate (CPU after GPU errors). */
   createEstimator?: (delegate?: PoseDelegate) => PoseEstimator;
@@ -83,10 +83,15 @@ const sizeConstraints = {
   height: { ideal: 720 },
 } as const;
 
-/** `onStale` returns false when the request was cancelled meanwhile: then no other camera is opened. */
+/**
+ * The stored camera is a preference: whatever keeps it from starting (unplugged, a Continuity
+ * Camera that is still listed but unreachable, busy) falls back to the default camera. Only a
+ * permission problem does not, as no other camera would work either. `onFallback` returns false
+ * when the request was cancelled meanwhile: then no other camera is opened.
+ */
 async function openCamera(
   cameraId: string | undefined,
-  onStale: () => boolean,
+  onFallback: () => boolean,
 ): Promise<MediaStream> {
   const open = (video: MediaTrackConstraints) =>
     navigator.mediaDevices.getUserMedia({ video, audio: false });
@@ -94,8 +99,7 @@ async function openCamera(
     try {
       return await open({ deviceId: { exact: cameraId }, ...sizeConstraints });
     } catch (e) {
-      if (!isStaleCameraError(e)) throw e;
-      if (!onStale()) throw e;
+      if (isPermissionError(e) || !onFallback()) throw e;
     }
   }
   try {
@@ -152,6 +156,8 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
     let frameCb = 0;
     let raf = 0;
     let removeWatchers = () => {};
+    /** The stored camera failed and another one was requested in its place. */
+    let fellBack = false;
     // The container takes the video's shape as soon as it is known (also when rotating).
     const syncAspect = () => {
       if (video?.videoHeight) setAspect(video.videoWidth / video.videoHeight);
@@ -173,11 +179,16 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       try {
         const all = await navigator.mediaDevices.enumerateDevices();
         if (cancelled) return;
+        // Without permission the ids are empty; such entries cannot be picked.
+        const inputs = all.filter((d) => d.kind === "videoinput" && d.deviceId);
         setCameras(
-          all
-            .filter((d) => d.kind === "videoinput")
-            .map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Kamera ${i + 1}` })),
+          inputs.map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Kamera ${i + 1}` })),
         );
+        // Unreachable and not even listed any more: gone for good, not just a short drop-out.
+        if (fellBack && cameraId && !inputs.some((d) => d.deviceId === cameraId)) {
+          fellBack = false;
+          cbRef.current.onStaleCamera?.();
+        }
       } catch {
         /* the picker just stays hidden */
       }
@@ -327,11 +338,14 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
       try {
         stream = await openCamera(cameraId, () => {
           if (cancelled) return false;
-          cbRef.current.onStaleCamera?.();
+          fellBack = true;
           return true;
         });
       } catch (e: unknown) {
-        if (!cancelled) fail(mapCameraError(e));
+        if (cancelled) return;
+        fail(mapCameraError(e));
+        // The picker must also be offered when no camera started.
+        void listCameras();
         return;
       }
       if (cancelled) {
@@ -385,6 +399,8 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
     delegate,
     cameras,
     activeDeviceId,
+    /** The stored camera could not be opened; another one is running. */
+    fallback: enabled && !!cameraId && activeDeviceId !== "" && activeDeviceId !== cameraId,
     aspect,
   };
 }

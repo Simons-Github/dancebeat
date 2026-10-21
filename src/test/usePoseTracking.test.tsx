@@ -220,6 +220,100 @@ describe("usePoseTracking", () => {
     expect(last?.activeDeviceId).toBe("default");
   });
 
+  const listDevices = (...ids: string[]) => {
+    (navigator.mediaDevices as { enumerateDevices: () => Promise<unknown[]> }).enumerateDevices =
+      async () => ids.map((deviceId) => ({ kind: "videoinput", deviceId, label: deviceId }));
+  };
+
+  it.each(["NotReadableError", "AbortError", "NotFoundError"])(
+    "nutzt bei %s der gespeicherten Kamera die Standardkamera und behält die Wahl, solange sie gelistet ist",
+    async (name) => {
+      listDevices("mac", "iphone");
+      getUserMedia
+        .mockRejectedValueOnce(new DOMException("x", name))
+        .mockResolvedValueOnce(fakeStream("mac"));
+      const onStale = vi.fn();
+      let last: ReturnType<typeof usePoseTracking> | undefined;
+      render(
+        <Probe
+          enabled
+          cameraId="iphone"
+          onStaleCamera={onStale}
+          createEstimator={() => fakeEstimator(null, true)}
+          onState={(s) => (last = s)}
+        />,
+      );
+      await act(flush);
+      const second = getUserMedia.mock.calls[1]?.[0] as { video: MediaTrackConstraints };
+      expect(second.video.deviceId).toBeUndefined();
+      expect(last?.status).toBe("ready");
+      expect(last?.activeDeviceId).toBe("mac");
+      expect(last?.fallback).toBe(true);
+      expect(onStale).not.toHaveBeenCalled();
+    },
+  );
+
+  it("versucht bei verweigerter Berechtigung keine andere Kamera", async () => {
+    getUserMedia.mockRejectedValue(new DOMException("x", "NotAllowedError"));
+    let last: ReturnType<typeof usePoseTracking> | undefined;
+    render(
+      <Probe
+        enabled
+        cameraId="iphone"
+        createEstimator={() => fakeEstimator()}
+        onState={(s) => (last = s)}
+      />,
+    );
+    await act(flush);
+    expect(getUserMedia).toHaveBeenCalledTimes(1);
+    expect(last?.error?.kind).toBe("denied");
+  });
+
+  it("meldet keinen Rückfall, wenn die gespeicherte Kamera läuft", async () => {
+    listDevices("mac", "iphone");
+    getUserMedia.mockResolvedValue(fakeStream("iphone"));
+    let last: ReturnType<typeof usePoseTracking> | undefined;
+    render(
+      <Probe
+        enabled
+        cameraId="iphone"
+        createEstimator={() => fakeEstimator(null, true)}
+        onState={(s) => (last = s)}
+      />,
+    );
+    await act(flush);
+    expect(last?.fallback).toBe(false);
+  });
+
+  it("listet die Kameras auch, wenn keine startet", async () => {
+    listDevices("mac", "iphone");
+    getUserMedia.mockRejectedValue(new DOMException("x", "NotReadableError"));
+    let last: ReturnType<typeof usePoseTracking> | undefined;
+    render(
+      <Probe
+        enabled
+        cameraId="iphone"
+        createEstimator={() => fakeEstimator()}
+        onState={(s) => (last = s)}
+      />,
+    );
+    await act(flush);
+    await act(flush);
+    expect(getUserMedia).toHaveBeenCalledTimes(2);
+    expect(last?.status).toBe("error");
+    expect(last?.cameras.map((c) => c.deviceId)).toEqual(["mac", "iphone"]);
+  });
+
+  it("lässt Einträge ohne ID (keine Berechtigung) aus der Auswahl", async () => {
+    listDevices("", "");
+    getUserMedia.mockRejectedValue(new DOMException("x", "NotAllowedError"));
+    let last: ReturnType<typeof usePoseTracking> | undefined;
+    render(<Probe enabled createEstimator={() => fakeEstimator()} onState={(s) => (last = s)} />);
+    await act(flush);
+    await act(flush);
+    expect(last?.cameras).toEqual([]);
+  });
+
   it.each([
     ["NotAllowedError", "denied"],
     ["NotFoundError", "nocamera"],
