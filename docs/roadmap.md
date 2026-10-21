@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a, 13b, 13c ✅)               | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13d ✅)                     | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -948,6 +948,31 @@ in den Posen. Tests: Schema v1/v2, Glättung der Weltpunkte, Analyse mit Fake-Es
 `trackTarget` mit Weltpunkten, MediaPipe-Estimator. **Gerätetest offen:** ob das Auslesen der
 Weltpunkte den Import messbar verlangsamt, und der Speicher: Der Import hält die Weltpunkte für
 bis zu 3 Personen je Probe, die `MultiPoseTrack` braucht also etwa doppelt so viel Speicher.
+
+**13d Choreografie v2 mit pose3d – umgesetzt.** `CHOREO_VERSION` ist 2: `FrameSchema` hat
+optional `pose3d` (`Skeleton3DSchema`, Knochen aus `BONE_IDS`, Komponenten −1..1, unbekannte
+Knochen abgelehnt). `Skeleton3D.bones` erlaubt jetzt ausdrücklich `undefined` je Knochen, damit
+der zod-Typ und der Skeleton-Typ unter `exactOptionalPropertyTypes` gegenseitig zuweisbar sind
+(Prüfung zur Compile-Zeit in `schema.ts`). `migrateChoreo` ist eine Schrittkette 0 → 1 → 2
+(1 → 2 setzt nur die Version), IndexedDB `DB_VERSION` 3 mit demselben Upgrade-Durchlauf.
+Exportdateien v1 bleiben lesbar, Export schreibt v2. `frameAt` interpoliert `pose3d` über
+`interpolate`, `mirrorChoreo` spiegelt es mit `mirror3d`, `choreoFromPoseTrack` behält `world`
+beim Zuschneiden und baut `pose3d` per `fromLandmarks3d` aus derselben geglätteten Probe
+(Positionen und Knochen auf 3 Stellen, Gier auf 0,1°). `lerpAngle`/`angleDiff` liegen jetzt in
+`src/lib/angle.ts` (von `pose.ts` re-exportiert), damit `pose.ts` `interpolate` ohne
+Importzyklus nutzen kann. Größe einer synthetischen 3-Minuten-Choreo (1800 Frames, 33
+Landmarks): `pose3d` an jedem Frame +57,8 %, mit 2 Stellen +51,3 %, ausgedünnt
++29,0 % (1,37 → 1,77 MB). Abweichung vom Plan: Wie dort als Ausweg vorgesehen, trägt nur etwa
+jeder zweite Frame `pose3d` (nach der Beat-Phasen-Verschiebung ausgedünnt; erster und letzter
+Frame behalten ihn, ebenso ein Frame, dessen Vorgänger keinen hat oder dessen Nachfolger keinen
+Kandidaten hat). `frameAt` überbrückt höchstens einen Frame ohne `pose3d` (statt nur zwischen
+zwei direkten Nachbarn zu interpolieren); auf einem Frame mit `pose3d` gibt es dessen Pose
+unverändert zurück. Lücken in der 3D-Pose bleiben nur dort, wo das Video keine brauchbaren
+Weltpunkte oder keine Körperachse lieferte. Mit echten Videos (Sichtbarkeit an vielen Punkten) dürfte der Anteil eher
+kleiner sein, gemessen ist das nicht. Tests: `src/test/choreoV2.test.ts` (Schema mit und ohne
+`pose3d`, Migration 1 → 2, `frameAt` mit gemischten Frames, Spiegeln, Import einer v1-Datei,
+Video-Import mit und ohne Weltpunkte, Größe), IndexedDB-Upgrade von Version 2 in
+`repository.test.ts`.
 
 ### 14. Neue Demo-Songs ⏳
 

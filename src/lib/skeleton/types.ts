@@ -68,10 +68,14 @@ export const BONE_PAIRS: [BoneId, BoneId][] = [
  *   toward the dancer's own left.
  * - `bones`: unit vectors in the body system (x left of the dancer, y up, z forward). A missing
  *   entry means the bone is unknown (joint not visible), never a zero vector.
+ *
+ * Stored in choreography frames as `pose3d` (format v2). `Skeleton3DSchema` in `schema.ts`
+ * validates it; the bones allow an explicit `undefined` because that is what zod infers for
+ * optional keys, so the parsed type and this one are mutually assignable (checked there).
  */
 export interface Skeleton3D {
   root: { pos: Vec3; yawDeg: number };
-  bones: Partial<Record<BoneId, Vec3>>;
+  bones: { [K in BoneId]?: Vec3 | undefined };
 }
 
 /** Figure units (square landmark space) per metre; torso 0.22 in `figure()` = 0.5 m. */

@@ -377,6 +377,7 @@ IndexedDB-Versionen:
 | ---------- | --------------------------------------------------------------------------- |
 | 1          | Stores `songs` (keyPath `id`) und `blobs`                                   |
 | 2          | Migration der Songs auf Choreografie-Format v1 (UUIDs, Zeitstempel, Winkel) |
+| 3          | Migration der Songs auf Choreografie-Format v2 (optional `pose3d`)          |
 
 ## Externe Abrufe
 
@@ -530,7 +531,8 @@ Landmarks pro Achse normiert wie MediaPipe sie liefert) eine geprüfte `Choreogr
 Etappe 13c trägt jede Probe optional auch `world` (`Landmark3d[] | null`: MediaPipe-Weltpunkte
 derselben Person in Metern, Ursprung Hüftmitte, y nach unten, z von der Kamera weg; Schema
 `Landmark3dSchema` in `schema.ts`). Fehlt das Feld, hat die Analyse keine Weltpunkte geliefert.
-Die Choreografie entsteht in 13c weiter nur aus den 2D-Landmarks. Die
+`landmarks` und `angles` der Choreografie entstehen weiter nur aus den 2D-Landmarks; seit 13d
+bekommt etwa jeder zweite Frame aus den Weltpunkten zusätzlich `pose3d`. Die
 Pose-Spur entsteht aus der Analyse (`useVideoAnalysis`, siehe unten) und der Wahl der
 Zielperson (`trackTarget`, siehe [Zielperson](#zielperson-etappe-8f)). Ablauf und Konventionen:
 [choreography-format.md](choreography-format.md#video-import).

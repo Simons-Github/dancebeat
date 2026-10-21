@@ -9,6 +9,9 @@ import {
   LEG_KEYS,
 } from "./pose";
 import { CHOREO_VERSION, ChoreographySchema } from "./schema";
+import { fromLandmarks3d } from "./skeleton/fromLandmarks3d";
+import { BONE_IDS, type Skeleton3D } from "./skeleton/types";
+import type { Vec3 } from "./skeleton/vec";
 import type { Angles, Choreography, Frame, Landmark, Landmark3d, Move } from "./types";
 import { SONG_PALETTES } from "@/theme";
 
@@ -19,8 +22,8 @@ export interface PoseTrack {
   /**
    * Sorted by timeMs (video time). landmarks null = no person detected. `world` (Etappe 13c):
    * MediaPipe world landmarks of the same person, null if none; absent (or undefined, as zod
-   * parses it) if the analysis recorded no world landmarks. The choreography is still built from
-   * the 2D landmarks only.
+   * parses it) if the analysis recorded no world landmarks. Landmarks and angles of the
+   * choreography come from the 2D landmarks; `world` only feeds the frames' `pose3d` (13d).
    */
   samples: {
     timeMs: number;
@@ -277,6 +280,34 @@ function roundFrame(timeMs: number, lm: Landmark[], angles: Angles): Frame {
   return frame;
 }
 
+/** `pose3d` rounded for storage: positions and bone directions to 3 decimals, yaw to 0.1°. */
+function roundSkeleton(sk: Skeleton3D): Skeleton3D {
+  const rn = (v: Vec3, d: number): Vec3 => [round(v[0], d), round(v[1], d), round(v[2], d)];
+  const bones: Skeleton3D["bones"] = {};
+  for (const id of BONE_IDS) {
+    const v = sk.bones[id];
+    if (v) bones[id] = rn(v, 3);
+  }
+  return { root: { pos: rn(sk.root.pos, 3), yawDeg: round(sk.root.yawDeg, 1) }, bones };
+}
+
+/**
+ * Attaches the candidate 3D poses, thinned to about every second frame (a 3-minute choreo grows
+ * by about 30 % instead of 58 %): a frame keeps its pose3d if it is the first or last frame,
+ * the previous frame has none, or the next frame has no candidate. So two frames in a row lack
+ * pose3d only where the video gave no usable world points, and frameAt can bridge every other
+ * gap.
+ */
+function thinPose3d(items: { frame: Frame; sk: Skeleton3D | null | undefined }[]): Frame[] {
+  let prevHas = false;
+  return items.map(({ frame, sk }, i) => {
+    const last = i === items.length - 1;
+    const keep = !!sk && (i === 0 || last || !prevHas || !items[i + 1]?.sk);
+    prevHas = keep;
+    return keep && sk ? { ...frame, pose3d: sk } : frame;
+  });
+}
+
 const limbAngleCount = (a: Angles) => [...ARM_KEYS, ...LEG_KEYS].filter((k) => a[k] != null).length;
 
 /** Whether a frame is a reliable reference pose: torso visible and enough limb angles. */
@@ -433,16 +464,16 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
   // 1. Trim and shift.
   const trimmed = track.samples
     .filter((s) => s.timeMs >= start && s.timeMs <= end)
-    // `world` is dropped on purpose: the choreography uses 2D only until Etappe 13d.
-    .map((s) => ({ timeMs: s.timeMs - start, landmarks: s.landmarks }));
+    .map((s) => ({ ...s, timeMs: s.timeMs - start }));
   const last = trimmed[trimmed.length - 1];
   const durationMs = Number.isFinite(end) ? end - start : (last?.timeMs ?? 0);
 
   // 2. Smooth, 5. downsample: per slot the nearest sample with a detected person.
   const smoothed = smoothTrack(trimmed, opts.filter, opts.maxGapMs).filter(
-    (s): s is { timeMs: number; landmarks: Landmark[] } => s.landmarks !== null,
+    (s): s is Sample & { landmarks: Landmark[] } => s.landmarks !== null,
   );
   const frames: Frame[] = [];
+  const skeletons: (Skeleton3D | null)[] = [];
   let j = 0;
   let lastIdx = -1;
   for (let slot = 0; slot <= durationMs; slot += interval) {
@@ -458,7 +489,13 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
     const s = smoothed[best]!;
     // 3. Angles from the source landmarks with the source aspect; landmarks stored square.
     const angles = computeAngles(s.landmarks, { aspect: track.aspect });
-    frames.push(roundFrame(s.timeMs, toSquareSpace(s.landmarks, track.aspect), angles));
+    const frame = roundFrame(s.timeMs, toSquareSpace(s.landmarks, track.aspect), angles);
+    // 3b. Candidate 3D pose from the world landmarks of the same sample (format v2); 2D stays
+    // the source of landmarks and angles. fromLandmarks3d expects MediaPipe world points as they
+    // are. Attached after the phase shift (thinPose3d), parallel to `frames` until then.
+    const sk = s.world ? roundSkeleton(fromLandmarks3d(s.world)) : null;
+    skeletons.push(sk && Object.keys(sk.bones).length > 0 ? sk : null);
+    frames.push(frame);
   }
   if (frames.length < 2) throw new Error("Im Video wurde zu selten eine Person erkannt.");
 
@@ -488,9 +525,10 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
   // Beat phase goes into choreo.offsetMs (play time = audio − offsetMs): beat pulse and sync
   // test expect moves on k · beat. Times shift back by the phase, the audio alignment stays.
   const phase = round(((offset % beatMs) + beatMs) % beatMs, 1);
-  const shifted = frames
-    .map((f) => ({ ...f, timeMs: round(f.timeMs - phase, 1) }))
-    .filter((f) => f.timeMs >= 0);
+  const kept = frames
+    .map((f, i) => ({ frame: { ...f, timeMs: round(f.timeMs - phase, 1) }, sk: skeletons[i] }))
+    .filter(({ frame }) => frame.timeMs >= 0);
+  const shifted = thinPose3d(kept);
   const shiftedMoves = moves.map((m) => ({ ...m, timeMs: Math.max(0, m.timeMs - phase) }));
 
   const now = opts.now ?? Date.now();
@@ -626,7 +664,7 @@ export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackM
   const maxGapMs = opts.maxGapMs ?? 250;
   const trimmed = track.samples
     .filter((s) => s.timeMs >= start && s.timeMs <= end)
-    // `world` is dropped on purpose: the choreography uses 2D only until Etappe 13d.
+    // `world` is not needed here: all metrics are measured on the 2D landmarks.
     .map((s) => ({ timeMs: s.timeMs - start, landmarks: s.landmarks }));
   const detected = trimmed.filter((s) => s.landmarks !== null).length;
   const durationMs = Number.isFinite(end)

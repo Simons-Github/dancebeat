@@ -1,11 +1,12 @@
 import { z } from "zod";
+import { BONE_IDS, type BoneId, type Skeleton3D } from "./skeleton/types";
 
 /**
  * Persisted and exchanged data formats. These zod schemas are the single source of truth for the
  * data types (see types.ts); every read from storage and every import is validated against them.
  */
 
-export const CHOREO_VERSION = 1;
+export const CHOREO_VERSION = 2;
 export const EXPORT_FORMAT = "dancebeat-choreo";
 
 const time = z.number().finite().nonnegative();
@@ -31,6 +32,30 @@ export const Landmark3dSchema = z.union([
   ]),
 ]);
 
+const vec3 = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]);
+const unitComponent = z.number().min(-1).max(1);
+const boneVec = z.tuple([unitComponent, unitComponent, unitComponent]);
+const boneShape = Object.fromEntries(BONE_IDS.map((id) => [id, boneVec.optional()])) as Record<
+  BoneId,
+  z.ZodOptional<typeof boneVec>
+>;
+
+/**
+ * A body pose as bone directions (`Skeleton3D`, see `src/lib/skeleton/types.ts` for the
+ * convention). Bone entries are unit vectors; a missing bone is absent, never a zero vector.
+ */
+export const Skeleton3DSchema = z.object({
+  root: z.object({ pos: vec3, yawDeg: z.number().finite() }),
+  bones: z.object(boneShape).strict(),
+});
+
+// Compile-time check: the parsed type and the skeleton API type are mutually assignable.
+type Skeleton3DParsed = z.infer<typeof Skeleton3DSchema>;
+const skeletonTypesMatch: [Skeleton3DParsed, Skeleton3D] extends [Skeleton3D, Skeleton3DParsed]
+  ? true
+  : never = true;
+void skeletonTypesMatch;
+
 const angle = z.number().finite().min(-180).max(180);
 export const AnglesSchema = z
   .object({
@@ -52,6 +77,8 @@ export const FrameSchema = z.object({
   landmarks: z.array(LandmarkSchema).max(33),
   angles: AnglesSchema,
   lowVisibility: z.boolean().optional(),
+  /** Format v2: optional 3D pose of the reference dancer (video import with world landmarks). */
+  pose3d: Skeleton3DSchema.optional(),
 });
 
 export const MoveSchema = z.object({
@@ -112,9 +139,10 @@ export const ExportedSongSchema = SongSchema.pick({
   startOffsetMs: true,
 });
 
+/** Export files of format v1 stay readable; their choreography is migrated on import. */
 export const ChoreoFileSchema = z.object({
   format: z.literal(EXPORT_FORMAT),
-  version: z.literal(CHOREO_VERSION),
+  version: z.union([z.literal(1), z.literal(CHOREO_VERSION)]),
   exportedAt: timestamp,
   song: ExportedSongSchema,
   choreo: ChoreographySchema,

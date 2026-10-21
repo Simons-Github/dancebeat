@@ -1,6 +1,6 @@
 # Choreografie-Format
 
-Aktuelle Version: **1**. Maßgeblich ist das zod-Schema in `src/lib/schema.ts`; dieses Dokument
+Aktuelle Version: **2**. Maßgeblich ist das zod-Schema in `src/lib/schema.ts`; dieses Dokument
 beschreibt Bedeutung und Konventionen.
 
 ## Felder
@@ -9,7 +9,7 @@ beschreibt Bedeutung und Konventionen.
 
 | Feld                     | Typ           | Bedeutung                                                            |
 | ------------------------ | ------------- | -------------------------------------------------------------------- |
-| `version`                | `1`           | Formatversion                                                        |
+| `version`                | `2`           | Formatversion                                                        |
 | `id`                     | UUID          | stabile ID (`crypto.randomUUID`)                                     |
 | `title`                  | Text, 1–120   | Titel                                                                |
 | `bpm`                    | 30–300        | Tempo; darf gebrochen sein (die Analyse liefert 0,1-Schritte)        |
@@ -28,6 +28,7 @@ beschreibt Bedeutung und Konventionen.
 | `landmarks`     | bis zu 33 Punkte | MediaPipe-Indizes; je Punkt `[x, y]` oder `[x, y, visibility]`       |
 | `angles`        | Objekt           | Winkel je Gelenk (siehe unten); fehlende Schlüssel = nicht verfügbar |
 | `lowVisibility` | optional, bool   | Frame mit schlechter Erkennung (Video-Import)                        |
+| `pose3d`        | optional, Objekt | 3D-Pose als [`Skeleton3D`](#skeleton3d) (seit v2, Video-Import)      |
 
 ### Move
 
@@ -40,6 +41,14 @@ beschreibt Bedeutung und Konventionen.
 
 Die Soll-Winkel eines Moves werden aus den Frames zum Zeitpunkt `timeMs` interpoliert
 (`frameAt`, Winkel über den kürzesten Bogen).
+
+`pose3d` ist optional und ergänzt die 2D-Daten, ersetzt sie aber nicht: Bewertung und Anzeige
+nutzen weiter `landmarks` und `angles`. `frameAt` interpoliert `pose3d` mit derselben
+Glättungskurve wie die Landmarks über `interpolate`, und zwar zwischen den nächsten Frames mit
+`pose3d`. Dabei darf höchstens ein Frame ohne `pose3d` dazwischen liegen (der Video-Import
+schreibt es nur an etwa jeden zweiten Frame); sonst fehlt `pose3d` im Ergebnis. Genau auf einem
+Frame mit `pose3d` kommt dessen Pose unverändert zurück. Am Anfang und Ende gilt der erste bzw.
+letzte Frame unverändert.
 
 ### Song (Bibliothekseintrag, nicht Teil des Exports)
 
@@ -86,9 +95,20 @@ spiegelbildlich mit. Zweimal angewendet ergibt sich das Original.
 
 ## Skeleton3D
 
-Interne 3D-Darstellung einer Pose (`src/lib/skeleton/`, seit Etappe 13a). Noch **nicht Teil des
-gespeicherten Formats**; Choreografien bleiben v1. 2D (`landmarks`, `angles`) wird daraus
-abgeleitet und bleibt die Grundlage für Bewertung und Anzeige.
+Interne 3D-Darstellung einer Pose (`src/lib/skeleton/`, seit Etappe 13a). Seit Format v2
+(Etappe 13d) optional als `pose3d` am Frame gespeichert, geprüft durch `Skeleton3DSchema` in
+`src/lib/schema.ts`:
+
+```json
+{
+  "root": { "pos": [0.012, -0.004, 0.031], "yawDeg": -3.5 },
+  "bones": { "torso": [0.021, 0.998, -0.06], "leftUpperArm": [0.64, -0.766, 0.05], "…": "…" }
+}
+```
+
+`root.pos` hat 3 Zahlen, `yawDeg` ist endlich, jeder Knochen ein Vektor mit Komponenten in
+−1..1; unbekannte Knochennamen werden abgelehnt, fehlende Knochen sind erlaubt (nie als
+Nullvektor). 2D (`landmarks`, `angles`) bleibt die Grundlage für Bewertung und Anzeige.
 
 - **Welt:** Meter, x zur linken Körperseite des Tänzers bei Gier 0, y nach oben, z zum
   Betrachter. `fromLandmarks3d` rechnet MediaPipe-Weltpunkte (x Bild rechts, y unten, z von der
@@ -114,12 +134,14 @@ abgeleitet und bleibt die Grundlage für Bewertung und Anzeige.
 - **Spiegeln** (`mirror3d`): links und rechts tauschen, x spiegeln, Gier umkehren. Die Winkel
   entsprechen `mirrorAngles` wie bei `mirrorChoreo`; anders als dort wird die Figur auch auf dem
   Bildschirm gespiegelt (x → 1 − x), damit die bewegte Seite im Spiegelraum richtig liegt.
-  Zweimal angewendet ergibt sich das Original.
+  Zweimal angewendet ergibt sich das Original. `mirrorChoreo` spiegelt `pose3d` damit; weil
+  die Landmarks dort nur umbenannt werden, zeigen Projektion und gespeicherte Landmarks danach
+  dieselbe Bewegung.
 
 ## Video-Import
 
 `choreoFromPoseTrack` (`src/lib/videoChoreo.ts`) baut aus einer Pose-Spur eines Videos eine
-Choreografie im Format v1:
+Choreografie im Format v2:
 
 1. Zeitbereich zuschneiden; der Anfang des Bereichs wird 0.
 2. Glätten (One-Euro, vorwärts und rückwärts; Standard `minCutoff` 2 Hz, `beta` 40, `dCutoff`
@@ -140,6 +162,18 @@ Choreografie im Format v1:
    Visibility wird auf 2 Stellen **abgerundet**, damit kein unsicherer Punkt über die Schwelle
    rutscht. Ab 0.99 entfällt sie (`[x, y]` = voll sichtbar). `lowVisibility` steht, wenn nicht
    beide Schultern und beide Hüften sichtbar sind. Drei Minuten ergeben etwa 1,3 MB JSON.
+   Mit Weltpunkten (Pose-Spur v2) bekommt etwa **jeder zweite** Frame `pose3d` =
+   `fromLandmarks3d(world)` aus derselben geglätteten Probe (MediaPipe-Weltpunkte ohne weitere
+   Umrechnung), gerundet auf 3 Stellen (Wurzelposition in m, Knochenrichtungen) und die Gier auf
+   0,1°; ohne Knochen (keine Körperachse sichtbar) entfällt es. Ausgedünnt wird nach dem
+   Verschieben um die Beat-Phase: Ein Frame behält seinen `pose3d`, wenn er der erste oder
+   letzte ist, der vorige keinen hat oder der nächste keinen Kandidaten hat. Zwei Frames in
+   Folge ohne `pose3d` gibt es also nur, wo das Video an mindestens einem davon keine
+   brauchbaren Weltpunkte (oder keine Körperachse) lieferte; nur dort fehlt die 3D-Pose auch in
+   `frameAt`. `landmarks` und `angles` kommen
+   weiter aus den 2D-Punkten. Gemessen an einer synthetischen 3-Minuten-Choreo (1800 Frames, 33
+   Landmarks, Test in `src/test/choreoV2.test.ts`): `pose3d` an jedem Frame +57,8 % (mit 2
+   Stellen +51,3 %), ausgedünnt +29,0 % (1,37 → 1,77 MB). Ziel war unter +50 %.
 6. Moves nach `movePlacement` (Etappe 8g-4c). Ein Kandidat entfällt, wenn der Frame dort
    fehlt, `lowVisibility` hat oder weniger als 4 Arm- und Beinwinkel trägt.
    - `"grid"` („Fester Takt“): Moves alle `beatsPerMove` Beats (Standard 2) ab
@@ -236,7 +270,7 @@ Choreografien werden ohne Audio als JSON exportiert:
 ```json
 {
   "format": "dancebeat-choreo",
-  "version": 1,
+  "version": 2,
   "exportedAt": 1760000000000,
   "song": {
     "title": "…",
@@ -246,13 +280,14 @@ Choreografien werden ohne Audio als JSON exportiert:
     "syncOffsetMs": 0,
     "startOffsetMs": 0
   },
-  "choreo": { "version": 1, "id": "…", "…": "…" }
+  "choreo": { "version": 2, "id": "…", "…": "…" }
 }
 ```
 
 Quelle, Highscore und Sterne werden nicht exportiert. Beim Import wird die Datei geprüft (inkl.
 Sortierung), ältere Choreografie-Versionen werden migriert, und Song und Choreografie bekommen
-neue UUIDs. Ein Import überschreibt also nie einen vorhandenen Eintrag.
+neue UUIDs. Exportiert wird Version 2; Dateien der Version 1 bleiben lesbar und kommen als
+Version 2 heraus. Ein Import überschreibt also nie einen vorhandenen Eintrag.
 
 ## Versionen und Migration
 
@@ -260,10 +295,16 @@ neue UUIDs. Ein Import überschreibt also nie einen vorhandenen Eintrag.
 | ------- | --------------------------------------------------------------------------- |
 | 0       | ohne `version`-Feld; Winkel ohne Vorzeichen (Innenwinkel 0–180°), freie IDs |
 | 1       | `version`, UUIDs, `createdAt`/`updatedAt`, vorzeichenbehaftete Winkel       |
+| 2       | optional `pose3d` je Frame (`Skeleton3D`, Etappe 13d)                       |
 
 Migration 0 → 1 (`src/lib/library/migrations.ts`): Winkel werden aus den Landmarks neu
 berechnet; Frames ohne Landmarks verlieren ihre Winkel (nicht verfügbar statt falsch). Nicht-UUID-IDs
 werden ersetzt. Die IndexedDB-Version 2 führt diese Migration beim Öffnen aus.
+
+Migration 1 → 2: nur die Version wird gesetzt, Frames und Zeitstempel bleiben unverändert.
+`migrateChoreo` läuft die Schritte 0 → 1 → 2 ab der gespeicherten Version durch und prüft erst
+danach gegen das Schema. Die IndexedDB-Version 3 führt sie beim Öffnen aus (gleicher Durchlauf
+über alle Songs wie bei Version 2).
 
 Bei einer Formatänderung: Version erhöhen, Migrationsschritt ergänzen, IndexedDB-Version erhöhen,
 Tests und diese Tabelle aktualisieren.

@@ -5,7 +5,7 @@ import { migrateChoreo, migrateSong } from "@/lib/library/migrations";
 import { computeAngles, figure } from "@/lib/pose";
 import { makeChoreo, makeSong } from "./fixtures";
 
-describe("Choreografie-Format v1", () => {
+describe("Choreografie-Format", () => {
   it("akzeptiert eine gültige Choreografie", () => {
     expect(
       ChoreographySchema.safeParse(
@@ -36,7 +36,8 @@ describe("Choreografie-Format v1", () => {
     expect(ChoreographySchema.safeParse({ ...c, moves: [...c.moves].reverse() }).success).toBe(
       false,
     );
-    expect(ChoreographySchema.safeParse({ ...c, version: 2 }).success).toBe(false);
+    expect(ChoreographySchema.safeParse({ ...c, version: 1 }).success).toBe(false);
+    expect(ChoreographySchema.safeParse({ ...c, version: 3 }).success).toBe(false);
     expect(ChoreographySchema.safeParse({ ...c, accentColor: "pink" }).success).toBe(false);
   });
 
@@ -45,7 +46,7 @@ describe("Choreografie-Format v1", () => {
   });
 });
 
-describe("Migration Version 0 → 1", () => {
+describe("Migration Version 0 → 1 → 2", () => {
   const lm = figure({ la: 160, ra: 20, re: 60 });
   const legacy = {
     title: "Alt",
@@ -63,7 +64,7 @@ describe("Migration Version 0 → 1", () => {
 
   it("berechnet Winkel aus Landmarks neu und verwirft Winkel ohne Landmarks", () => {
     const c = migrateChoreo(legacy, 42);
-    expect(c.version).toBe(1);
+    expect(c.version).toBe(2);
     expect(c.frames[0]!.angles).toEqual(computeAngles(lm));
     expect(c.frames[1]!.angles).toEqual({});
     expect(c.createdAt).toBe(42);

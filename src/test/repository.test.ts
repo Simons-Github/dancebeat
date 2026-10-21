@@ -16,9 +16,10 @@ beforeEach(async () => {
   repo = (await import("@/lib/library/repository")).songRepository;
 });
 
-function seedV1(records: { songs: unknown[]; blobs: [string, unknown][] }) {
+/** Creates the database at an old schema version (stores as of version 1) with raw records. */
+function seed(version: number, records: { songs: unknown[]; blobs: [string, unknown][] }) {
   return new Promise<void>((resolve, reject) => {
-    const r = indexedDB.open("dancebeat", 1);
+    const r = indexedDB.open("dancebeat", version);
     r.onupgradeneeded = () => {
       r.result.createObjectStore("songs", { keyPath: "id" });
       r.result.createObjectStore("blobs");
@@ -90,7 +91,7 @@ describe("IndexedDbSongRepository", () => {
         moves: [{ timeMs: 0, label: "x", iconId: "x", gold: false }],
       },
     };
-    await seedV1({
+    await seed(1, {
       songs: [legacy, { id: "broken", title: 5 }],
       blobs: [["demo-pink", "AUDIO"]],
     });
@@ -98,7 +99,7 @@ describe("IndexedDbSongRepository", () => {
     const list = await repo.list();
     expect(list).toHaveLength(1);
     expect(list[0]!.id).not.toBe("demo-pink");
-    expect(list[0]!.choreo.version).toBe(1);
+    expect(list[0]!.choreo.version).toBe(2);
     expect(list[0]!.choreo.frames[0]!.angles.leftShoulder).toBeCloseTo(90, 6);
     expect(await repo.getAudio("demo-pink")).toBe("AUDIO");
 
@@ -106,5 +107,16 @@ describe("IndexedDbSongRepository", () => {
     await repo.delete(list[0]!.id);
     expect(await repo.getAudio("demo-pink")).toBeUndefined();
     warn.mockRestore();
+  });
+
+  it("migriert Datenbank-Version 2 mit Choreografie v1 auf Format v2", async () => {
+    const song = makeSong();
+    const v1 = JSON.parse(JSON.stringify({ ...song, choreo: { ...song.choreo, version: 1 } }));
+    await seed(2, { songs: [v1], blobs: [] });
+
+    const stored = await repo.get(song.id);
+    expect(stored).toEqual(song);
+    expect(stored!.choreo.version).toBe(2);
+    expect(stored!.choreo.frames).toEqual(song.choreo.frames);
   });
 });

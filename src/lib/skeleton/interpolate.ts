@@ -1,4 +1,4 @@
-import { lerpAngle } from "../pose";
+import { lerpAngle } from "../angle";
 import { BONE_IDS, type Skeleton3D } from "./types";
 import { lerp3, slerp } from "./vec";
 

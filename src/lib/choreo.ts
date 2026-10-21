@@ -1,3 +1,4 @@
+import { mirror3d } from "./skeleton/mirror";
 import type { AngleKey, Angles, Choreography, Frame, Landmark } from "./types";
 
 /** MediaPipe pose landmark pairs (left, right). Index 0 (nose) has no partner. */
@@ -57,13 +58,20 @@ export function mirrorAngles(a: Angles): Angles {
 /**
  * Mirrors a choreography: the player then does the reference dancer's movements as a mirror
  * image (their right arm for the dancer's left), which is how a recorded dancer facing the
- * camera is meant to be followed. Applying it twice restores the original.
+ * camera is meant to be followed. A frame's `pose3d` is mirrored with `mirror3d`. Applying it
+ * twice restores the original.
  */
 export function mirrorChoreo(c: Choreography): Choreography {
-  const frame = (f: Frame): Frame => ({
-    ...f,
-    landmarks: mirrorLandmarks(f.landmarks),
-    angles: mirrorAngles(f.angles),
-  });
+  const frame = (f: Frame): Frame => {
+    const out: Frame = {
+      ...f,
+      landmarks: mirrorLandmarks(f.landmarks),
+      angles: mirrorAngles(f.angles),
+    };
+    // mirror3d also reflects the figure on screen; with the label swap of the landmarks above
+    // the projected pose and the stored landmarks stay the same move (see mirror3d).
+    if (f.pose3d) out.pose3d = mirror3d(f.pose3d);
+    return out;
+  };
   return { ...c, frames: c.frames.map(frame) };
 }

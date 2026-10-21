@@ -10,8 +10,10 @@ const DB_NAME = "dancebeat";
  * Schema history:
  * 1 – stores "songs" (keyPath id) and "blobs" (audio, out-of-line keys)
  * 2 – song records migrated to choreography format v1 (UUIDs, timestamps, signed angles)
+ * 3 – song records migrated to choreography format v2 (optional `pose3d` per frame); the same
+ *     cursor pass as for 2, `migrateSong` runs all format steps from the record's version on
  */
-const DB_VERSION = 2;
+const DB_VERSION = 3;
 const SONGS = "songs";
 const BLOBS = "blobs";
 
@@ -20,7 +22,7 @@ function upgrade(db: IDBDatabase, tx: IDBTransaction, oldVersion: number) {
     db.createObjectStore(SONGS, { keyPath: "id" });
     db.createObjectStore(BLOBS);
   }
-  if (oldVersion >= 1 && oldVersion < 2) {
+  if (oldVersion >= 1 && oldVersion < 3) {
     // Song ids may change (legacy ids become UUIDs), so records are re-keyed.
     const store = tx.objectStore(SONGS);
     store.openCursor().onsuccess = (e) => {

@@ -30,11 +30,13 @@ export function parseChoreoFile(text: string): ChoreoFile {
     throw new Error("Die Datei ist kein gültiges JSON.");
   }
   try {
-    if (typeof raw === "object" && raw !== null && "choreo" in raw) {
-      const r = raw as Record<string, unknown>;
-      return ChoreoFileSchema.parse({ ...r, choreo: migrateChoreo(r["choreo"]) });
-    }
-    return ChoreoFileSchema.parse(raw);
+    // Files of format v1 are accepted; the choreography is migrated and the result is v2.
+    const r = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : null;
+    const file =
+      r && "choreo" in r
+        ? ChoreoFileSchema.parse({ ...r, choreo: migrateChoreo(r["choreo"]) })
+        : ChoreoFileSchema.parse(raw);
+    return { ...file, version: CHOREO_VERSION };
   } catch (e) {
     if (e instanceof ZodError) throw new Error(`Ungültige Choreografie-Datei. ${describe(e)}`);
     throw e;

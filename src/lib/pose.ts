@@ -1,4 +1,5 @@
-// Direct module imports: the skeleton index re-exports `interpolate`, which imports this file.
+import { angleDiff, lerpAngle } from "./angle";
+import { interpolate } from "./skeleton/interpolate";
 import { project } from "./skeleton/project";
 import { FIGURE_UNITS_PER_METER, type Skeleton3D } from "./skeleton/types";
 import { normalize, type Vec3 } from "./skeleton/vec";
@@ -66,14 +67,7 @@ export const isVisible = (p?: Landmark, min = 0.5) => !!p && vis(p) >= min;
 
 const DEG = 180 / Math.PI;
 
-/** Shortest signed difference a - b in degrees, in [-180, 180). */
-export const angleDiff = (a: number, b: number) => ((((a - b + 180) % 360) + 360) % 360) - 180;
-
-/** Interpolates along the shortest arc and returns a value in (-180, 180]. */
-export function lerpAngle(a: number, b: number, t: number) {
-  const r = a + angleDiff(b, a) * t;
-  return r > 180 ? r - 360 : r <= -180 ? r + 360 : r;
-}
+export { angleDiff, lerpAngle };
 
 export interface AngleOptions {
   /**
@@ -163,6 +157,23 @@ export function bodyCheck(lm: Landmark[] | null) {
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
+/**
+ * `pose3d` at time `t` between frames `lo` and `lo + 1`: interpolated (same smoothstep as the
+ * landmarks) between the nearest frames with a 3D pose, which may skip at most one frame without
+ * (the video import stores `pose3d` on every second frame). Otherwise there is none.
+ */
+function pose3dAt(frames: Frame[], lo: number, t: number): Skeleton3D | null {
+  const a = frames[lo]?.pose3d ? frames[lo] : frames[lo - 1];
+  const b = frames[lo + 1]?.pose3d ? frames[lo + 1] : frames[lo + 2];
+  // Each side skips at most one frame, but together they may bridge only one.
+  if (!a?.pose3d || !b?.pose3d || (a !== frames[lo] && b !== frames[lo + 1])) return null;
+  const k = Math.max(0, Math.min(1, (t - a.timeMs) / (b.timeMs - a.timeMs || 1)));
+  // On a frame with pose3d it is returned as is (interpolate would drop bones b lacks).
+  if (k === 0) return a.pose3d;
+  if (k === 1) return b.pose3d;
+  return interpolate(a.pose3d, b.pose3d, k * k * (3 - 2 * k));
+}
+
 export function frameAt(frames: Frame[], t: number): Frame | null {
   const first = frames[0];
   const last = frames[frames.length - 1];
@@ -193,7 +204,10 @@ export function frameAt(frames: Frame[], t: number): Frame | null {
       vb = b.angles[key];
     if (va != null && vb != null) angles[key] = lerpAngle(va, vb, e);
   }
-  return { timeMs: t, landmarks, angles };
+  const frame: Frame = { timeMs: t, landmarks, angles };
+  const pose3d = pose3dAt(frames, lo, t);
+  if (pose3d) frame.pose3d = pose3d;
+  return frame;
 }
 
 /** Einfache Strichfigur aus Gliedmaßen-Winkeln (für eingebaute Demo-Choreos). */
