@@ -2,7 +2,7 @@
 
 Tanzspiel im Stil von Just Dance für eine Person, als PWA fürs Handy. Der Spieler tanzt vor der
 Frontkamera; Pose-Erkennung und Bewertung laufen vollständig im Browser. Kein Backend, keine
-Accounts, kein Mehrspieler, keine Veröffentlichung.
+Accounts, kein Mehrspieler.
 
 **Warum so:** privat und lokal. Kamerabilder verlassen das Gerät nie, die Song-Bibliothek liegt
 in IndexedDB. Die Datenschicht ist trotzdem so geschnitten, dass später ein Server angebunden
@@ -60,8 +60,6 @@ das im Bericht ausdrücklich sagen statt es als getestet auszugeben.
 **Datenschutz und Recht**
 
 - Keine Uploads von Kamera- oder Videodaten. Frames werden nur lokal verarbeitet.
-- Keine geschützten Songs oder Original-Assets (Logos, Fonts, Coach-Modelle, Piktogramme) im
-  Repo. Audio- und Videodateien sind per `.gitignore` ausgeschlossen.
 - Keine Secrets oder Tokens im Repo. Spotify-Client-ID trägt der Nutzer selbst ein; Tokens nur
   in `sessionStorage`.
 - Jeder externe Abruf (CDN, YouTube, Spotify) muss in der UI benannt sein.

@@ -56,8 +56,7 @@ coverage
 # Playwright MCP screenshots and traces
 .playwright-mcp/
 
-# Raw pose tracks from the dev-mode video import (landmarks of real videos, stay local)
-*.posetrack.json
-
 # Vercel CLI project link
 .vercel
+
+*.posetrack.json

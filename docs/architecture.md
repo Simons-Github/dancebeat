@@ -820,7 +820,7 @@ Einstellungen, die an einem Video scheitern, fallen dort heraus. Raster per Komm
 änderbar: `--min-cutoff`, `--beta`, `--max-gap`, `--beats-per-move`, `--placement` (`grid`,
 `holds`; Standard `holds`), dazu `--top` (Zeilen je Tabelle, Standard 10). Die Spalte „Bew. °/s“
 zeigt `moveMotionDegPerS`; die Platzierung ändert den Holdout-Fehler nicht und wird über diese
-Spalte verglichen. Die Rohdaten bleiben lokal und kommen nicht ins Repo. Laufzeit etwa 2 s je
+Spalte verglichen. Laufzeit etwa 2 s je
 Minute Video beim Standardraster. Neue Standardwerte vor dem Übernehmen im Spiel gegenprüfen.
 
 ## Choreografie-Editor (Etappe 8d-1)
