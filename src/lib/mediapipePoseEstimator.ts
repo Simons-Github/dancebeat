@@ -1,11 +1,18 @@
-import type { NormalizedLandmark, PoseLandmarker } from "@mediapipe/tasks-vision";
+import type {
+  Landmark as MpLandmark,
+  NormalizedLandmark,
+  PoseLandmarker,
+} from "@mediapipe/tasks-vision";
 
 import { createPoseLandmarker, type PoseModel } from "./mediapipe";
 import type { PoseDelegate, PoseEstimator } from "./poseEstimator";
-import type { Landmark } from "./types";
+import type { Landmark, Landmark3d } from "./types";
 
 const toLandmarks = (pose: NormalizedLandmark[]): Landmark[] =>
   pose.map((q) => [q.x, q.y, q.visibility ?? 1] as Landmark);
+
+const toLandmarks3d = (pose: MpLandmark[]): Landmark3d[] =>
+  pose.map((q): Landmark3d => [q.x, q.y, q.z, q.visibility ?? 1]);
 
 /**
  * MediaPipe Pose Landmarker in VIDEO mode. "lite" is the live model; GPU falls back to CPU.
@@ -42,6 +49,14 @@ export function createMediaPipeEstimator(
     },
     detectAll(video, timestampMs) {
       return landmarker?.detectForVideo(video, timestampMs).landmarks.map(toLandmarks) ?? [];
+    },
+    detectAllWorld(video, timestampMs) {
+      const result = landmarker?.detectForVideo(video, timestampMs);
+      if (!result) return [];
+      return result.landmarks.map((pose, i) => {
+        const world = result.worldLandmarks[i];
+        return { landmarks: toLandmarks(pose), world: world ? toLandmarks3d(world) : null };
+      });
     },
     close() {
       closed = true;

@@ -15,7 +15,7 @@ import {
   type MultiPoseTrack,
 } from "@/lib/targetPerson";
 import type { Landmark } from "@/lib/types";
-import { figureLandmarks, shiftedFigure } from "./videoAnalysisFakes";
+import { figureLandmarks, shiftedFigure, worldOf } from "./videoAnalysisFakes";
 
 const ASPECT = 16 / 9;
 const STEP = 50;
@@ -108,6 +108,48 @@ describe("trackTarget", () => {
         (s) => s.landmarks === null,
       ),
     ).toBe(true);
+  });
+});
+
+describe("trackTarget mit Weltpunkten", () => {
+  /** `makeTrack` plus world landmarks parallel to the poses (`worldOf`). */
+  const withWorlds = (track: MultiPoseTrack): MultiPoseTrack => ({
+    ...track,
+    samples: track.samples.map((s) => ({ ...s, worlds: s.poses.map(worldOf) })),
+  });
+
+  it("übernimmt bei einer Person die Weltpunkte der ersten Pose, ohne Personen null", () => {
+    const track = withWorlds(makeTrack((t, i) => (i % 4 === 2 ? [] : [left(t)])));
+    const out = trackTarget(track, defaultTarget(track));
+    for (const [i, s] of out.samples.entries()) {
+      const src = track.samples[i]!;
+      expect(s.landmarks).toBe(src.poses[0] ?? null);
+      expect(s.world).toBe(src.worlds?.[0] ?? null);
+    }
+    expect(out.samples[2]!.world).toBeNull();
+  });
+
+  it("nimmt im Mehrpersonen-Modus die Weltpunkte der gewählten Pose", () => {
+    const track = withWorlds(
+      makeTrack((t, i) => (i % 2 ? [right(t), left(t)] : [left(t), right(t)])),
+    );
+    const out = trackTarget(track, { sampleIndex: 0, poseIndex: 1 });
+    for (const [i, s] of out.samples.entries()) {
+      const src = track.samples[i]!;
+      const k = src.poses.indexOf(s.landmarks!);
+      expect(k).toBeGreaterThanOrEqual(0);
+      expect(s.world).toBe(src.worlds![k]);
+      expect(centerX(s.landmarks)).toBeCloseTo(0.7, 5);
+    }
+  });
+
+  it("ohne Weltpunkte in der Analyse bekommt die Spur kein world-Feld", () => {
+    const single = makeTrack((t) => [left(t)]);
+    const multi = makeTrack((t) => [left(t), right(t)]);
+    for (const s of trackTarget(single, defaultTarget(single)).samples)
+      expect(s).not.toHaveProperty("world");
+    for (const s of trackTarget(multi, defaultTarget(multi)).samples)
+      expect(s).not.toHaveProperty("world");
   });
 });
 

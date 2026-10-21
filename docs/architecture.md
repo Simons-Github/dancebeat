@@ -526,7 +526,11 @@ Google Fonts oder ein anderes CDN.
 
 `src/lib/videoChoreo.ts` (Etappe 8a, reine Logik ohne React): `choreoFromPoseTrack` macht aus
 einer rohen Pose-Spur (`PoseTrack`: Seitenverhältnis plus Proben `{ timeMs, landmarks | null }`,
-Landmarks pro Achse normiert wie MediaPipe sie liefert) eine geprüfte `Choreography`. Die
+Landmarks pro Achse normiert wie MediaPipe sie liefert) eine geprüfte `Choreography`. Seit
+Etappe 13c trägt jede Probe optional auch `world` (`Landmark3d[] | null`: MediaPipe-Weltpunkte
+derselben Person in Metern, Ursprung Hüftmitte, y nach unten, z von der Kamera weg; Schema
+`Landmark3dSchema` in `schema.ts`). Fehlt das Feld, hat die Analyse keine Weltpunkte geliefert.
+Die Choreografie entsteht in 13c weiter nur aus den 2D-Landmarks. Die
 Pose-Spur entsteht aus der Analyse (`useVideoAnalysis`, siehe unten) und der Wahl der
 Zielperson (`trackTarget`, siehe [Zielperson](#zielperson-etappe-8f)). Ablauf und Konventionen:
 [choreography-format.md](choreography-format.md#video-import).
@@ -536,6 +540,9 @@ Zielperson (`trackTarget`, siehe [Zielperson](#zielperson-etappe-8f)). Ablauf un
   verschieben. Werte `minCutoff` 2 Hz, `beta` 40, `dCutoff` 1 Hz (seit 8g-5, gemessen an echten
   Videos; vorher 1 / 10), Neustart nach Lücken über 250 ms. Messung:
   [choreography-format.md](choreography-format.md#standardwerte-aus-der-messung-etappe-8g-5).
+  Weltpunkte (x, y, z) laufen seit 13c durch denselben Filter mit denselben Werten und Regeln
+  (unsichere Punkte unverändert, Neustart nach Lücken und Proben ohne `world`); die 2D-Werte
+  bleiben dabei unverändert.
 - `suggestGoldMoves` ist eigenständig exportiert, damit der Editor (8d-1, `suggestGold`)
   den Vorschlag wiederverwendet.
 - Fehlermeldungen sind deutsch, weil der Import-Dialog sie direkt zeigt.
@@ -756,6 +763,12 @@ werden. Logik in `src/lib/targetPerson.ts` (ohne React).
   `numPoses`; `PoseEstimator.detectAll`). `analyzeVideo` liefert eine `MultiPoseTrack`
   (`{ timeMs, poses }` je Probe, `poses` leer = niemand erkannt). Das Live-Spiel bleibt bei
   einer Person.
+- Weltpunkte (Etappe 13c): Hat der Estimator `detectAllWorld` (MediaPipe), nimmt `analyzeVideo`
+  diese Methode und legt je Probe zusätzlich `worlds` ab, parallel zu `poses` (gleicher Index =
+  gleiche Person, `null` wenn MediaPipe für diese Person keine liefert). Sonst `detectAll`, sonst
+  `detect`; dann fehlt `worlds`. Die Personenwahl rechnet nur mit den 2D-Posen; `trackTarget`
+  übernimmt die Weltpunkte der gewählten Pose als `world` in die `PoseTrack`. Das Live-Spiel
+  (`detect` in `usePoseTracking`) bekommt keine Weltpunkte, erst ab Etappe 16.
 - `trackTarget` macht daraus die `PoseTrack` für `choreoFromPoseTrack`: Ab der gewählten Probe
   vorwärts und rückwärts nimmt es je Probe die Pose, deren Rumpfmitte (Mittel der sichtbaren
   Schultern und Hüften, in Bildhöhen, x mit dem Seitenverhältnis) der letzten bekannten Mitte
@@ -808,9 +821,11 @@ wird:
   einfachere Summe aus Zittern und Abweichung vom Rohwert wurde verworfen: Sie bevorzugte
   starke Glättung auch bei schnellen Moves.
 - „Rohdaten exportieren“ lädt `*.posetrack.json` herunter (`src/lib/poseTrackFile.ts`, Format
-  `dancebeat-pose-track` v1, mit zod geprüft): die Spur der Zielperson und die Einstellungen
+  `dancebeat-pose-track` v2, mit zod geprüft): die Spur der Zielperson und die Einstellungen
   des Dialogs (BPM, Beat-Phase in Videozeit, Bereich, Spiegeln, Dateiname, seit 8g-4b optional
-  das Pose-Modell, seit 8g-4c optional die Move-Platzierung). Die Datei enthält
+  das Pose-Modell, seit 8g-4c optional die Move-Platzierung). Version 2 (13c) ergänzt je Probe
+  optional `world` (Weltpunkte, auf 4 Nachkommastellen gerundet, also 0,1 mm); v1-Dateien
+  bleiben lesbar, dürfen aber kein `world` enthalten. Die Datei enthält
   nur Landmarks, keine Bilder, und gehört nicht zur Bibliothek. `importOptions` rechnet sie in
   dieselben Optionen um, die `buildVideoChoreo` an `choreoFromPoseTrack` gibt. So lässt sich
   das Feintuning ohne neuen MediaPipe-Lauf wiederholen.

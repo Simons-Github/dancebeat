@@ -2,7 +2,7 @@ import { vi } from "vitest";
 
 import { figure } from "@/lib/pose";
 import type { PoseEstimator } from "@/lib/poseEstimator";
-import type { Landmark } from "@/lib/types";
+import type { Landmark, Landmark3d } from "@/lib/types";
 
 export interface FakeVideoOptions {
   width?: number;
@@ -197,6 +197,31 @@ export function fakeMultiEstimator(poses: (timeMs: number) => Landmark[][]): Fak
     est.timestamps.push(ts);
     est.seen.push(shown);
     return poses(shown);
+  });
+  return est;
+}
+
+/** Stand-in world landmarks for `lm`: centered, z 0, same visibility (enough for the plumbing). */
+export const worldOf = (lm: Landmark[]): Landmark3d[] =>
+  lm.map((p): Landmark3d => [p[0] - 0.5, p[1] - 0.5, 0, p[2] ?? 1]);
+
+/**
+ * Estimator with `detectAllWorld`: `poses` maps the shown video time to all people, each with
+ * `worldOf` as world landmarks (null for people at an index in `noWorld`).
+ */
+export function fakeWorldEstimator(
+  poses: (timeMs: number) => Landmark[][],
+  noWorld: number[] = [],
+): FakeEstimator {
+  const est = fakeMultiEstimator(poses);
+  est.detectAllWorld = vi.fn((video: HTMLVideoElement, ts: number) => {
+    const shown = (video as unknown as FakeVideo).shownMs;
+    est.timestamps.push(ts);
+    est.seen.push(shown);
+    return poses(shown).map((lm, i) => ({
+      landmarks: lm,
+      world: noWorld.includes(i) ? null : worldOf(lm),
+    }));
   });
   return est;
 }

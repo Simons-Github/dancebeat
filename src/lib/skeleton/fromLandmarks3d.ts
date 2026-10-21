@@ -1,11 +1,13 @@
+import type { Landmark3d } from "../types";
 import { BONE_ANCHORS, BONE_IDS, type BoneAnchor, type Skeleton3D } from "./types";
 import { add, normalize, rotateYaw, scale, sub, type Vec3 } from "./vec";
 
 /**
  * One MediaPipe world landmark: metres, origin at the hip midpoint, x toward the right of the
- * camera image, y down, z away from the camera; optional visibility (default 1).
+ * camera image, y down, z away from the camera; optional visibility (default 1). Defined by
+ * `Landmark3dSchema` (schema.ts), re-exported here for the skeleton API.
  */
-export type Landmark3d = [x: number, y: number, z: number, visibility?: number];
+export type { Landmark3d };
 
 const DEG = 180 / Math.PI;
 

@@ -2,10 +2,11 @@ import { describe, expect, it } from "vitest";
 import { mirrorChoreo } from "@/lib/choreo";
 import { ARM_KEYS, computeAngles, figure, isVisible, type FigureParams } from "@/lib/pose";
 import { ChoreographySchema } from "@/lib/schema";
-import type { AngleKey, Angles, Frame, Landmark, Move } from "@/lib/types";
+import type { AngleKey, Angles, Frame, Landmark, Landmark3d, Move } from "@/lib/types";
 import {
   choreoFromPoseTrack,
   DEFAULT_MOVE_PLACEMENT,
+  DEFAULT_ONE_EURO,
   MIN_MOVE_GAP_MS,
   OneEuroFilter,
   poseMotionAt,
@@ -13,6 +14,7 @@ import {
   suggestGoldMoves,
   toSquareSpace,
   trackMetrics,
+  type OneEuroParams,
   type PoseTrack,
 } from "@/lib/videoChoreo";
 
@@ -153,6 +155,157 @@ describe("smoothTrack", () => {
     // Reset after a null sample and after a long time gap.
     expect(out[4]!.landmarks).toEqual(a);
     expect(out[5]!.landmarks).toEqual(c);
+  });
+});
+
+/**
+ * Frozen copy of the 2D `onePass`/`smoothTrack` before Etappe 13c (reference for the generalized
+ * filter, which must give exactly the same 2D output). OneEuroFilter itself is unchanged.
+ */
+type OldSample = { timeMs: number; landmarks: Landmark[] | null };
+function oldOnePass(samples: OldSample[], p: OneEuroParams, maxGapMs: number): OldSample[] {
+  const filters = new Map<number, { fx: OneEuroFilter; fy: OneEuroFilter; last: number }>();
+  return samples.map(({ timeMs, landmarks }) => {
+    if (!landmarks) {
+      filters.clear();
+      return { timeMs, landmarks: null };
+    }
+    for (const i of filters.keys()) if (i >= landmarks.length) filters.delete(i);
+    const out = landmarks.map((pt, i): Landmark => {
+      if (!isVisible(pt)) {
+        filters.delete(i);
+        return pt;
+      }
+      let f = filters.get(i);
+      if (!f || timeMs - f.last > maxGapMs) {
+        f = { fx: new OneEuroFilter(p), fy: new OneEuroFilter(p), last: timeMs };
+        filters.set(i, f);
+      }
+      f.last = timeMs;
+      const x = f.fx.filter(pt[0], timeMs);
+      const y = f.fy.filter(pt[1], timeMs);
+      return pt.length > 2 ? [x, y, pt[2] as number] : [x, y];
+    });
+    return { timeMs, landmarks: out };
+  });
+}
+function oldSmoothTrack(samples: OldSample[], maxGapMs = 250): OldSample[] {
+  const p = DEFAULT_ONE_EURO;
+  const fwd = oldOnePass(samples, p, maxGapMs);
+  const reversed = samples.map((s) => ({ timeMs: -s.timeMs, landmarks: s.landmarks })).reverse();
+  const bwd = oldOnePass(reversed, p, maxGapMs).reverse();
+  return fwd.map((s, k) => {
+    const back = bwd[k]?.landmarks;
+    if (!s.landmarks || !back) return s;
+    const landmarks = s.landmarks.map((pt, i): Landmark => {
+      const q = back[i];
+      if (!q || !isVisible(pt)) return pt;
+      const x = (pt[0] + q[0]) / 2,
+        y = (pt[1] + q[1]) / 2;
+      return pt.length > 2 ? [x, y, pt[2] as number] : [x, y];
+    });
+    return { timeMs: s.timeMs, landmarks };
+  });
+}
+
+describe("smoothTrack 2D wie vor 13c", () => {
+  it("liefert exakt dieselbe 2D-Ausgabe wie die eingefrorene alte Fassung", () => {
+    const hash = (i: number) => {
+      const h = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+      return h - Math.floor(h);
+    };
+    const samples: OldSample[] = [];
+    let t = 0;
+    for (let i = 0; i < 120; i++) {
+      // A gap longer than maxGapMs (250) after sample 60.
+      t += i === 60 ? 600 : 33 + Math.round(hash(i + 500) * 20);
+      if (i % 23 === 7) {
+        samples.push({ timeMs: t, landmarks: null });
+        continue;
+      }
+      const n = i % 31 === 11 ? 3 : 5; // fewer points now and then
+      const landmarks = Array.from({ length: n }, (_, j): Landmark => {
+        const x = 0.5 + 0.2 * Math.sin(t / 400 + j) + 0.01 * (hash(i * 7 + j) - 0.5);
+        const y = 0.5 + 0.2 * Math.cos(t / 300 + j) + 0.01 * (hash(i * 7 + j + 3) - 0.5);
+        if (j === 0) return [x, y]; // no visibility entry
+        const v = hash(i * 11 + j);
+        return [x, y, v < 0.2 ? 0.3 : v]; // some invisible points
+      });
+      samples.push({ timeMs: t, landmarks });
+    }
+    expect(smoothTrack(samples)).toEqual(oldSmoothTrack(samples));
+    expect(smoothTrack(samples, {}, 100)).toEqual(oldSmoothTrack(samples, 100));
+  });
+});
+
+describe("smoothTrack mit Weltpunkten", () => {
+  /** Deterministic white-ish noise in [-amp, amp] (hash of i). */
+  const noise = (i: number, amp: number) => {
+    const h = Math.sin(i * 12.9898 + 78.233) * 43758.5453;
+    return amp * 2 * (h - Math.floor(h) - 0.5);
+  };
+  const truthAt = (t: number): [number, number, number] => [
+    0.3 * Math.sin(t / 900),
+    -0.4 + 0.1 * Math.cos(t / 700),
+    0.05 * Math.sin(t / 500),
+  ];
+  const samples = Array.from({ length: 80 }, (_, i) => {
+    const t = i * 50;
+    const [x, y, z] = truthAt(t);
+    const world: Landmark3d[] = [
+      [x + noise(3 * i, 0.01), y + noise(3 * i + 1, 0.01), z + noise(3 * i + 2, 0.01), 0.9],
+      [1, 2, 3, 0.3],
+      [x, y, z],
+    ];
+    const landmarks: Landmark[] = [[0.5 + x / 4, 0.5 + y / 4, 0.9]];
+    return { timeMs: t, landmarks, world };
+  });
+
+  it("glättet Rauschen in x, y und z", () => {
+    const out = smoothTrack(samples);
+    let eRaw = 0,
+      eSmooth = 0;
+    for (const [i, s] of samples.entries()) {
+      if (i < 5 || i >= samples.length - 5) continue;
+      const truth = truthAt(s.timeMs);
+      const raw = s.world[0]!;
+      const sm = out[i]!.world![0]!;
+      for (let d = 0; d < 3; d++) {
+        eRaw += Math.abs(raw[d]! - truth[d]!);
+        eSmooth += Math.abs(sm[d]! - truth[d]!);
+      }
+      // Visibility stays.
+      expect(sm[3]).toBe(0.9);
+    }
+    // Same parameters as for 2D (tuned for 0..1 coordinates; metres are of a similar scale), so
+    // the reduction is moderate, like for the 2D points.
+    expect(eSmooth).toBeLessThan(eRaw * 0.85);
+  });
+
+  it("reicht unsichere Weltpunkte unverändert durch, 2D bleibt wie ohne Weltpunkte", () => {
+    const out = smoothTrack(samples);
+    for (const [i, s] of out.entries()) expect(s.world![1]).toBe(samples[i]!.world[1]);
+    const flat = samples.map(({ timeMs, landmarks }) => ({ timeMs, landmarks }));
+    expect(out.map(({ timeMs, landmarks }) => ({ timeMs, landmarks }))).toEqual(smoothTrack(flat));
+  });
+
+  it("Samples ohne world bleiben ohne, world null bleibt null und setzt zurück", () => {
+    const a: Landmark3d[] = [[0.1, 0.2, 0.3]];
+    const b: Landmark3d[] = [[0.5, 0.6, 0.7]];
+    const lm: Landmark[] = [[0.5, 0.5]];
+    const out = smoothTrack([
+      { timeMs: 0, landmarks: lm, world: a },
+      { timeMs: 50, landmarks: lm },
+      { timeMs: 100, landmarks: lm, world: b },
+      { timeMs: 150, landmarks: lm, world: null },
+      { timeMs: 200, landmarks: lm, world: a },
+    ]);
+    expect(out[1]).not.toHaveProperty("world");
+    expect(out[3]!.world).toBeNull();
+    // Each world sample stands alone between gaps: unchanged.
+    expect(out[0]!.world).toEqual(a);
+    expect(out[2]!.world).toEqual(b);
+    expect(out[4]!.world).toEqual(a);
   });
 });
 

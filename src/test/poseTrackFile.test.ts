@@ -8,7 +8,7 @@ import {
   POSE_TRACK_FORMAT,
 } from "@/lib/poseTrackFile";
 import { figure } from "@/lib/pose";
-import type { Landmark } from "@/lib/types";
+import type { Landmark, Landmark3d } from "@/lib/types";
 import { choreoFromPoseTrack, type PoseTrack } from "@/lib/videoChoreo";
 
 const track: PoseTrack = {
@@ -72,6 +72,51 @@ describe("poseTrackFile", () => {
     expect(choreoFromPoseTrack(t, opts).moves.map((m) => m.timeMs)).toEqual(
       dialog.choreo.moves.map((m) => m.timeMs),
     );
+  });
+
+  it("Version 2 speichert Weltpunkte gerundet, Version 1 bleibt lesbar", () => {
+    const withWorld: PoseTrack = {
+      ...track,
+      samples: track.samples.map((s, i) =>
+        i === 3
+          ? s
+          : {
+              ...s,
+              world: s.landmarks
+                ? s.landmarks.map((p): Landmark3d => [p[0] - 0.5123456, p[1] / 3, 0.1, 0.8])
+                : null,
+            },
+      ),
+    };
+    const file = buildPoseTrackFile({ ...input, track: withWorld });
+    expect(file.version).toBe(2);
+    const parsed = parsePoseTrackFile(JSON.stringify(file));
+    expect(parsed).toEqual(file);
+    const first = parsed.track.samples[0]!.world![0]!;
+    expect(first[0]).toBe(
+      Math.round((track.samples[0]!.landmarks![0]![0] - 0.5123456) * 1e4) / 1e4,
+    );
+    expect(first[3]).toBe(0.8);
+    const { track: t } = importOptions(parsed);
+    expect(t.samples[3]).not.toHaveProperty("world");
+    expect(t.samples[5]!.world).toBeNull();
+    expect(t.samples[0]!.world).toEqual(parsed.track.samples[0]!.world);
+
+    // A version-1 export (before 13c) still parses and builds the same choreography.
+    const v1 = { ...buildPoseTrackFile(input), version: 1 };
+    const old = parsePoseTrackFile(JSON.stringify(v1));
+    expect(old.version).toBe(1);
+    const { track: oldTrack, opts } = importOptions(old);
+    expect(oldTrack.samples.every((s) => !("world" in s))).toBe(true);
+    expect(choreoFromPoseTrack(oldTrack, opts).moves.length).toBe(
+      choreoFromPoseTrack(importOptions(buildPoseTrackFile(input)).track, opts).moves.length,
+    );
+    // Version 1 knows no world landmarks; unknown versions are rejected.
+    expect(() => parsePoseTrackFile(JSON.stringify({ ...file, version: 1 }))).toThrow();
+    expect(() => parsePoseTrackFile(JSON.stringify({ ...file, version: 3 }))).toThrow();
+    const bad = structuredClone(file);
+    bad.track.samples[0]!.world = [[0, 0, 0, 2]];
+    expect(() => parsePoseTrackFile(JSON.stringify(bad))).toThrow();
   });
 
   it("lehnt fremde Dateien ab", () => {

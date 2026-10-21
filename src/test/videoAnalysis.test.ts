@@ -11,7 +11,7 @@ import {
 } from "@/lib/videoAnalysis";
 import { defaultTarget, trackTarget } from "@/lib/targetPerson";
 import { choreoFromPoseTrack } from "@/lib/videoChoreo";
-import { fakeEstimator, FakeVideo } from "./videoAnalysisFakes";
+import { fakeEstimator, FakeVideo, fakeWorldEstimator, worldOf } from "./videoAnalysisFakes";
 
 const someone: Landmark[] = [[0.5, 0.5, 1]];
 
@@ -70,6 +70,30 @@ describe("analyzeVideo", () => {
     ]);
     expect(all.mock.calls.map((c) => c[1])).toEqual([0, 50, 100]);
     expect(est.detect).not.toHaveBeenCalled();
+  });
+
+  it("bevorzugt detectAllWorld und legt die Weltpunkte parallel zu den Personen ab", async () => {
+    const video = new FakeVideo({ durationMs: 100 });
+    const other: Landmark[] = [[0.2, 0.5, 1]];
+    const est = fakeWorldEstimator(() => [someone, other], [1]);
+    const track = await analyzeVideo(video.asVideo(), est);
+    expect(track.samples.map((s) => s.poses)).toEqual([
+      [someone, other],
+      [someone, other],
+      [someone, other],
+    ]);
+    for (const s of track.samples) expect(s.worlds).toEqual([worldOf(someone), null]);
+    expect(est.detectAll).not.toHaveBeenCalled();
+    expect(est.detect).not.toHaveBeenCalled();
+  });
+
+  it("ohne detectAllWorld bleiben die Samples ohne Weltpunkte", async () => {
+    const video = new FakeVideo({ durationMs: 100 });
+    const track = await analyzeVideo(
+      video.asVideo(),
+      fakeEstimator(() => someone),
+    );
+    for (const s of track.samples) expect(s).not.toHaveProperty("worlds");
   });
 
   it("übergibt streng steigende Zeitstempel, auch über mehrere Läufe mit demselben Modell", async () => {

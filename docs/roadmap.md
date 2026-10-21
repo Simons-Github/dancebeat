@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a, 13b ✅)                    | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a, 13b, 13c ✅)               | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -931,6 +931,23 @@ Abweichung: Die Nase liegt mit fester Halslänge statt „0,09 über den Schulte
 Neigungsversatz“, bei den Demo-Posen (Neigung höchstens 10°) unter 0,002 verschoben; alle
 anderen Gelenke und alle Winkel sind gleich. Tests: `src/test/figure3d.test.ts` (gegen eine
 eingefrorene Kopie des alten `figure()`).
+
+**13c Pose-Spur v2 mit Weltpunkten – umgesetzt.** Der Video-Import schreibt die
+MediaPipe-Weltpunkte (Meter, Ursprung Hüftmitte) der Zielperson mit: `Landmark3dSchema` in
+`src/lib/schema.ts` (`Landmark3d` jetzt aus `types.ts`, der Skeleton-Kern re-exportiert ihn),
+`analyzeVideo` legt je Probe `worlds` parallel zu `poses` ab, `trackTarget` übernimmt die
+Weltpunkte der gewählten Pose (1:1- und Mehrpersonen-Weg) als `PoseTrack.samples[].world`, und
+`smoothTrack` glättet sie mit denselben One-Euro-Werten vorwärts und rückwärts (gleiche Regeln
+für Lücken und unsichere Punkte; die 2D-Ausgabe ist bitgleich wie vorher). Der Rohdaten-Export
+ist jetzt `dancebeat-pose-track` v2 mit optionalem `world` (auf 4 Nachkommastellen gerundet);
+v1-Dateien bleiben lesbar, `world` in v1 wird abgelehnt. Choreografie und Live-Spiel unverändert.
+Abweichung vom Plan: `detect` und `detectAll` bleiben wie sie sind (das Live-Spiel nutzt
+`detect`, Weltpunkte erst ab Etappe 16); neu ist die optionale Methode `detectAllWorld`, die
+`{ landmarks, world }` je Person liefert, und die Weltpunkte stehen parallel als `worlds` statt
+in den Posen. Tests: Schema v1/v2, Glättung der Weltpunkte, Analyse mit Fake-Estimator,
+`trackTarget` mit Weltpunkten, MediaPipe-Estimator. **Gerätetest offen:** ob das Auslesen der
+Weltpunkte den Import messbar verlangsamt, und der Speicher: Der Import hält die Weltpunkte für
+bis zu 3 Personen je Probe, die `MultiPoseTrack` braucht also etwa doppelt so viel Speicher.
 
 ### 14. Neue Demo-Songs ⏳
 

@@ -4,6 +4,7 @@ import type {
   ChoreoFileSchema,
   ChoreographySchema,
   FrameSchema,
+  Landmark3dSchema,
   LandmarkSchema,
   MoveSchema,
   SongSchema,
@@ -23,6 +24,8 @@ export type AngleKey =
 
 export type Angles = z.infer<typeof AnglesSchema>;
 export type Landmark = z.infer<typeof LandmarkSchema>; // x, y, (visibility)
+/** MediaPipe world landmark in metres: x, y, z, (visibility). See Landmark3dSchema. */
+export type Landmark3d = z.infer<typeof Landmark3dSchema>;
 export type Frame = z.infer<typeof FrameSchema>;
 export type Move = z.infer<typeof MoveSchema>;
 export type Choreography = z.infer<typeof ChoreographySchema>;

@@ -17,6 +17,20 @@ export const LandmarkSchema = z.union([
   z.tuple([z.number().finite(), z.number().finite(), z.number().min(0).max(1)]),
 ]);
 
+/**
+ * MediaPipe world landmark: metres, origin at the hip midpoint, x toward the right of the camera
+ * image, y down, z away from the camera; optional visibility (default 1).
+ */
+export const Landmark3dSchema = z.union([
+  z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]),
+  z.tuple([
+    z.number().finite(),
+    z.number().finite(),
+    z.number().finite(),
+    z.number().min(0).max(1),
+  ]),
+]);
+
 const angle = z.number().finite().min(-180).max(180);
 export const AnglesSchema = z
   .object({

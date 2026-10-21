@@ -130,11 +130,11 @@ function seekTo(
 
 /**
  * Steps through `range` (default: the whole video) every `intervalMs`, seeks the paused video
- * there and records all people the estimator finds (`detectAll`, or `detect` wrapped as zero or
- * one person). Sample times are video time in ms (not relative to
- * the range). Rejects with an "AbortError" DOMException when `signal` aborts, and with
+ * there and records all people the estimator finds (`detectAllWorld` with world landmarks in
+ * `worlds`, else `detectAll`, else `detect` wrapped as zero or one person). Sample times are
+ * video time in ms (not relative to the range). Rejects with an "AbortError" DOMException when `signal` aborts, and with
  * `VideoAnalysisError` for missing metadata, seek timeouts and media errors. Errors thrown by
- * `estimator.detect` / `detectAll` propagate unchanged.
+ * `estimator.detect` / `detectAll` / `detectAllWorld` propagate unchanged.
  */
 export async function analyzeVideo(
   video: HTMLVideoElement,
@@ -176,13 +176,22 @@ export async function analyzeVideo(
     if (signal?.aborted) throw abortError();
     const ts = offset + timeMs;
     lastTimestamps.set(estimator, ts);
-    let poses: Landmark[][];
-    if (estimator.detectAll) poses = estimator.detectAll(video, ts);
-    else {
-      const one = estimator.detect(video, ts);
-      poses = one ? [one] : [];
+    if (estimator.detectAllWorld) {
+      const found = estimator.detectAllWorld(video, ts);
+      samples.push({
+        timeMs,
+        poses: found.map((d) => d.landmarks),
+        worlds: found.map((d) => d.world),
+      });
+    } else {
+      let poses: Landmark[][];
+      if (estimator.detectAll) poses = estimator.detectAll(video, ts);
+      else {
+        const one = estimator.detect(video, ts);
+        poses = one ? [one] : [];
+      }
+      samples.push({ timeMs, poses });
     }
-    samples.push({ timeMs, poses });
     if (onProgress) {
       const fraction = (i + 1) / steps;
       const t = now();

@@ -1,4 +1,11 @@
-import type { Landmark } from "./types";
+import type { Landmark, Landmark3d } from "./types";
+
+/** One detected person: image landmarks plus MediaPipe world landmarks (metres, if available). */
+export interface PoseDetection {
+  landmarks: Landmark[];
+  /** World landmarks of the same person (`Landmark3d`), null if the model gave none. */
+  world: Landmark3d[] | null;
+}
 
 export type PoseDelegate = "GPU" | "CPU";
 
@@ -21,6 +28,12 @@ export interface PoseEstimator {
    * Optional: estimators without it are treated as finding at most one person.
    */
   detectAll?(video: HTMLVideoElement, timestampMs: number): Landmark[][];
+  /**
+   * Like `detectAll`, plus the world landmarks of each person (same index = same person). Used by
+   * the video import only (Etappe 13c); live play keeps `detect` and gets no world landmarks
+   * before Etappe 16. Optional: without it the import records no world landmarks.
+   */
+  detectAllWorld?(video: HTMLVideoElement, timestampMs: number): PoseDetection[];
   /** Releases the model. Safe to call at any time, also while `init` is still pending. */
   close(): void;
 }

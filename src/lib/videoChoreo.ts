@@ -9,15 +9,24 @@ import {
   LEG_KEYS,
 } from "./pose";
 import { CHOREO_VERSION, ChoreographySchema } from "./schema";
-import type { Angles, Choreography, Frame, Landmark, Move } from "./types";
+import type { Angles, Choreography, Frame, Landmark, Landmark3d, Move } from "./types";
 import { SONG_PALETTES } from "@/theme";
 
 /** Raw pose track from a video analysis (MediaPipe output, per-axis normalized landmarks). */
 export interface PoseTrack {
   /** Source video width / height. Landmarks are normalized per axis (MediaPipe). */
   aspect: number;
-  /** Sorted by timeMs (video time). landmarks null = no person detected. */
-  samples: { timeMs: number; landmarks: Landmark[] | null }[];
+  /**
+   * Sorted by timeMs (video time). landmarks null = no person detected. `world` (Etappe 13c):
+   * MediaPipe world landmarks of the same person, null if none; absent (or undefined, as zod
+   * parses it) if the analysis recorded no world landmarks. The choreography is still built from
+   * the 2D landmarks only.
+   */
+  samples: {
+    timeMs: number;
+    landmarks: Landmark[] | null;
+    world?: Landmark3d[] | null | undefined;
+  }[];
 }
 
 export interface OneEuroParams {
@@ -142,32 +151,77 @@ export function toSquareSpace(lm: Landmark[], aspect: number): Landmark[] {
 
 type Sample = PoseTrack["samples"][number];
 
-/** One causal One-Euro pass; time must increase. */
-function onePass(samples: Sample[], p: OneEuroParams, maxGapMs: number): Sample[] {
-  const filters = new Map<number, { fx: OneEuroFilter; fy: OneEuroFilter; last: number }>();
-  return samples.map(({ timeMs, landmarks }) => {
-    if (!landmarks) {
+/** A point whose first `dims` entries are coordinates, optionally followed by its visibility. */
+type Point = readonly number[];
+
+/** Same rule as `isVisible`: visibility (entry `dims`, default 1) of at least 0.5. */
+const visibleAt = (pt: Point, dims: number) => (pt.length > dims ? pt[dims]! : 1) >= 0.5;
+
+/** `pt` with its first coordinates replaced by `coords`; visibility and the rest stay. */
+const withCoords = <P extends Point>(pt: P, coords: number[]): P =>
+  [...coords, ...pt.slice(coords.length)] as unknown as P;
+
+/**
+ * Causal One-Euro filtering of one point list (2D landmarks or world landmarks) over time:
+ * one filter per point and coordinate. A missing list resets all filters; invisible points are
+ * passed through and reset their filter; gaps longer than maxGapMs restart it as well.
+ */
+function pointFilter(dims: number, p: OneEuroParams, maxGapMs: number) {
+  const filters = new Map<number, { f: OneEuroFilter[]; last: number }>();
+  return <P extends Point>(points: readonly P[] | null | undefined, timeMs: number): P[] | null => {
+    if (!points) {
       filters.clear();
-      return { timeMs, landmarks: null };
+      return null;
     }
-    // Landmarks absent from this sample are a gap as well.
-    for (const i of filters.keys()) if (i >= landmarks.length) filters.delete(i);
-    const out = landmarks.map((pt, i): Landmark => {
-      if (!isVisible(pt)) {
+    // Points absent from this sample are a gap as well.
+    for (const i of filters.keys()) if (i >= points.length) filters.delete(i);
+    return points.map((pt, i) => {
+      if (!visibleAt(pt, dims)) {
         filters.delete(i);
         return pt;
       }
       let f = filters.get(i);
       if (!f || timeMs - f.last > maxGapMs) {
-        f = { fx: new OneEuroFilter(p), fy: new OneEuroFilter(p), last: timeMs };
+        f = { f: Array.from({ length: dims }, () => new OneEuroFilter(p)), last: timeMs };
         filters.set(i, f);
       }
       f.last = timeMs;
-      const x = f.fx.filter(pt[0], timeMs);
-      const y = f.fy.filter(pt[1], timeMs);
-      return pt.length > 2 ? [x, y, pt[2] as number] : [x, y];
+      return withCoords(
+        pt,
+        f.f.map((fd, d) => fd.filter(pt[d]!, timeMs)),
+      );
     });
-    return { timeMs, landmarks: out };
+  };
+}
+
+/** Mean of a forward and a backward pass; invisible points and points without partner stay. */
+function averagePasses<P extends Point>(
+  fwd: P[] | null,
+  bwd: readonly P[] | null | undefined,
+  dims: number,
+): P[] | null {
+  if (!fwd || !bwd) return fwd;
+  return fwd.map((pt, i) => {
+    const q = bwd[i];
+    if (!q || !visibleAt(pt, dims)) return pt;
+    return withCoords(
+      pt,
+      Array.from({ length: dims }, (_, d) => (pt[d]! + q[d]!) / 2),
+    );
+  });
+}
+
+/** One causal One-Euro pass over 2D landmarks and world landmarks; time must increase. */
+function onePass(samples: Sample[], p: OneEuroParams, maxGapMs: number): Sample[] {
+  const flat = pointFilter(2, p, maxGapMs);
+  const world = pointFilter(3, p, maxGapMs);
+  return samples.map((s) => {
+    const landmarks = flat(s.landmarks, s.timeMs);
+    // A sample without world landmarks is a gap for the world filters.
+    const w = world(s.world, s.timeMs);
+    return s.world === undefined
+      ? { timeMs: s.timeMs, landmarks }
+      : { timeMs: s.timeMs, landmarks, world: w };
   });
 }
 
@@ -177,6 +231,8 @@ function onePass(samples: Sample[], p: OneEuroParams, maxGapMs: number): Sample[
  * reference poses off the beat. Points with visibility < 0.5 never feed a filter: they are
  * passed through unchanged (still marked not visible), and the filter of that landmark restarts
  * on its next visible sample, as it does after null samples and gaps longer than maxGapMs.
+ * World landmarks (x, y, z) are smoothed the same way with the same parameters; samples without
+ * `world` stay without.
  */
 export function smoothTrack(
   samples: Sample[],
@@ -185,19 +241,13 @@ export function smoothTrack(
 ): Sample[] {
   const p = { ...DEFAULT_ONE_EURO, ...params };
   const fwd = onePass(samples, p, maxGapMs);
-  const reversed = samples.map((s) => ({ timeMs: -s.timeMs, landmarks: s.landmarks })).reverse();
+  const reversed = samples.map((s) => ({ ...s, timeMs: -s.timeMs })).reverse();
   const bwd = onePass(reversed, p, maxGapMs).reverse();
   return fwd.map((s, k) => {
-    const back = bwd[k]?.landmarks;
-    if (!s.landmarks || !back) return s;
-    const landmarks = s.landmarks.map((pt, i): Landmark => {
-      const q = back[i];
-      if (!q || !isVisible(pt)) return pt;
-      const x = (pt[0] + q[0]) / 2,
-        y = (pt[1] + q[1]) / 2;
-      return pt.length > 2 ? [x, y, pt[2] as number] : [x, y];
-    });
-    return { timeMs: s.timeMs, landmarks };
+    const back = bwd[k];
+    const landmarks = averagePasses(s.landmarks, back?.landmarks, 2);
+    if (s.world === undefined) return { timeMs: s.timeMs, landmarks };
+    return { timeMs: s.timeMs, landmarks, world: averagePasses(s.world, back?.world, 3) };
   });
 }
 
@@ -383,6 +433,7 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
   // 1. Trim and shift.
   const trimmed = track.samples
     .filter((s) => s.timeMs >= start && s.timeMs <= end)
+    // `world` is dropped on purpose: the choreography uses 2D only until Etappe 13d.
     .map((s) => ({ timeMs: s.timeMs - start, landmarks: s.landmarks }));
   const last = trimmed[trimmed.length - 1];
   const durationMs = Number.isFinite(end) ? end - start : (last?.timeMs ?? 0);
@@ -575,6 +626,7 @@ export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackM
   const maxGapMs = opts.maxGapMs ?? 250;
   const trimmed = track.samples
     .filter((s) => s.timeMs >= start && s.timeMs <= end)
+    // `world` is dropped on purpose: the choreography uses 2D only until Etappe 13d.
     .map((s) => ({ timeMs: s.timeMs - start, landmarks: s.landmarks }));
   const detected = trimmed.filter((s) => s.landmarks !== null).length;
   const durationMs = Number.isFinite(end)
