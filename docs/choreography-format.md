@@ -278,6 +278,45 @@ mit Video-Clips wird nie nach `src/data/motion-pack.json` geschrieben (das Skrip
 Rechte an fremden Choreografien sind ungeklärt, das Ausliefern braucht eine ausdrückliche
 Entscheidung. Ohne Dateien erzeugt das Skript unverändert das ausgelieferte Paket.
 
+### Quelle AIST++ (Etappe 13h)
+
+<a id="aist"></a>Mocap-Clips aus AIST++ werden zu Pose-Spuren v2 und laufen dann denselben Weg
+wie Video-Spuren. Ablauf: `.pkl` → Python-Konverter (13h-2, noch offen) → neutrales JSON →
+`bun run aist-track` → `*.posetrack.json` → `build-motion-pack`. Logik in `src/lib/aist.ts`.
+
+- **Eingabe** `<Clipname>.aist.json`: `{ "fps": 60, "joints": [[[x, y, z] | null, … 17], …] }`,
+  `keypoints3d_optim` als COCO-17 in Zentimetern, AIST-Welt mit y nach oben, rechtshändig.
+  Fehlende Gelenke sind `null`.
+- **Clip-Liste** (`--list`, JSON-Array): `{ "name": "gHO_sBM_cAll_d19_mHO0_ch01", "bpm": 120,
+"beatPhaseMs": 0 }`. Zugelassen sind nur Genres mit stehendem Tanz (`AIST_STANDING_GENRES`:
+  House, LA- und Middle-Hip-Hop, Locking, Waacking, Jazz Ballet), kein Break und kein Krump.
+  Namen müssen eindeutig sein. BPM und Beat-Phase kommen aus den AIST-Angaben zur Musik und
+  werden nicht geraten. `beatPhaseMs` fehlt bis zur Messung (dann 0).
+- **Gelenke** (`COCO_TO_MEDIAPIPE`): Nase 0→0, Augen 1/2→2/5, Ohren 3/4→7/8, Schultern 5/6→11/12,
+  Ellbogen 7/8→13/14, Handgelenke 9/10→15/16, Hüften 11/12→23/24, Knie 13/14→25/26,
+  Knöchel 15/16→27/28 (ungerade COCO-Indizes = links). Alle anderen MediaPipe-Punkte bekommen
+  Sichtbarkeit 0 und werden übersprungen, nie als 0 gewertet.
+- **Achsen** (`cocoToWorld`): Meter, Ursprung Hüftmitte (ohne beide Hüften Schultermitte, ohne
+  beide `null`), MediaPipe-Konvention (x gleich, y und z umgedreht). Das ist eine Drehung um 180°
+  um x, also keine Spiegelung.
+- **Blickrichtung** (`clipYawDeg`): Kreismittel der Gier über alle Bilder des Clips. Alle Bilder
+  werden um diesen einen Wert gedreht, sodass die Person im Mittel zur Kamera schaut. Drehungen
+  innerhalb des Clips bleiben sichtbar.
+- **Spur:** Abtastung alle `AIST_STEP_MS` (50 ms, wie die Video-Analyse) mit dem nächstgelegenen
+  Bild. Weltpunkte wie oben, auf 4 Stellen gerundet. 2D-Landmarks sind `project` des Skeletts
+  mit x → 1 − x, also Kameraraum wie bei einem ungespiegelten Frontvideo; dazu `mirror: true`,
+  `aspect` 1, `movePlacement` `holds`, `video` = `AIST++ <Clipname>` (Clip-IDs damit
+  `video:aist-…`).
+- **Warnungen:** Zeigt die Nase in den meisten Bildern nach hinten (Median der Vorwärtskomponente
+  des Knochens `neck` < 0), sind die Achsen vermutlich gespiegelt oder vertauscht. Eine zweite Warnung kommt, wenn
+  mehr als die Hälfte der Proben keine Pose hat. Ganz ohne Pose bricht das Skript für diese Datei
+  ab.
+
+Aufruf: `bun run aist-track --list=clips.json [--out=Ordner] a.aist.json …`, Ausgabe standardmäßig
+`eval-results/aist/<Clipname>.posetrack.json`. `*.aist.json` und Pose-Spuren sind von git
+ignoriert, weil es fremde Daten sind. Für ausgelieferte Clips gilt dieselbe Lizenzfrage wie bei
+Video-Clips (14-0.1).
+
 ## Generator
 
 Erzeugt die Choreografie für Songs ohne eigene (`autoChoreo` in `src/data/demo.ts`, seit Etappe

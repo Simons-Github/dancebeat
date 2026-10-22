@@ -61,5 +61,8 @@ coverage
 
 *.posetrack.json
 
+# AIST++ keypoints from scripts/aist (third-party mocap data, never committed)
+*.aist.json
+
 # Evaluation bench output (bun run eval-choreo)
 eval-results/

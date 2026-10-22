@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g ✅, 13h offen)          | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen) | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -1081,6 +1081,31 @@ Stufe 3 neu erzeugt, 25 statt 16 Moves auf dem Beat-Raster, gleiche Länge und C
 `pose3d` an allen 133 Frames, „Speichern“ danach behält die neue Choreo, Konsole ohne Fehler und
 Warnungen. **Nur am Gerät prüfbar, nicht getestet:** Dauer der Neuanalyse bei großen
 Audio- und Videodateien am Handy.
+
+**13h-1 AIST++ → Pose-Spur v2 (TypeScript-Seite) – umgesetzt, Messung mit echten Daten offen.**
+`src/lib/aist.ts` liest das neutrale JSON des späteren Python-Konverters (COCO-17, cm, y nach oben)
+und schreibt eine Pose-Spur v2, die `build-motion-pack` wie eine Video-Spur schneidet. Die
+Weltpunkte sind in MediaPipe-Konvention mit Ursprung Hüftmitte. Die Blickrichtung wird einmal je
+Clip als Kreismittel der Gier abgezogen. Die 2D-Landmarks kommen aus `project` im Kameraraum, dazu
+`mirror: true` wie bei einem ungespiegelten Video. Abgetastet wird alle 50 ms. Die Clip-Liste trägt
+BPM und Beat-Phase und lässt nur stehende Genres zu. Wenn das Gesicht überwiegend nach hinten
+zeigt, warnt das Skript vor vertauschten Achsen. Aufruf
+`bun run aist-track --list=clips.json a.aist.json …`, Details in
+[choreography-format.md](choreography-format.md#aist). Ein synthetischer, um 70° gedrehter Clip
+lief durch beide Skripte: 7 Clips, alle mit 12 Knochen, keiner verworfen.
+Abweichungen vom Plan:
+
+- Die Teilung in 13h-1 und 13h-2.
+- Die Augen und Ohren werden mit abgebildet.
+- Die Clip-Liste liegt nicht im Repo, weil BPM und Beat-Phase aus den AIST-Angaben kommen müssen
+  und nicht geraten werden.
+- Die Quelle heißt `video:AIST++ …`, weil `videoMotionSource` unverändert genutzt wird.
+
+Tests: `src/test/aist.test.ts`, unabhängig vom Code geschrieben.
+**Offen (13h-2, braucht Freigabe 13-0.7, Python mit numpy):** `scripts/aist/convert.py` mit
+eingeschränktem Unpickler und eigenem Test, Clip-Auswahl und Clip-Liste mit den AIST-Tempi.
+Danach mit echten Dateien messen, ob die Achsenannahme (y nach oben, rechtshändig) stimmt und wie
+viele Clips die Filter bestehen.
 
 ### 14. Neue Demo-Songs ⏳
 
