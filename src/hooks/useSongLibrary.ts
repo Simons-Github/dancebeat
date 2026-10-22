@@ -7,6 +7,8 @@ import {
 } from "@tanstack/react-query";
 import { songRepository } from "@/lib/library/repository";
 import { markDemoDeleted, seedDemos } from "@/data/demo";
+import { audioTiming, regenerateSong } from "@/lib/library/regenerate";
+import { loadMotionPack } from "@/lib/motionPack";
 import type { Song } from "@/lib/types";
 
 /** Fields the "Song bearbeiten" dialog changes; saved together in one write. */
@@ -105,6 +107,28 @@ export function useSongLibrary() {
     },
     [save],
   );
+  /**
+   * Replaces the song's choreography with a newly generated one at the given difficulty and
+   * returns the saved song. A local audio file is analysed again for beat phase and energy.
+   * Every call uses a new seed (deliberately not the song id, so the moves change); the seed is
+   * not stored, the generated choreography itself is.
+   */
+  const regenerateChoreo = useCallback(
+    async (s: Song, difficulty: 1 | 2 | 3): Promise<Song> => {
+      const pack = await loadMotionPack();
+      const audio =
+        s.source.type === "local" ? await songRepository.getAudio(s.source.blobId) : undefined;
+      const next = regenerateSong(s, pack, {
+        difficulty,
+        seed: crypto.randomUUID(),
+        ...(await audioTiming(audio, s)),
+      });
+      const saved = await songRepository.save(next);
+      await refreshAfterWrite();
+      return saved;
+    },
+    [refreshAfterWrite],
+  );
   /** JSON text of the song's choreography export (no audio). */
   const exportChoreo = useCallback((s: Song) => songRepository.export(s.id), []);
   return {
@@ -113,6 +137,7 @@ export function useSongLibrary() {
     save,
     remove,
     updateDetails,
+    regenerateChoreo,
     exportChoreo,
     refresh,
   };

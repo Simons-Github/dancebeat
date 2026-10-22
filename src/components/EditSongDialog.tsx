@@ -1,6 +1,6 @@
 import { useId, useRef, useState, type FormEvent, type MouseEvent } from "react";
 import { Link } from "@tanstack/react-router";
-import { AudioWaveform, Download, ListMusic, Pencil, Trash2 } from "lucide-react";
+import { AudioWaveform, Download, ListMusic, Pencil, Sparkles, Trash2 } from "lucide-react";
 
 import {
   AlertDialog,
@@ -61,6 +61,8 @@ interface EditSongDialogProps {
   /** Saves title, artist and start offset together in one write. */
   onSave: (song: Song, patch: Required<SongDetailsPatch>) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
+  /** Replaces the choreography with a newly generated one; resolves with the saved song. */
+  onRegenerate: (song: Song, difficulty: 1 | 2 | 3) => Promise<Song>;
   /** JSON text of the song's choreography export. */
   onExport: (song: Song) => Promise<string>;
   /** Called once the dialogs are gone after a delete; the caller moves focus somewhere useful. */
@@ -68,15 +70,16 @@ interface EditSongDialogProps {
 }
 
 /**
- * Edit button plus dialog to change a song's title, artist and start offset, or delete it (with
- * confirmation). Stays mounted
- * while the selection changes, so a delete can close its dialogs cleanly. The dialog works on
- * a snapshot of the song taken when it opened.
+ * Edit button plus dialog to change a song's title, artist and start offset, regenerate its
+ * choreography or delete it (both with confirmation). Stays mounted while the selection changes,
+ * so a delete can close its dialogs cleanly. The dialog works on a snapshot of the song taken
+ * when it opened; a regeneration replaces the snapshot with the saved song.
  */
 export function EditSongDialog({
   song,
   onSave,
   onRemove,
+  onRegenerate,
   onExport,
   onDeleted,
 }: EditSongDialogProps) {
@@ -90,6 +93,10 @@ export function EditSongDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [difficulty, setDifficulty] = useState<1 | 2 | 3>(2);
+  const [regenOpen, setRegenOpen] = useState(false);
+  const [regenError, setRegenError] = useState<string | null>(null);
+  const [regenDone, setRegenDone] = useState(false);
   /** Set after a successful delete: the trigger's song is gone, so focus goes elsewhere. */
   const deleted = useRef(false);
 
@@ -108,7 +115,9 @@ export function EditSongDialog({
       setTitle(song.title);
       setArtist(song.artist);
       setStart(formatStartOffsetSeconds(song.startOffsetMs));
+      setDifficulty(song.difficulty);
       setError(null);
+      setRegenDone(false);
     }
     setOpen(next);
   };
@@ -170,6 +179,25 @@ export function EditSongDialog({
     }
   };
 
+  const confirmRegenerate = async (e: MouseEvent) => {
+    e.preventDefault(); // keep the confirmation open until the new choreography is saved
+    if (!target || busy) return;
+    setBusy(true);
+    setRegenError(null);
+    setRegenDone(false);
+    try {
+      const saved = await onRegenerate(target, difficulty);
+      // "Speichern" writes the snapshot including its choreography, so it must be the saved song.
+      setTarget(saved);
+      setRegenOpen(false);
+      setRegenDone(true);
+    } catch (err) {
+      setRegenError(errorText(err, "Neu erzeugen hat nicht geklappt. Versuch es noch einmal."));
+    } finally {
+      setBusy(false);
+    }
+  };
+
   const shownTitle = target?.title ?? "";
 
   return (
@@ -199,7 +227,7 @@ export function EditSongDialog({
           <DialogTitle>Song bearbeiten</DialogTitle>
           <DialogDescription>
             Ändere Titel, Künstler und Startpunkt, prüfe den Takt im Sync-Test, bearbeite die
-            Choreografie oder lösche den Song.
+            Choreografie oder erzeuge sie neu, oder lösche den Song.
           </DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
@@ -287,6 +315,77 @@ export function EditSongDialog({
                 Choreografie bearbeiten
               </Link>
             </Button>
+          )}
+          {target && (
+            <div className="flex flex-col gap-2">
+              <Label htmlFor={`${id}-difficulty`} className="text-base">
+                Schwierigkeit
+              </Label>
+              <select
+                id={`${id}-difficulty`}
+                value={difficulty}
+                disabled={busy}
+                aria-describedby={`${id}-difficulty-hint`}
+                onChange={(e) => setDifficulty(Number(e.target.value) as 1 | 2 | 3)}
+                className="h-11 rounded-xl border border-input bg-transparent px-3 text-base"
+              >
+                <option value={1}>1 – Leicht</option>
+                <option value={2}>2 – Mittel</option>
+                <option value={3}>3 – Schwer</option>
+              </select>
+              <p id={`${id}-difficulty-hint`} className={HINT}>
+                Erzeugt neue Moves im Takt des Songs. Bei einer Audiodatei wird die Musik dafür neu
+                analysiert.
+              </p>
+              <AlertDialog
+                open={regenOpen}
+                onOpenChange={(next) => {
+                  if (busy) return;
+                  if (next) setRegenError(null);
+                  setRegenOpen(next);
+                }}
+              >
+                <AlertDialogTrigger asChild>
+                  <Button type="button" variant="secondary" disabled={busy} className={BTN}>
+                    <Sparkles aria-hidden />
+                    Choreografie neu erzeugen
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent className="rounded-3xl">
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>
+                      Choreografie von „{shownTitle}“ neu erzeugen?
+                    </AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Die aktuelle Choreografie wird ersetzt, auch Änderungen aus dem Editor.
+                      Highscore und Sterne bleiben.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  {regenError && (
+                    <p role="alert" className={ERROR}>
+                      {regenError}
+                    </p>
+                  )}
+                  <AlertDialogFooter className="gap-3 sm:space-x-0">
+                    <AlertDialogCancel disabled={busy} className={cn(BTN, "mt-0")}>
+                      Abbrechen
+                    </AlertDialogCancel>
+                    <AlertDialogAction
+                      disabled={busy}
+                      onClick={(e) => void confirmRegenerate(e)}
+                      className={BTN}
+                    >
+                      Neu erzeugen
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+              {regenDone && (
+                <p role="status" className="text-base">
+                  Neue Choreografie gespeichert.
+                </p>
+              )}
+            </div>
           )}
           {error && (
             <p role="alert" className={ERROR}>

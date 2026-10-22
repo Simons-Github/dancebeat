@@ -46,7 +46,7 @@ Lizenzfragen der Datensätze sind hier bewusst ausgeklammert; für ausgelieferte
 4. **Generator deterministisch:** Zufall nur über einen Seed-RNG (Seed = Song-ID), keine
    Abhängigkeit von `Math.random`. Gleicher Song, gleiche Choreo.
 5. **Keine neuen Abhängigkeiten.** Vektor- und Quaternion-Rechnung als kleine eigene Funktionen.
-6. **Offen, vom Nutzer zu entscheiden:** Bekommt „Song bearbeiten“ einen Knopf
+6. **Entschieden (13f-2): ja**, Stil-Auswahl erst mit einem zweiten Stil im Paket. Frage war: Bekommt „Song bearbeiten“ einen Knopf
    „Choreografie neu erzeugen“ (neuer Seed) und Auswahl für Stil und Schwierigkeit? Empfehlung:
    ja, aber erst in 13f-2 nach dem Messplatz; bis dahin nutzt der Generator die vorhandene
    `difficulty` des Songs und den Stil „party“.
@@ -195,8 +195,9 @@ realizeFrames(clips, plan) → Choreography
     Aufrufer in `newSong.ts` und `devSongs.ts` reichen die Song-ID als Seed durch.
   - Plan und Clip-Folge lassen sich auch von außen vorgeben (`realizeFrames` ohne
     `planStructure`/`selectMoves`); das braucht der Songaufbau der Demos in Etappe 14.
-- **13f-2 Oberfläche (nach Entscheidung 13-0.6 und nach 13g):** „Choreografie neu erzeugen“
-  in „Song bearbeiten“, Auswahl Stil und Schwierigkeit.
+- **13f-2 Oberfläche (nach Entscheidung 13-0.6 und nach 13g, umgesetzt):** „Choreografie neu
+  erzeugen“ in „Song bearbeiten“, Auswahl Schwierigkeit (Stil erst mit einem zweiten Stil im
+  Paket).
 - Tests `src/test/generator.test.ts`: gleicher Seed = gleiche Choreo; anderer Seed = andere;
   Moves auf Beats und mit Mindestabstand `MIN_MOVE_GAP_MS`; A-Phrasen identisch; Spiegelpaare;
   Gold-Slots; Ergebnis besteht `ChoreographySchema`; Scoring mit dem simulierten Spieler

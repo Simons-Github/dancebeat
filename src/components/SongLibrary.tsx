@@ -13,6 +13,7 @@ interface SongLibraryProps {
   loading: boolean;
   onSaveDetails: (song: Song, patch: SongDetailsPatch) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
+  onRegenerate: (song: Song, difficulty: 1 | 2 | 3) => Promise<Song>;
   onExport: (song: Song) => Promise<string>;
   onAdd: (song: Song, audio?: Blob) => Promise<void>;
 }
@@ -23,6 +24,7 @@ export function SongLibrary({
   loading,
   onSaveDetails,
   onRemove,
+  onRegenerate,
   onExport,
   onAdd,
 }: SongLibraryProps) {
@@ -107,6 +109,7 @@ export function SongLibrary({
         song={selected}
         onSaveDetails={onSaveDetails}
         onRemove={onRemove}
+        onRegenerate={onRegenerate}
         onExport={onExport}
         onAdd={onAdd}
         onAdded={select}

@@ -11,6 +11,7 @@ interface SongBannerProps {
   song: Song | undefined;
   onSaveDetails: (song: Song, patch: SongDetailsPatch) => Promise<void>;
   onRemove: (song: Song) => Promise<void>;
+  onRegenerate: (song: Song, difficulty: 1 | 2 | 3) => Promise<Song>;
   onExport: (song: Song) => Promise<string>;
   onAdd: (song: Song, audio?: Blob) => Promise<void>;
   onAdded: (song: Song) => void;
@@ -20,6 +21,7 @@ export function SongBanner({
   song,
   onSaveDetails,
   onRemove,
+  onRegenerate,
   onExport,
   onAdd,
   onAdded,
@@ -56,6 +58,7 @@ export function SongBanner({
           song={song}
           onSave={onSaveDetails}
           onRemove={onRemove}
+          onRegenerate={onRegenerate}
           onExport={onExport}
           onDeleted={() => setRefocus((n) => n + 1)}
         />

@@ -11,7 +11,8 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const { songs, loading, save, remove, updateDetails, exportChoreo } = useSongLibrary();
+  const { songs, loading, save, remove, updateDetails, regenerateChoreo, exportChoreo } =
+    useSongLibrary();
   const search = useSearch({ strict: false }) as Record<string, unknown>;
   const navigate = useNavigate();
   const handled = useRef(false);
@@ -46,6 +47,7 @@ function Index() {
       loading={loading}
       onSaveDetails={updateDetails}
       onRemove={remove}
+      onRegenerate={regenerateChoreo}
       onExport={exportChoreo}
       onAdd={save}
     />

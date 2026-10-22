@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13e-2, 13f-1, 13g ✅)       | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g ✅, 13h offen)          | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -1056,11 +1056,31 @@ konnten, behoben: der Anker liegt auf dem Slot-Beat), `choreoMetrics.test.ts`, n
 Flags per `ps` geprüft, 390×844 und 844×390): „Song hinzufügen“ (URL, Stufe 3, 128 BPM, 60 s)
 legt eine Choreo mit 95 Moves an, `pose3d` an allen 503 Frames, Konsole ohne Fehler. Das Spiel
 mit `?sim=1` konnte im Browser nicht geprüft werden (keine abspielbare Testdatei).
-13f-2 (Knopf „neu erzeugen“, Stil und Schwierigkeit)
-wartet auf Entscheidung 13-0.6; 13h bleibt offen. **Nur am Gerät prüfbar, nicht
+13f-2 folgt unten, 13h bleibt offen. **Nur am Gerät prüfbar, nicht
 getestet:** ob sich die Choreos besser anfühlen als die alte Posenfolge, ob dichte Stufe-3-Phrasen
 (bis 2 Moves/s) mitzumachen sind, ob die Beat-Phase aus der Audiodatei die Moves hörbar auf den
 Takt legt.
+
+**13f-2 „Choreografie neu erzeugen“ – umgesetzt, Gerätetest offen.** Entscheidung 13-0.6: ja.
+„Song bearbeiten“ hat unter „Choreografie bearbeiten“ die Auswahl „Schwierigkeit“ (vorbelegt
+mit der des Songs) und den Knopf „Choreografie neu erzeugen“ mit Rückfrage („Die aktuelle
+Choreografie wird ersetzt, auch Änderungen aus dem Editor. Highscore und Sterne bleiben.“).
+`useSongLibrary.regenerateChoreo` lädt das Motion-Paket, analysiert bei Datei-Songs die
+gespeicherte Audiodatei neu (`audioTiming`: Onset-Hüllkurve als Energie, Beat-Phase zur gespeicherten BPM ab dem Startpunkt, beides in Choreo-Zeit, also um `offsetMs` verschoben; ohne Datei oder bei Dekodierfehler ohne beides, wie bei URL, YouTube und
+Spotify) und speichert über das Repository. Reine Logik `regenerateSong`
+(`src/lib/library/regenerate.ts`): Länge aus dem letzten Frame bzw. Move der gespeicherten
+Choreo (Songs speichern ihre Länge nicht), neuer Seed bei jedem Aufruf (nicht gespeichert,
+gespeichert wird die Choreo), Choreo-ID, Farben, `offsetMs` und `createdAt` bleiben, ebenso
+alles am Song außer `difficulty`. Danach arbeitet der Dialog mit dem gespeicherten Song weiter,
+damit ein späteres „Speichern“ die neue Choreo nicht mit dem alten Stand überschreibt. Kein
+Formatwechsel. Abweichung vom Plan: keine Stil-Auswahl, weil das Motion-Paket nur `party` hat;
+sie folgt, wenn ein zweiter Stil im Paket ist. Aus dem Review: Beat-Phase und Energie lagen zuerst auf der Audio-Zeitachse, bei Video-Choreos (Ausschnittbeginn in `offsetMs`) lagen die Moves dadurch neben dem Takt; behoben. Tests: `src/test/regenerate.test.ts` (Länge, Gleichheit mit `autoChoreo`, Seed, Schwierigkeit, erhaltene Felder, Beat-Phase, Schema, `audioTiming` mit Offset und übersprungenem Intro), `src/test/edit-song-regenerate.test.tsx` (Vorbelegung, Abbrechen, Neu erzeugen
+mit Status, Speichern danach mit dem neuen Song, Fehler und erneuter Versuch). Playwright
+(projektlokaler Server, Flags per `ps` geprüft, 390×844 und 844×390): Demo „Pink Pulse“ auf
+Stufe 3 neu erzeugt, 25 statt 16 Moves auf dem Beat-Raster, gleiche Länge und Choreo-ID,
+`pose3d` an allen 133 Frames, „Speichern“ danach behält die neue Choreo, Konsole ohne Fehler und
+Warnungen. **Nur am Gerät prüfbar, nicht getestet:** Dauer der Neuanalyse bei großen
+Audio- und Videodateien am Handy.
 
 ### 14. Neue Demo-Songs ⏳
 

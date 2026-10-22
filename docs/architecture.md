@@ -372,6 +372,11 @@ erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle
   werden aus der Datei vorbelegt, solange der Nutzer sie nicht selbst geändert hat.
 - Vor dem Speichern läuft `requestPersistentStorage()` (Ergebnis wird nicht abgewartet).
   `StorageFullError` erscheint mit eigener Meldung im Dialog.
+- „Choreografie neu erzeugen“ in „Song bearbeiten“ (Etappe 13f-2): Schwierigkeit wählen,
+  Rückfrage, dann `useSongLibrary.regenerateChoreo` (Motion-Paket laden, bei `local`-Quellen die
+  Audiodatei über `getAudio` holen und mit `audioTiming` neu analysieren, Phase und Hüllkurve in Choreo-Zeit, also um `offsetMs` verschoben, `regenerateSong`,
+  `save`). Der Dialog ersetzt danach seinen Schnappschuss durch den gespeicherten Song. Siehe
+  [Generator](choreography-format.md#generator).
 - Export: „Choreografie exportieren“ in „Song bearbeiten“ lädt `<titel>.dancebeat.json` (ohne
   Audio, Quelle und Highscore) als Blob-URL herunter; die URL wird verzögert freigegeben
   (Safari bricht den Download sonst ab).

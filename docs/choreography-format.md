@@ -283,7 +283,10 @@ Entscheidung. Ohne Dateien erzeugt das Skript unverändert das ausgelieferte Pak
 Erzeugt die Choreografie für Songs ohne eigene (`autoChoreo` in `src/data/demo.ts`, seit Etappe
 13f-1) aus dem Motion-Paket. Reine Funktionen in `src/lib/generator/`, deterministisch: Zufall
 nur über `randomFromString(seed)` (`src/lib/random.ts`, FNV-1a + mulberry32), Seed ist die
-Song-ID. Gleicher Song, gleiche Choreo. Drei austauschbare Stufen:
+Song-ID. Gleicher Song, gleiche Choreo. Ausnahme „Choreografie neu erzeugen“ (13f-2,
+`regenerateSong` in `src/lib/library/regenerate.ts`): neuer zufälliger Seed bei jedem Aufruf,
+nicht gespeichert (die erzeugte Choreo wird gespeichert); Länge aus dem letzten Frame bzw. Move
+der bisherigen Choreo, Choreo-ID, Farben und `offsetMs` bleiben. Drei austauschbare Stufen:
 
 ```ts
 planStructure(input) → Plan                          // plan.ts
@@ -294,7 +297,7 @@ generateChoreo(input, pack) = alle drei              // generate.ts
 
 Eingabe `GenerationInput`: `bpm`, `beatPhaseMs` (Zeit eines Beats), `durationMs`, optional
 `energy` (Kurve mit `hopMs` und `values`, z. B. die Onset-Hüllkurve von `analyzeAudio`), `style`
-(bis 13f-2 immer `party`), `difficulty` (1–3), `seed`. `realizeFrames` geht auch ohne die ersten
+(vorerst immer `party`, das Paket hat nur diesen Stil), `difficulty` (1–3), `seed`. `realizeFrames` geht auch ohne die ersten
 beiden Stufen (feste Clip-Folgen für die Demo-Songs aus Etappe 14).
 
 **Aufbau** (`planStructure`, ohne Zufall):
