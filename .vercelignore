@@ -17,6 +17,8 @@ Rohdaten
 *.wav
 *.ogg
 *.flac
+# ...except the own demo songs, which the seed fetches from /demo-audio
+!public/demo-audio/*.mp3
 *.mp4
 *.mov
 *.webm
