@@ -452,6 +452,50 @@ beiden Varianten jeden Move als PERFECT (der Scorer nimmt die beste Pose aus ±2
 Schwierigkeit 3 am niedrigsten). Reaktionszeit simuliert er nicht: Ob dichte Stufe-3-Phrasen
 mitzumachen sind, zeigt nur ein Gerätetest.
 
+## Demo-Manifest
+
+Seit Etappe 14a-1 beschreibt je ein Manifest einen ausgelieferten Demo-Song:
+`src/data/demos/<slug>.manifest.json`, von Hand geschrieben und gegen `DemoManifestSchema`
+(`src/lib/demoManifest.ts`) geprüft. Es wird nicht in der Bibliothek gespeichert, hat deshalb eine
+eigene Version (`1`) und keine Migration.
+
+| Feld          | Bedeutung                                                                           |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `id`          | Song-ID `demo-<slug>`                                                               |
+| `title`       | Titel                                                                               |
+| `artist`      | Künstlerzeile, „DanceBeat Original“                                                 |
+| `audio`       | Dateiname in `public/demo-audio/` (nur `A–Z a–z 0–9 _ -`, Endung `.mp3`)            |
+| `palette`     | Index in `SONG_PALETTES` (`src/theme.ts`); keine Hex-Werte im Manifest              |
+| `difficulty`  | 1–3                                                                                 |
+| `bpm`         | gemessenes Tempo (30–300, Messung in 0,01-Schritten)                                |
+| `beatPhaseMs` | Zeit von Beat 0, kleiner als ein Beat (Beat des Rasters, nicht gemessener Downbeat) |
+| `durationMs`  | gemessene Länge der Audiodatei                                                      |
+| `sections`    | Abschnitte `{ kind, beats }` in Reihenfolge ab Beat 0                               |
+| `phrases`     | je Abschnittstyp `"auto"` oder eine feste Folge von Clip-IDs                        |
+| `gold`        | Gold Moves als `{ section, beat }` (Index in `sections`, Beat im Abschnitt)         |
+| `moveNames`   | optional: Anzeigename je Clip-ID                                                    |
+
+- **Abschnittstypen:** `intro`, `verse`, `prechorus`, `chorus`, `bridge`, `outro`.
+- **Längen in Beats, Vielfaches von 4** (ein Takt), nicht in 8er-Zählzeiten: Die KI-Songs halten
+  die 8er-Phrasierung nicht ein, Abschnittsgrenzen fallen auch auf Beat 4 mod 8.
+- **Phrasen:** Jeder vorkommende Abschnittstyp braucht einen Eintrag. `"auto"` heißt: der
+  Generator wählt mit dem Seed des Songs (14b). Clip-IDs müssen im Motion-Paket stehen
+  (`unknownClipIds`); solange das Paket nur die `demo:*`-Clips hat, stehen alle Phrasen auf `"auto"`.
+- **Prüfungen:** Gold-Abschnitt und -Beat liegen in den Abschnitten, nicht in Intro oder Outro,
+  ohne Dubletten; `beatPhaseMs` + Summe der
+  Beats · 60000 / `bpm` ≤ `durationMs`; Beat-Phase kleiner als ein Beat. Unbekannte Felder sind Fehler (`.strict()`).
+- **Beat 0** ist ein Beat des gemessenen Rasters, kein gemessener Takt-Anfang; die
+  Abschnittslängen sind auf demselben Raster geschätzt.
+
+**Messung:** `bun run measure-audio public/demo-audio/*.mp3` (`scripts/measure-audio.ts`, Logik
+in `scripts/measureAudio.ts`) braucht `ffmpeg` im PATH (Systemwerkzeug, keine
+Projektabhängigkeit). Tempo: Grobschätzung und `refineBpm` wie in der App, dann ein Kammfilter
+über den ganzen Song (±0,5 BPM in 0,01-Schritten; ein Onset zählt zum Hüllkurven-Schritt
+`floor(t / hop)`, wie `onsetEnvelope` ihn bildet). Phase: derselbe Kammfilter bei festem Tempo
+auf dem Kick-Band (Tiefpass 120 Hz), weil das volle Band in manchen Songs auf die Hi-Hat-Offbeats
+einrastet. Dazu gibt das Skript die Länge und eine Tabelle der Energie (RMS voll und Kick-Band)
+je 4 Beats aus; daraus werden die Abschnitte geschätzt und danach per Gehör geprüft.
+
 ## Video-Import
 
 `choreoFromPoseTrack` (`src/lib/videoChoreo.ts`) baut aus einer Pose-Spur eines Videos eine

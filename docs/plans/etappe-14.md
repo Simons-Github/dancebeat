@@ -57,6 +57,11 @@ Gewählte Wege:
 
 ## 14a Musik erzeugen und Manifest
 
+Aufgeteilt: **14a-1** Messung (`bun run measure-audio`), Manifest-Schema und die vier Manifeste
+(umgesetzt, siehe [roadmap.md](../roadmap.md)); **14a-2** Seed mit den MP3s, zusammen mit den
+Choreografien aus 14b sinnvoll. Abschnittslängen in Beats (Vielfaches von 4) statt
+8er-Zählzeiten.
+
 - Der Nutzer hat vier Songs mit Gemini erzeugt (14-0.2). BPM je Song so wählen, dass genug
   Clips im Motion-Paket innerhalb ±12 % liegen (`bun run eval-choreo` aus 13g zeigt die
   Abdeckung pro BPM).

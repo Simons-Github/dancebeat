@@ -22,7 +22,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
 | 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen) | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
-| 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
+| 14. Neue Demo-Songs                          | ⏳ (14a-1 ✅)                       | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
 
@@ -1150,6 +1150,33 @@ den Generator aus 13 (fester Plan, Refrain identisch, Gold Moves am Höhepunkt);
 (2026-10-22: AIST++-Bewegung darf ausgeliefert werden; Musik mit Gemini erzeugt, Nachweis führt der
 Nutzer außerhalb des Repos; alte Demos werden ersetzt); wartet auf die
 MP3-Dateien und die Etappen 12 und 13. Plan: [plans/etappe-14.md](plans/etappe-14.md).
+
+**14a-1 Messung und Manifeste – umgesetzt.** `bun run measure-audio` (`scripts/measure-audio.ts`,
+Logik `scripts/measureAudio.ts`, braucht `ffmpeg`) misst Tempo über den ganzen Song, Beat-Phase
+auf dem Kick-Band, Länge und Energie je 4 Beats. Schema `DemoManifestSchema` in
+`src/lib/demoManifest.ts`, vier Manifeste in `src/data/demos/`, Format in
+[choreography-format.md](choreography-format.md#demo-manifest). Tests:
+`demoManifest.test.ts`, `measureAudio.test.ts`. Gemessen:
+
+| Song                   | BPM    | Beat-Phase | Länge     |
+| ---------------------- | ------ | ---------- | --------- |
+| Gold in My Pocket      | 121,99 | 310 ms     | 173923 ms |
+| Gold on the Glass      | 120    | 440 ms     | 170371 ms |
+| Lemonade Skies         | 110,96 | 155 ms     | 149838 ms |
+| Rise Until The Morning | 128    | 120 ms     | 173793 ms |
+
+Abweichungen vom Plan: Abschnittslängen in Beats (Vielfaches von 4) statt 8er-Zählzeiten, weil
+die KI-Songs Grenzen auch auf Beat 4 mod 8 legen; Farben als Index in `SONG_PALETTES` (das Array
+hat keine Namen); der Seed (`src/data/demo.ts`, Abruf der MP3s) wandert nach 14a-2, weil der
+Abruf erst mit den Choreografien aus 14b Sinn ergibt; alle Phrasen stehen auf `"auto"`, bis das
+Motion-Paket AIST-Clips enthält. Die Existenz der MP3s prüft der Test nur, wenn MP3s im Ordner
+liegen (sie sind noch nicht eingecheckt). Schwierigkeit vorläufig, endgültig in 14c.
+Aus dem Review: Beat 0 ist ein Beat des Rasters, kein gemessener Takt-Anfang (Doku angepasst);
+der Kammfilter liest den Hüllkurven-Schritt mit `floor` wie `onsetEnvelope` (Phasen dadurch 5 ms
+später); Manifest-Objekte sind `.strict()`, Gold nicht in Intro/Outro und ohne Dubletten.
+Nur per Gehör bzw. am Gerät prüfbar, nicht geprüft: Abschnittsgrenzen und Gold-Positionen wurden
+aus dem Energieverlauf geschätzt; ob die Phase im Browser (MP3-Decoder-Verzögerung) auf dem Beat
+liegt, zeigt erst 14b am Gerät.
 
 ## Offene Befunde
 

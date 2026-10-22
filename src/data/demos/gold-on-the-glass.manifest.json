@@ -1,0 +1,68 @@
+{
+  "version": 1,
+  "id": "demo-gold-on-the-glass",
+  "title": "Gold on the Glass",
+  "artist": "DanceBeat Original",
+  "audio": "Gold_on_the_Glass.mp3",
+  "palette": 2,
+  "difficulty": 2,
+  "bpm": 120,
+  "beatPhaseMs": 440,
+  "durationMs": 170371,
+  "sections": [
+    {
+      "kind": "intro",
+      "beats": 40
+    },
+    {
+      "kind": "prechorus",
+      "beats": 8
+    },
+    {
+      "kind": "verse",
+      "beats": 44
+    },
+    {
+      "kind": "chorus",
+      "beats": 40
+    },
+    {
+      "kind": "verse",
+      "beats": 44
+    },
+    {
+      "kind": "chorus",
+      "beats": 40
+    },
+    {
+      "kind": "bridge",
+      "beats": 40
+    },
+    {
+      "kind": "chorus",
+      "beats": 48
+    },
+    {
+      "kind": "outro",
+      "beats": 24
+    }
+  ],
+  "phrases": {
+    "intro": "auto",
+    "verse": "auto",
+    "prechorus": "auto",
+    "chorus": "auto",
+    "bridge": "auto",
+    "outro": "auto"
+  },
+  "gold": [
+    {
+      "section": 5,
+      "beat": 36
+    },
+    {
+      "section": 7,
+      "beat": 44
+    }
+  ]
+}
