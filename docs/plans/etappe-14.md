@@ -1,6 +1,6 @@
 # Plan Etappe 14: Neue Demo-Songs im Stil von Just Dance
 
-Ziel: Die zwei synthetischen Demos („Pink Pulse“, „Sunset Kick“) werden durch zwei bis drei
+Ziel: Die zwei synthetischen Demos („Pink Pulse“, „Sunset Kick“) werden durch vier
 Demos ersetzt, die sich wie Just Dance anfühlen: echte Songs mit Aufbau (Intro, Strophe,
 Refrain, Bridge, Outro, ca. 2:30–3:00), fließende menschliche Bewegung, ein Refrain mit immer
 derselben Phrase und Gold Moves an den Höhepunkten.
@@ -17,6 +17,25 @@ Gewählte Wege:
   Video-Import), Abfolge fest im Manifest.
 
 ## 14-0 Entscheidungen und Lizenzen (Nutzer, vor jedem Code)
+
+**Entschieden am 2026-10-22:**
+
+1. AIST++: Der Nutzer hat die Terms of Use gelesen; abgeleitete Bewegungsdaten dürfen
+   ausgeliefert werden. Namensnennung (CC BY 4.0, Google LLC) und Zitat des ISMIR-2019-Papers
+   kommen in die Credits (14c). Die AIST-Musik bleibt ausgeschlossen. Das gilt auch für das
+   Motion-Paket aus Etappe 13; die Freigabe 13-0.7 für den Python-Konverter (13h-2) bleibt
+   getrennt.
+2. Musik: erzeugt mit **Gemini** (Pro-Abo des Nutzers), **4 Songs** statt zwei bis drei. Die
+   Lizenzlage der Gemini-Ausgabe hat Claude nicht geprüft; der Nutzer legt einen Nachweis
+   außerhalb des Repos ab. Format: MP3.
+3. Audio liegt im Repo: Ausnahme in `.gitignore` nur für `public/demo-audio/*.mp3`, Ordner
+   `public/demo-audio/` angelegt. Die CLAUDE.md-Zeile zur Ausnahme folgt mit 14c.
+4. Alte Demos werden **ersetzt** (neue IDs); Löschen von Code nur nach Freigabe.
+
+**Stand:** 14-0 erledigt. 14a wartet auf die MP3-Dateien im Ordner und auf ausdrückliche
+Freigabe des Nutzers.
+
+Ursprüngliche Fragen und Empfehlungen:
 
 1. **AIST++-Bewegungen ausliefern** (Stand der Recherche 2026-10-21):
    - Die AIST++-Annotationen (3D-Keypoints, SMPL) stehen laut Projektseite unter **CC BY 4.0**
@@ -129,13 +148,13 @@ Gewählte Wege:
 
 ## Reihenfolge und Commits
 
-| Schritt | Inhalt                                  | Hängt ab von                  | Modell |
-| ------- | --------------------------------------- | ----------------------------- | ------ |
-| 14-0    | Entscheidungen, Lizenzprüfung (Nutzer)  | –                             | –      |
-| 14a     | Musik erzeugen (Nutzer), Manifest, Seed | 14-0.2, 14-0.3, 13e (BPM)     | Sonnet |
-| 14b     | Songaufbau über den Generator           | 14a, 13f-1, 14-0.1            | Opus   |
-| 14c     | Einbinden, Credits, Spielbarkeit, Doku  | 14b, 14-0.4, 12 (Darstellung) | Sonnet |
-| 14d     | Playwright, Gerätetest                  | alle                          | –      |
+| Schritt | Inhalt                                   | Hängt ab von                  | Modell |
+| ------- | ---------------------------------------- | ----------------------------- | ------ |
+| 14-0    | Entscheidungen, Lizenzprüfung (erledigt) | –                             | –      |
+| 14a     | Musik erzeugen (Nutzer), Manifest, Seed  | 14-0.2, 14-0.3, 13e (BPM)     | Sonnet |
+| 14b     | Songaufbau über den Generator            | 14a, 13f-1, 14-0.1            | Opus   |
+| 14c     | Einbinden, Credits, Spielbarkeit, Doku   | 14b, 14-0.4, 12 (Darstellung) | Sonnet |
+| 14d     | Playwright, Gerätetest                   | alle                          | –      |
 
 Ein Commit pro Teiletappe.
 
