@@ -285,10 +285,10 @@ describe("Spielscreen (Simulationsmodus)", () => {
     expect(r.counts.PERFECT).toBe(4);
     expect(r.maxCombo).toBe(4);
     expect(screen.getByTestId("result-score")).toHaveTextContent("4.000");
-    // 4 × PERFECT = 4000 of 8000 reference points (ratio 0.5 → 3 stars), beats the stored 1234.
-    expect(r.stars).toBe(3);
+    // 4 × PERFECT = ratio 1 (5 stars, Megastar), 4000 points beat the stored 1234.
+    expect(r.stars).toBe(5);
     expect(r.newHighscore).toBe(true);
-    expect(library.songs[0]).toMatchObject({ highscore: 4000, stars: 3 });
+    expect(library.songs[0]).toMatchObject({ highscore: 4000, stars: 5 });
     expect(screen.getByTestId("new-highscore")).toBeInTheDocument();
   });
 

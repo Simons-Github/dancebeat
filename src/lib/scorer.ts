@@ -1,5 +1,6 @@
 import { frameAt } from "./pose";
 import {
+  accuracyPoints,
   angleDeviation,
   judge,
   movePoints,
@@ -32,6 +33,7 @@ export interface ScoreSnapshot {
   counts: Record<Rating, number>;
   stars: number;
   mega: boolean;
+  /** Accuracy ratio of the stars (0..1): accuracy points over the reference maximum. */
   ratio: number;
   /** Moves judged so far. */
   judged: number;
@@ -59,6 +61,8 @@ export class Scorer {
   private skipped: boolean[] = [];
   private next = 0;
   private score = 0;
+  /** Sum of `accuracyPoints` of the judged moves; the stars are based on it, not on `score`. */
+  private accuracy = 0;
   private combo = 0;
   private maxCombo = 0;
   private judged = 0;
@@ -82,6 +86,7 @@ export class Scorer {
     this.skipped = this.moves.map(() => false);
     this.next = 0;
     this.score = 0;
+    this.accuracy = 0;
     this.combo = 0;
     this.maxCombo = 0;
     this.judged = 0;
@@ -140,6 +145,7 @@ export class Scorer {
     this.combo = nextCombo(this.combo, rating);
     this.maxCombo = Math.max(this.maxCombo, this.combo);
     this.score += points;
+    this.accuracy += accuracyPoints(rating, m.gold);
     this.counts[rating]++;
     this.judged++;
     return { index, rating, gold: m.gold, points, combo: this.combo };
@@ -151,7 +157,7 @@ export class Scorer {
   }
 
   snapshot(): ScoreSnapshot {
-    const { stars, mega, ratio } = starsFor(this.score, this.refMax);
+    const { stars, mega, ratio } = starsFor(this.accuracy, this.refMax);
     return {
       score: this.score,
       combo: this.combo,

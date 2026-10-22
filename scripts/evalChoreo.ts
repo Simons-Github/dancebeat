@@ -127,7 +127,7 @@ interface Column {
 
 const fix = (v: number, d: number) => v.toFixed(d);
 
-/** Table columns: means over the seeds, except "max °/s" (highest) and "min Score" (lowest). */
+/** Table columns: means over the seeds, except "max °/s" (highest) and "min Quote" (lowest). */
 const COLUMNS: readonly Column[] = [
   { head: "Quelle", cell: (g) => (g.source === "baseline" ? "alt" : "Generator") },
   { head: "BPM", cell: (g) => String(g.bpm) },
@@ -142,8 +142,8 @@ const COLUMNS: readonly Column[] = [
   { head: "Abdeckung", cell: (g) => fix(g.aggregate.mean.coverage, 2) },
   { head: "max °/s", cell: (g) => fix(g.aggregate.maxSpeedDegPerS, 0) },
   { head: "p95 °/s", cell: (g) => fix(g.aggregate.mean.p95SpeedDegPerS, 0) },
-  { head: "Score sim", cell: (g) => fix(g.aggregate.mean.simRatio, 3) },
-  { head: "min Score", cell: (g) => fix(g.aggregate.minSimRatio, 3) },
+  { head: "Quote sim", cell: (g) => fix(g.aggregate.mean.simRatio, 3) },
+  { head: "min Quote", cell: (g) => fix(g.aggregate.minSimRatio, 3) },
   { head: "Perfekt", cell: (g) => fix(g.aggregate.mean.perfectShare, 2) },
   { head: "Sterne", cell: (g) => fix(g.aggregate.mean.simStars, 2) },
 ];

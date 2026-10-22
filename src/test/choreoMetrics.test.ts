@@ -19,7 +19,7 @@ import {
 } from "@/lib/generator/metrics";
 import { computeAngles, figure, figure3d, type FigureParams } from "@/lib/pose";
 import { MotionPackSchema } from "@/lib/schema";
-import { movePoints, nextCombo, referenceMax } from "@/lib/scoring";
+import { accuracyPoints, referenceMax } from "@/lib/scoring";
 import type { Choreography, Frame, MotionClip, MotionPack, Move } from "@/lib/types";
 
 import {
@@ -57,15 +57,10 @@ function choreoOf(poses: FigureParams[], stepMs = 1000): ChoreoLike {
   return { frames, moves: frames.map((f) => move(f.timeMs)) };
 }
 
-/** Ratio when every move is PERFECT: the combo multiplier grows, the reference stays at ×2. */
+/** Star ratio when every move is PERFECT: accuracy points without combo, so exactly 1. */
 function allPerfectRatio(moves: readonly Move[]) {
-  let combo = 0,
-    score = 0;
-  for (const m of moves) {
-    score += movePoints("PERFECT", combo, m.gold);
-    combo = nextCombo(combo, "PERFECT");
-  }
-  return score / referenceMax([...moves]);
+  const accuracy = moves.reduce((s, m) => s + accuracyPoints("PERFECT", m.gold), 0);
+  return accuracy / referenceMax([...moves]);
 }
 
 function clip(id: string, energy: number, iconId?: string): MotionClip {
@@ -216,8 +211,8 @@ describe("simulateScore", () => {
     const snap = simulateScore(c, NO_NOISE);
     expect(snap.counts.PERFECT).toBe(3);
     expect(snap.judged).toBe(3);
-    // 3 × 1000 at combo multiplier 1 against 3 × 2000.
-    expect(snap.ratio).toBeCloseTo(0.5, 9);
+    // 3 × 1000 accuracy points against 3 × 1000; the combo does not count for the stars.
+    expect(snap.ratio).toBeCloseTo(1, 9);
     expect(snap.ratio).toBeCloseTo(allPerfectRatio(c.moves), 9);
   });
 

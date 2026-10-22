@@ -426,15 +426,15 @@ eine 3-Minuten-Choreo, verglichen mit der alten `autoChoreo` (jetzt `legacyAutoC
 noch Basislinie). Tabelle in der Konsole, alle Läufe als JSON in `eval-results/` (ignoriert).
 Optionen: `--seeds`, `--bpm`, `--noise`, `--miss`, `--out`, `--baseline-only`.
 
-| Kennzahl    | Bedeutung                                                                                    |
-| ----------- | -------------------------------------------------------------------------------------------- |
-| Moves/min   | (Moves − 1) pro Minute zwischen erstem und letztem Move                                      |
-| Messbar     | Mittel je Move: Anteil der 8 Gliedmaßenwinkel, die sicher messbar sind (`measurableAngles`)  |
-| Schritt °   | mittlerer Winkelabstand aufeinanderfolgender Moves                                           |
-| Wiederh.    | Anteil aufeinanderfolgender Moves mit praktisch gleicher Pose (alle Winkel unter 5° Abstand) |
-| Abdeckung   | Anteil der Paket-Clips (ohne Ruheposen), die mindestens einmal vorkommen                     |
-| max/p95 °/s | höchste bzw. 95.-Perzentil-Winkelgeschwindigkeit einer Gliedmaße, `frameAt` alle 20 ms       |
-| Score sim   | simulierter Spieler (`simulatedAngles`, 30 Bilder/s, Standard 10° Rauschen, 10 % Ausfall)    |
+| Kennzahl    | Bedeutung                                                                                                                  |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------- |
+| Moves/min   | (Moves − 1) pro Minute zwischen erstem und letztem Move                                                                    |
+| Messbar     | Mittel je Move: Anteil der 8 Gliedmaßenwinkel, die sicher messbar sind (`measurableAngles`)                                |
+| Schritt °   | mittlerer Winkelabstand aufeinanderfolgender Moves                                                                         |
+| Wiederh.    | Anteil aufeinanderfolgender Moves mit praktisch gleicher Pose (alle Winkel unter 5° Abstand)                               |
+| Abdeckung   | Anteil der Paket-Clips (ohne Ruheposen), die mindestens einmal vorkommen                                                   |
+| max/p95 °/s | höchste bzw. 95.-Perzentil-Winkelgeschwindigkeit einer Gliedmaße, `frameAt` alle 20 ms                                     |
+| Quote sim   | Sternquote (0–1, seit N2 ohne Combo) des simulierten Spielers (`simulatedAngles`, 30 Bilder/s, 10° Rauschen, 10 % Ausfall) |
 
 Stand 13f-1 nach dem Review (20 Seeds, 10° Rauschen, 10 % Ausfall; Generator-Spitzen vor der
 hierarchischen Interpolation bis 2400°/s, vor der linearen `frameAt`-Interpolation 525–813°/s):
@@ -567,15 +567,17 @@ Ergebnis (20 Seeds; Moves/min und p95 sind je Stufe fest):
 
 | Song                   | Stufe | Moves/min (1 / 2 / 3) | p95 °/s (1 / 2 / 3) | Sterne bei 10° / 30° / 60° |
 | ---------------------- | ----- | --------------------- | ------------------- | -------------------------- |
-| Lemonade Skies         | 1     | 45 / 45 / 90          | 273 / 288 / 350     | 5 / 5 / 5                  |
-| Gold on the Glass      | 2     | 50 / 50 / 100         | 372 / 348 / 348     | 5 / 5 / 5                  |
-| Gold in My Pocket      | 2     | 54 / 54 / 109         | 382 / 301 / 382     | 5 / 5 / 5                  |
-| Rise Until The Morning | 3     | 61 / 61 / 121         | 417 / 288 / 438     | 5 / 5 / 5                  |
+| Lemonade Skies         | 1     | 45 / 45 / 90          | 273 / 288 / 350     | 5 / 5 / 3                  |
+| Gold on the Glass      | 2     | 50 / 50 / 100         | 372 / 348 / 348     | 5 / 5 / 3                  |
+| Gold in My Pocket      | 2     | 54 / 54 / 109         | 382 / 301 / 382     | 5 / 5 / 3                  |
+| Rise Until The Morning | 3     | 61 / 61 / 121         | 417 / 288 / 438     | 5 / 5 / 3                  |
 
-- **Sterne trennen nicht:** Auf jeder Stufe und in jedem Lauf gibt es 5 Sterne, auch bei 60°
-  Rauschen und 20 % Ausfall, wo fast kein Move mehr PERFECT ist (Quote im Mittel 1,06–1,10, kein Lauf unter 1,0). Ursache ist
-  die Referenz der Sternquote (×2 Combo, echte Läufe erreichen ×4), Befund N2 in der
-  [Roadmap](roadmap.md#offene-befunde).
+- **Sterne trennen die Songs nicht:** In 14c-2 gab es überall 5 Sterne, auch bei 60° Rauschen,
+  weil die Sternquote die Combo mitzählte (Befund N2). Seit N2 messen die Sterne nur die
+  Genauigkeit ([scoring.md](scoring.md#sterne-und-rang)); die Sterne-Spalte ist danach neu
+  gemessen (10 Seeds, 10 % Ausfall, Sterne der Manifest-Stufe). Sie trennen jetzt das Können des
+  simulierten Spielers, aber nicht die Songs: Sein Rauschen hängt nicht von der Bewegung ab, jeder
+  Song und jede Stufe ergibt bei gleichem Rauschen dieselben Sterne.
 - **Regel stattdessen:** Messbar trennt nur Stufe 3 (doppelte Dichte). Stufe 1 und 2 sind bei
   gleicher Energie gleich dicht (`BASE_STEP_BEATS`, die höchste `MANIFEST_ENERGY` 0,6 liegt unter
   `HIGH_ENERGY`); sie unterscheiden sich nur in der Clip-Auswahl. Die Zuordnung 1 oder 2 folgt

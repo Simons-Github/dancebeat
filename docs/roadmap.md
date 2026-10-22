@@ -866,6 +866,20 @@ Bereits mit den Grundlagen erledigt (SDK-Typen, Lint 0 Funde).
 
 ### 11. Nice-to-have ⏳
 
+**N1 `normalizeLandmarks` entfernt – erledigt (2026-10-22).** Die Funktion in `src/lib/pose.ts`
+wurde nirgends genutzt und prüfte die Sichtbarkeit nicht; gelöscht (Freigabe des Nutzers).
+Normierung läuft weiter nur über `computeAngles` mit `aspect`.
+
+**N2 Sterne messen die Genauigkeit – erledigt (2026-10-22).** Die Sternquote zählt
+Genauigkeitspunkte ohne Combo-Multiplikator (`accuracyPoints`) gegen „alles PERFECT“
+(`referenceMax`), liegt also bei 0–100 %. Schwellen neu: 20 / 35 / 50 / 65 / 80 %, Megastar ab
+95 %. Kalibriert mit `bun run eval-demos` bei 0–60° Rauschen und 10/20 % Ausfall: 10–20° Megastar,
+30° 5 Sterne, 40–50° 4, 60° 3 (vorher überall 5). Der angezeigte Score behält die Combo. Regel und
+Messung in [scoring.md](scoring.md#sterne-und-rang). Tests: `scoring.test.ts` (neu: Sterne N2),
+angepasst `scorer`, `choreoMetrics`, `generator`, `evalDemos`, `game-screen`. Gespeicherte Sterne
+bleiben stehen (Maximum, keine Migration). Nur am Gerät prüfbar, nicht geprüft: ob sich die Stufen
+mit echter Kamera richtig anfühlen.
+
 Siehe N-Befunde unten. Optional später: Cloud-Sync der Bibliothek über einen noch offenen
 Anbieter mit Login; dort nur Metadaten und Choreografie-JSON, nie Audiodateien.
 
@@ -1311,5 +1325,3 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | W7  | YouTube: Tipp aufs Video umgesetzt, iOS am Gerät offen                 | 3b     |
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen) | 3b     |
 | W13 | Kamera-Rückfall: Continuity-Kamera am Mac prüfen (Fehler, Hänger)      | 2      |
-| N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht               | 11     |
-| N2  | Sternquote über 100 %: Sim-Spieler hat überall 5 Sterne (14c-2)        | 11     |

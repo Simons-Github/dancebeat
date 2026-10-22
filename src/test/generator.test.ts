@@ -29,7 +29,7 @@ import { roundSkeleton } from "@/lib/precision";
 import { randomFromString } from "@/lib/random";
 import { ChoreographySchema, MOTION_PACK_VERSION, MotionPackSchema } from "@/lib/schema";
 import { Scorer } from "@/lib/scorer";
-import { movePoints, nextCombo, referenceMax } from "@/lib/scoring";
+import { movePoints, nextCombo } from "@/lib/scoring";
 import type { Choreography, MotionClip, MotionPack, Move } from "@/lib/types";
 import { MIN_MOVE_GAP_MS } from "@/lib/videoChoreo";
 
@@ -790,7 +790,9 @@ describe("simulated player", () => {
         combo = nextCombo(combo, "PERFECT");
       }
       expect(snap.score).toBe(best);
-      expect(snap.ratio).toBeCloseTo(best / referenceMax(c.moves), 9);
+      // Stars ignore the combo: all PERFECT is exactly the reference maximum.
+      expect(snap.ratio).toBeCloseTo(1, 9);
+      expect(snap.mega).toBe(true);
     },
   );
 });

@@ -107,15 +107,15 @@ interface Column {
 
 const fix = (v: number, d: number) => v.toFixed(d);
 
-/** Metric columns; means over the seeds, except "min Score" and "min Sterne" (lowest run). */
+/** Metric columns; means over the seeds, except "min Quote" and "min Sterne" (lowest run). */
 const COLUMNS: readonly Column[] = [
   { head: "Läufe", cell: (_, a) => String(a.runs) },
   { head: "Moves", cell: (_, a) => fix(a.mean.moves, 0) },
   { head: "Moves/min", cell: (_, a) => fix(a.mean.movesPerMin, 1) },
   { head: "Gold", cell: (_, a) => fix(a.mean.golds, 0) },
   { head: "p95 °/s", cell: (_, a) => fix(a.mean.p95SpeedDegPerS, 0) },
-  { head: "Score sim", cell: (_, a) => fix(a.mean.simRatio, 3) },
-  { head: "min Score", cell: (_, a) => fix(a.minSimRatio, 3) },
+  { head: "Quote sim", cell: (_, a) => fix(a.mean.simRatio, 3) },
+  { head: "min Quote", cell: (_, a) => fix(a.minSimRatio, 3) },
   { head: "Perfekt", cell: (_, a) => fix(a.mean.perfectShare, 2) },
   { head: "Sterne", cell: (_, a) => fix(a.mean.simStars, 2) },
   { head: "min Sterne", cell: (g) => fix(g.minStars ?? 0, 0) },

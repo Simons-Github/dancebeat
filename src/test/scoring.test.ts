@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { comboMultiplier, judge, movePoints, angleDeviation, nextCombo } from "@/lib/scoring";
+import {
+  accuracyPoints,
+  angleDeviation,
+  comboMultiplier,
+  judge,
+  movePoints,
+  nextCombo,
+  rankTitle,
+  referenceMax,
+  starsFor,
+} from "@/lib/scoring";
+import type { Rating } from "@/lib/types";
 
 describe("Bewertung", () => {
   it("Schwellen 15/30/45/60 Grad", () => {
@@ -68,5 +79,50 @@ describe("Combo", () => {
     expect(nextCombo(3, "GOOD")).toBe(4);
     expect(nextCombo(3, "OK")).toBe(3);
     expect(nextCombo(3, "X")).toBe(0);
+  });
+});
+
+describe("Sterne (Befund N2)", () => {
+  /** Stars of a song where every one of `n` moves gets `r`; the combo never enters the stars. */
+  const allRated = (r: Rating, n = 40, gold: boolean[] = []) => {
+    const moves = Array.from({ length: n }, (_, i) => ({ gold: gold[i] ?? false }));
+    const accuracy = moves.reduce((s, m) => s + accuracyPoints(r, m.gold), 0);
+    return starsFor(accuracy, referenceMax(moves));
+  };
+
+  it("Genauigkeitspunkte ohne Combo, Gold 5-fach", () => {
+    expect(accuracyPoints("SUPER", false)).toBe(700);
+    expect(accuracyPoints("PERFECT", true)).toBe(5000);
+    expect(referenceMax([{ gold: false }, { gold: true }])).toBe(6000);
+    expect(referenceMax([])).toBe(1);
+  });
+
+  it("alles PERFECT ist genau die Referenz: Megastar, Quote nie über 1", () => {
+    expect(allRated("PERFECT")).toEqual({ stars: 5, mega: true, ratio: 1 });
+    expect(allRated("PERFECT", 40, [true, true, true])).toMatchObject({ ratio: 1, mega: true });
+  });
+
+  it("eine lange Combo aus GOOD zählt nicht mehr als gutes Tanzen", () => {
+    // Before N2: 400 × up to ×4 against 1000 × 2 → ratio 0.65 at 40 moves (old 4 of 5 stars).
+    let combo = 0,
+      score = 0;
+    for (let i = 0; i < 40; i++) {
+      score += movePoints("GOOD", combo, false);
+      combo = nextCombo(combo, "GOOD");
+    }
+    expect(score / (40 * 2000)).toBeCloseTo(0.65, 9);
+    expect(allRated("GOOD")).toMatchObject({ stars: 2, mega: false });
+  });
+
+  it("Stufen: lauter SUPER 4, GOOD 2, OK 1, X 0 Sterne", () => {
+    expect(allRated("SUPER").stars).toBe(4);
+    expect(allRated("GOOD").stars).toBe(2);
+    expect(allRated("OK").stars).toBe(1);
+    expect(allRated("X")).toMatchObject({ stars: 0, ratio: 0 });
+  });
+
+  it("Rangtitel folgen den Sternen", () => {
+    expect(rankTitle(allRated("SUPER").stars, false)).toBe("PROFI");
+    expect(rankTitle(5, true)).toBe("MEGASTAR");
   });
 });

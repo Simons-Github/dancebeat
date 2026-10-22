@@ -62,7 +62,7 @@ export interface ChoreoMetrics {
   maxSpeedDegPerS: number;
   /** SPEED_PERCENTILE of the per-sample peak limb speed (degrees per second). */
   p95SpeedDegPerS: number;
-  /** Score of the simulated player relative to the reference maximum (1 = all PERFECT at ×2). */
+  /** Star ratio of the simulated player: accuracy points over the reference (1 = all PERFECT). */
   simRatio: number;
   /** Stars (0..5) of the simulated player. */
   simStars: number;

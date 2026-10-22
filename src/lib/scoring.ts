@@ -68,16 +68,27 @@ export function movePoints(r: Rating, combo: number, gold: boolean) {
   return POINTS[r] * comboMultiplier(combo) * (gold ? GOLD_FACTOR : 1);
 }
 
-/** Referenz-Maximum: alle Moves PERFECT bei Multiplikator x2 (realistisch erreichbar). */
-export function referenceMax(moves: { gold: boolean }[]) {
-  return moves.reduce((s, m) => s + 1000 * 2 * (m.gold ? GOLD_FACTOR : 1), 0) || 1;
+/**
+ * Accuracy points of a move for the stars: rating points with gold, without the combo multiplier.
+ * The displayed score keeps the combo; the stars only measure how well the moves were danced, so a
+ * long combo of GOOD cannot reach five stars (Befund N2).
+ */
+export function accuracyPoints(r: Rating, gold: boolean) {
+  return POINTS[r] * (gold ? GOLD_FACTOR : 1);
 }
 
-export const STAR_THRESHOLDS = [0.15, 0.3, 0.45, 0.6, 0.75];
+/** Reference maximum of the accuracy points: every move PERFECT, gold 5-fold. */
+export function referenceMax(moves: { gold: boolean }[]) {
+  return moves.reduce((s, m) => s + accuracyPoints("PERFECT", m.gold), 0) || 1;
+}
+
+/** Star thresholds on the accuracy ratio; calibrated with `bun run eval-demos` (docs/scoring.md). */
+export const STAR_THRESHOLDS = [0.2, 0.35, 0.5, 0.65, 0.8];
 export const MEGA_THRESHOLD = 0.95;
 
-export function starsFor(score: number, refMax: number) {
-  const r = score / refMax;
+/** Stars of `accuracy` accuracy points out of `refMax` (ratio 0..1). */
+export function starsFor(accuracy: number, refMax: number) {
+  const r = accuracy / refMax;
   const stars = STAR_THRESHOLDS.filter((t) => r >= t).length;
   return { stars, mega: r >= MEGA_THRESHOLD, ratio: r };
 }

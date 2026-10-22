@@ -74,7 +74,7 @@ console.log(
 );
 console.log(formatTable(groups));
 console.log(
-  "\nMittel über die Seeds; „max °/s“ ist der höchste, „min Score“ der niedrigste Wert eines Laufs.",
+  "\nMittel über die Seeds; „max °/s“ ist der höchste, „min Quote“ der niedrigste Wert eines Laufs.",
 );
 
 const out = path.resolve(values.out ?? path.join(root, "eval-results/eval-choreo.json"));

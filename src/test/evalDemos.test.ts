@@ -45,7 +45,7 @@ describe("runDemoEval", () => {
     for (const g of run({ seeds: 2, noiseDeg: 0, missRate: 0 })) {
       expect(g.error).toBeNull();
       expect(g.aggregate!.mean.perfectShare).toBe(1);
-      expect(g.aggregate!.mean.simRatio).toBeGreaterThanOrEqual(1);
+      expect(g.aggregate!.mean.simRatio).toBeCloseTo(1, 9);
       expect(g.minStars).toBe(5);
     }
   });

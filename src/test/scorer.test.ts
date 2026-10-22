@@ -120,8 +120,8 @@ describe("Combo und Gold", () => {
     expect(results.map((r) => r.points)).toEqual([POINTS.PERFECT * GOLD_FACTOR]);
     const snap = s.snapshot();
     expect(snap.score).toBe(POINTS.PERFECT + POINTS.PERFECT * GOLD_FACTOR);
-    // Reference: every move PERFECT at x2, gold 5-fold → (1 + 5) × 2000
-    expect(snap.ratio).toBeCloseTo(snap.score / (6 * 2000));
+    // Reference: every move PERFECT, gold 5-fold, no combo → (1 + 5) × 1000; both hit.
+    expect(snap.ratio).toBeCloseTo(1);
   });
 });
 
@@ -144,7 +144,7 @@ describe("seekTo und startOffsetMs", () => {
     const s = new Scorer(c);
     s.seekTo(3500);
     const snap = run(s, c, { noiseDeg: 0, missRate: 0 }, 3500);
-    expect(snap.ratio).toBeCloseTo(3000 / (3 * 2000));
+    expect(snap.ratio).toBeCloseTo(3000 / (3 * 1000));
   });
 
   it("ein noch offenes Fenster bleibt offen", () => {

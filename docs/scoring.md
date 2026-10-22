@@ -163,12 +163,26 @@ Die Abweichung wird durch den Toleranzfaktor der Schwierigkeit geteilt und dann 
 
 ## Sterne und Rang
 
-- Referenzmaximum = alle gespielten Moves PERFECT bei Multiplikator x2 (realistisch erreichbar),
-  Gold 5-fach. **Per `seekTo` übersprungene Moves zählen nicht für die Sterne:** weder im
-  Score noch im Referenzmaximum, sie werden also weder belohnt noch bestraft.
-- Quote = Score / Referenzmaximum. Sterne bei 15 / 30 / 45 / 60 / 75 %; **Megastar** ab 95 %.
-- Da lange Combos x3 oder x4 erreichen, kann die Quote über 100 % liegen. Das ist gewollt, aber
-  noch zu prüfen, ob die Sternstufen sich gut anfühlen.
+- Die Sterne messen die Genauigkeit, nicht den Score: **Genauigkeitspunkte** je Move =
+  Bewertungspunkte × Gold-Faktor, **ohne Combo-Multiplikator** (`accuracyPoints`). Der
+  angezeigte Score behält die Combo.
+- Referenzmaximum = alle gespielten Moves PERFECT, Gold 5-fach. **Per `seekTo` übersprungene Moves zählen nicht für die Sterne:** weder in
+  den Genauigkeitspunkten noch im Referenzmaximum, sie werden also weder belohnt noch bestraft.
+- Quote = Genauigkeitspunkte / Referenzmaximum, also 0–100 %. Sterne bei 20 / 35 / 50 / 65 / 80 %;
+  **Megastar** ab 95 %. Anhaltspunkte: lauter SUPER ergibt 4 Sterne, lauter GOOD 2, lauter OK 1;
+  5 Sterne braucht überwiegend PERFECT, Megastar fast nur PERFECT.
+- **Warum ohne Combo (Befund N2):** Früher war die Quote Score / (alles PERFECT bei x2). Lange
+  Combos erreichen x4, die Quote lag dann über 100 %, und schon eine Combo aus lauter GOOD kam auf
+  4–5 Sterne. Der simulierte Spieler hatte in 14c-2 überall 5 Sterne, auch bei 60° Rauschen.
+- **Kalibrierung** mit `bun run eval-demos --noise=… --miss=…` (vier Demos, 10 Seeds): bei 10–20°
+  Rauschen Megastar (fast alles PERFECT), 30° 5 Sterne (rund 55 % PERFECT, Quote 0,83–0,88), 40°
+  und 50° 4 Sterne (Quote 0,66–0,74), 60° 3 Sterne (Quote 0,56–0,59, kaum PERFECT); 10 % oder 20 %
+  Ausfall ändern daran fast nichts. Das Rauschen des Simulators ist je Bild unabhängig, und der
+  Scorer nimmt das beste Bild im Fenster; ein echter Spieler mit 60° Fehler stünde schlechter da.
+  Ob sich die Stufen richtig anfühlen, zeigt erst der Gerätetest.
+- Bereits gespeicherte Sterne bleiben stehen (kein Formatwechsel, keine Migration): Die Bibliothek
+  merkt sich die besten Sterne als Maximum (`applyResult`), ein nach der alten Regel zu hoher Wert
+  wird also erst durch ein gleich gutes Ergebnis wieder erreicht, nie abgesenkt.
 - Rangtitel: 0 Sterne „NOCH ÜBEN“, dann „ANFÄNGER“, „GROOVER“, „TÄNZER“, „PROFI“,
   „SUPERSTAR“; Megastar „MEGASTAR“.
 
