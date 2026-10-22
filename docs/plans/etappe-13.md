@@ -130,7 +130,8 @@ Ein Datenartefakt mit allen Moves, die der Generator verwenden darf, getrennt vo
 mit eigener Version.
 
 Geteilt: **13e-1** Schema, Logik, Skript und Startpaket aus den Demo-Posen (umgesetzt);
-**13e-2** Pose-Spuren v2 aus dem Video-Import als Quelle mit Segmentierung an Haltepunkten.
+**13e-2** Pose-Spuren v2 aus dem Video-Import als Quelle mit Segmentierung an Haltepunkten
+(umgesetzt).
 
 - Schema `MotionPackSchema` in `src/lib/schema.ts`:
   - `version`, `clips[]`: `id`, `label`, `styles[]`, `difficulty` (1–3), `energy` (0–1),

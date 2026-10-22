@@ -157,6 +157,19 @@ export function difficulty(pose: Skeleton3D, neutral: Skeleton3D): 1 | 2 {
 
 // ---- Filters: each returns a reason (German, printed by the build script) or null. ----
 
+/**
+ * (0) Every keyframe carries all 12 bones. Video poses can lack bones (landmarks below the
+ * visibility threshold); the distance measures and the generator need complete poses.
+ */
+export function checkComplete(clip: RawClip): string | null {
+  for (const k of clip.keyframes) {
+    const n = BONE_IDS.filter((id) => k.pose3d.bones[id]).length;
+    if (n < BONE_IDS.length)
+      return `unvollständige Pose bei Beat ${k.beat}: ${n} von ${BONE_IDS.length} Knochen`;
+  }
+  return null;
+}
+
 /** (a) At least MIN_MEASURABLE_ANGLES arm and leg angles must be measurable at the anchor. */
 export function checkMeasurable(clip: RawClip): string | null {
   const pose = anchorPose(clip);
@@ -257,7 +270,13 @@ export function checkSpeed(clip: RawClip): string | null {
     : `Knochen dreht ${Math.round(worst)}°/s (höchstens ${MAX_BONE_SPEED_DEG_PER_S})`;
 }
 
-export const CLIP_FILTERS = [checkMeasurable, checkYaw, checkFloorWork, checkSpeed] as const;
+export const CLIP_FILTERS = [
+  checkComplete,
+  checkMeasurable,
+  checkYaw,
+  checkFloorWork,
+  checkSpeed,
+] as const;
 
 // ---- Grouping, mirrors, transitions ----
 
@@ -265,13 +284,16 @@ export const CLIP_FILTERS = [checkMeasurable, checkYaw, checkFloorWork, checkSpe
  * Merges clips with similar anchor poses: deterministic leader clustering (clips sorted by id,
  * each joins the first group whose leader is within `maxDeg`, else starts one). Only clips with
  * the same `beats` and the same set of `styles` can share a group, so a merge never changes a
- * clip's length or moves a transition to a clip without that style. Of each group
- * the medoid (smallest summed distance to the other members, ties by id) is kept. `idMap` maps
- * every input id to the id of its kept representative.
+ * clip's length or moves a transition to a clip without that style. Of each group the medoid
+ * (smallest summed distance to the other members, ties by id) among the members with the lowest
+ * `priority` is kept; by default all have priority 0. `buildMotionPack` passes the source index,
+ * so a curated demo clip (with pictogram) wins over a merged video clip. `idMap` maps every input
+ * id to the id of its kept representative.
  */
 export function groupClips<C extends RawClip>(
   clips: readonly C[],
   maxDeg = GROUP_MAX_DEG,
+  priority: (c: C) => number = () => 0,
 ): { kept: C[]; idMap: Map<string, string> } {
   const sorted = [...clips].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
   const groups: { key: string; leader: Skeleton3D | null; members: C[] }[] = [];
@@ -288,9 +310,11 @@ export function groupClips<C extends RawClip>(
   const idMap = new Map<string, string>();
   for (const { members } of groups) {
     const poses = members.map(anchorPose);
+    const top = Math.min(...members.map(priority));
     let best = members[0]!,
       bestSum = Infinity;
     members.forEach((m, i) => {
+      if (priority(m) !== top) return;
       const pi = poses[i];
       const sum = poses.reduce(
         (s, pj, j) => s + (i === j || !pi || !pj ? 0 : boneDistance(pi, pj)),
@@ -430,8 +454,9 @@ export interface BuildResult {
 }
 
 /**
- * Builds the motion pack: metrics per clip, filters (CLIP_FILTERS), grouping, mirror pairs and
- * transition counts per style (summed over sources). Numbers are rounded to PACK_DECIMALS,
+ * Builds the motion pack: metrics per clip, filters (CLIP_FILTERS), grouping (earlier sources
+ * win as group representative), mirror pairs and transition counts per style (summed over
+ * sources). Numbers are rounded to PACK_DECIMALS,
  * clips sorted by id; the result is validated with MotionPackSchema.
  */
 export function buildMotionPack(input: {
@@ -440,7 +465,8 @@ export function buildMotionPack(input: {
 }): BuildResult {
   const rejected: BuildResult["rejected"] = [];
   const accepted: MotionClip[] = [];
-  for (const src of input.sources) {
+  const sourceIndex = new Map<string, number>();
+  for (const [si, src] of input.sources.entries()) {
     for (const raw of src.clips) {
       const reason = CLIP_FILTERS.map((f) => f(raw)).find((r) => r !== null);
       if (reason) {
@@ -448,6 +474,7 @@ export function buildMotionPack(input: {
         continue;
       }
       const pose = anchorPose(raw)!; // a clip passing checkMeasurable has an anchor
+      if (!sourceIndex.has(raw.id)) sourceIndex.set(raw.id, si);
       accepted.push({
         ...raw,
         difficulty: difficulty(pose, input.neutral),
@@ -456,7 +483,7 @@ export function buildMotionPack(input: {
       });
     }
   }
-  const { kept, idMap } = groupClips(accepted);
+  const { kept, idMap } = groupClips(accepted, GROUP_MAX_DEG, (c) => sourceIndex.get(c.id) ?? 0);
   const clips = assignMirrors(kept)
     .map((c) => ({
       ...c,

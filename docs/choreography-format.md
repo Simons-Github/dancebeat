@@ -186,7 +186,7 @@ per dynamischem `import()` geladen (`loadMotionPack`) und gegen `MotionPackSchem
 
 | Feld          | Bedeutung                                                                                                                               |
 | ------------- | --------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | eindeutig, mit Quellpräfix (`demo:<Pose-ID>`)                                                                                           |
+| `id`          | eindeutig, mit Quellpräfix (`demo:<Pose-ID>`, Video: `video:<slug>:<n>`)                                                                |
 | `label`       | Anzeigename (Deutsch)                                                                                                                   |
 | `iconId`      | optional, wird `Move.iconId` (Demo: Pose-ID wie bisher)                                                                                 |
 | `styles`      | mindestens ein Stil; Demo-Posen: `party`                                                                                                |
@@ -198,7 +198,7 @@ per dynamischem `import()` geladen (`loadMotionPack`) und gegen `MotionPackSchem
 | `mirrorOf`    | ID des Spiegel-Clips, immer gegenseitig; fehlt bei symmetrischen Clips                                                                  |
 | `playability` | Anteil der 8 Arm- und Beinwinkel, die in der Frontalprojektion sicher messbar sind                                                      |
 | `sourceBpm`   | optional, Tempo der Quelle; fehlt bei Posen ohne eigenes Tempo                                                                          |
-| `source`      | Kennung der Quelle (Credits, Filter), Demo: `demo`                                                                                      |
+| `source`      | Kennung der Quelle (Credits, Filter), Demo: `demo`, Video: `video:<Dateiname>`                                                          |
 
 `transitions`: pro Stil Gewichte `von → nach` (positive Zahlen, dünn besetzt, fehlendes Paar =
 Grundgewicht des Generators). Das Schema prüft eindeutige IDs, gegenseitige `mirrorOf` und dass
@@ -220,7 +220,9 @@ Zwischen Keyframes wird mit `interpolate` überblendet.
    messbar“, wenn `computeAngles(project(pose))` ihn liefert und Segment und Bezugssegment (für
    Schulter und Hüfte der Rumpf) nach der Projektion mindestens `MIN_PROJECTED_FRACTION` (50 %)
    ihrer Länge behalten.
-2. **Filter** (je einer mit Begründung, das Skript gibt verworfene Clips aus): am Anker mindestens
+2. **Filter** (je einer mit Begründung, das Skript gibt verworfene Clips aus): Vollständigkeit,
+   jedes Keyframe trägt alle 12 Knochen (Video-Posen können Knochen unter der
+   Sichtbarkeitsschwelle verlieren); am Anker mindestens
    `MIN_MEASURABLE_ANGLES` (4) sicher messbare Winkel; an allen Keyframes Gier höchstens
    `MAX_YAW_DEG` (±45°); keine Bodenarbeit an irgendeinem Keyframe: Rumpf höchstens 45° aus der
    Senkrechten (`MIN_TORSO_UP` = cos 45°, sonst Liegen), mittlere Kniehöhe mindestens
@@ -235,13 +237,46 @@ Zwischen Keyframes wird mit `interpolate` überblendet.
 3. **Gruppieren:** Leader-Clustering nach ID sortiert, Ankerabstand höchstens `GROUP_MAX_DEG`
    (20°), nur unter Clips mit gleichem `beats` und gleicher Stilmenge (sonst änderte das
    Zusammenfassen die Länge oder hängte Übergänge an einen Clip ohne diesen Stil); von jeder
-   Gruppe bleibt das Medoid (kleinste Abstandssumme).
+   Gruppe bleibt das Medoid (kleinste Abstandssumme) unter den Mitgliedern der frühesten Quelle
+   (Reihenfolge in `sources`, Demo zuerst): ein kuratierter Demo-Clip mit Piktogramm gewinnt so
+   gegen einen ähnlichen Video-Clip.
 4. **Spiegelpaare:** Partner ist der Clip gleicher Länge, dessen Anker dem gespiegelten eigenen
    Anker (`mirror3d`) am nächsten liegt, höchstens `MIRROR_MAX_DEG` (5°); ist das der Clip
    selbst, ist er symmetrisch. Nur gegenseitige Paare bleiben.
 5. **Übergänge:** aufeinanderfolgende Paare der Quellsequenzen (Demo: die Moves der Demo-Songs),
    über die Gruppenvertreter abgebildet und pro Stil gezählt; Paare mit verworfenem Clip zählen
    nicht (keine Überbrückung).
+
+### Quelle Video-Spuren (Etappe 13e-2)
+
+`videoMotionSource` (`src/lib/motionPackVideo.ts`) schneidet Clips aus einer im Dev-Modus
+exportierten Pose-Spur (`*.posetrack.json`, Version 2 mit Weltpunkten):
+
+- **Schnitt:** Die Spur wird wie im Video-Import umgerechnet, immer mit Haltepunkt-Platzierung
+  (`holds`), sodass die Moves auf den ruhigsten Beats liegen. Beat-Index eines Moves =
+  `round(timeMs / Beatdauer)`. Clip _n_ ist die Bewegung vom Haltepunkt *n*−1 zum Haltepunkt _n_;
+  `beats` = Abstand der Beat-Indizes, außerhalb 1–4 wird der Clip verworfen.
+- **Keyframes:** alle `VIDEO_KEYFRAME_STEP_BEATS` (0,25 Beat) von Beat 0 bis `beats`, Pose =
+  `pose3d` von `frameAt` (gespiegelt wie die importierte Choreografie). Keyframes ohne `pose3d`
+  entfallen; fehlt sie am Start oder am Anker, wird der Clip verworfen.
+- **Anker:** `anchorBeat` = `beats`, also auf dem Haltepunkt am Clipende: dort kommt die tanzende Person
+  an und hält, der Weg dorthin ist die Bewegung des Clips. Der Generator legt den Anker auf den
+  Slot-Beat und spielt den Anlauf davor.
+- **Kennung:** `id` = `video:<slug>:<n>` (Dateiname klein, Nicht-Alphanumerisches als `-`, höchstens
+  40 Zeichen), `label` = Dateiname ohne Endung und _n_, `source` = `video:<Dateiname>`,
+  `sourceBpm` = Tempo der Spur, Stil aus `--style` (Standard `party`), kein `iconId` (der Move
+  zeigt die Clip-ID).
+- **Übergänge:** eine Sequenz mit allen Clips der Spur in Reihenfolge, verworfene eingeschlossen,
+  damit kein Übergang über einen verworfenen Clip hinweg entsteht.
+
+Aufruf: `bun run build-motion-pack [--style=party] [--out=Pfad] a.posetrack.json …` baut Demo
+plus Video-Spuren und schreibt standardmäßig `eval-results/motion-pack.video.json` (von git
+ignoriert); prüfen mit `bun run eval-choreo --pack=Pfad`. Unlesbare Dateien werden mit Meldung
+übersprungen; die Ausgabe nennt je Datei geschnittene und verworfene Clips, die Filtergründe,
+behaltene Clips (davon Video), Spiegelpaare unter den Video-Clips und Übergänge je Stil. Ein Paket
+mit Video-Clips wird nie nach `src/data/motion-pack.json` geschrieben (das Skript bricht ab): Die
+Rechte an fremden Choreografien sind ungeklärt, das Ausliefern braucht eine ausdrückliche
+Entscheidung. Ohne Dateien erzeugt das Skript unverändert das ausgelieferte Paket.
 
 ## Generator
 

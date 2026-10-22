@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13d, 13e-1, 13f-1, 13g ✅)  | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13e-2, 13f-1, 13g ✅)       | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ⏳                                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -990,11 +990,34 @@ Knöchel); der Posenabstand und die Geschwindigkeitsprüfung berücksichtigen di
 wird nur bei gleicher Länge und gleichen Stilen, und das Schema verlangt, dass Übergänge nur
 Clips ihres Stils verbinden. Das Demo-Paket bleibt dabei unverändert.
 Spiel, Bewertung und UI unverändert. Abweichungen vom Plan: 13e ist geteilt, Pose-Spuren aus dem
-Video-Import als Quelle (Segmentierung an Haltepunkten) folgen in **13e-2 (offen)**; das
+Video-Import als Quelle (Segmentierung an Haltepunkten) folgen in **13e-2** (siehe unten); das
 Startpaket hat 12 statt 13 Posen (`DEMO_POSES` hat 12); `iconId` ist zusätzlich im Clip, damit
 die Piktogramm-ID der Demo-Moves erhalten bleibt; Keyframe-Beats steigen streng (sonst wäre die
 Winkelgeschwindigkeit undefiniert). Tests: `src/test/motionPack.test.ts` (Schema, jeder Filter
 einzeln, Gruppierung, Spiegelpaare, Übergänge, Aktualität der JSON-Datei, Laden).
+
+**13e-2 Video-Spuren als Quelle des Motion-Pakets – umgesetzt, Messung mit echter v2-Spur
+offen.** `videoMotionSource` (`src/lib/motionPackVideo.ts`, nur vom Skript genutzt, nicht im
+App-Bundle) importiert eine Dev-Rohdatei (`*.posetrack.json`) wie die App mit Haltepunkt-Moves
+und schneidet je zwei aufeinanderfolgende Haltepunkte einen Clip: Länge = Beat-Abstand (1–4,
+sonst verworfen), Anker auf dem eigenen Haltepunkt (`anchorBeat = beats`), Keyframes alle ¼ Beat
+aus `frameAt(…).pose3d`, `sourceBpm` aus der Datei, ID `video:<slug>:<n>`, Quelle
+`video:<Videoname>`, kein `iconId`; ohne 3D-Pose an Start oder Anker verworfen. Die Sequenz je
+Video liefert die Übergänge. Neuer Filter `checkComplete` (alle 12 Knochen an jedem Keyframe);
+`groupClips` wählt den Gruppenvertreter nur unter den Clips der frühesten Quelle, Demo-Clips mit
+Piktogramm bleiben also Vertreter. `bun run build-motion-pack -- a.posetrack.json …` schreibt nach
+`eval-results/motion-pack.video.json` und verweigert `src/data/motion-pack.json` (Rechte an fremden
+Choreografien ungeklärt); `bun run eval-choreo --pack=…` misst das Ergebnis. Das ausgelieferte
+Paket ist unverändert. Details: [choreography-format.md](choreography-format.md#motion-paket).
+Tests: `src/test/motionPackVideo.test.ts` (unabhängig vom Code geschrieben: Clipform, Anker =
+gehaltene Pose, Spiegelung, Ablehnungen, v1-Datei, Slug, `checkComplete`, Vorrang beim
+Gruppieren, Demo- plus Videoquelle, Determinismus). **Befund:** Die beiden vorhandenen
+Rohdateien (BTS, TikTok) sind v1 ohne Weltpunkte, liefern also keine Clips. Eine synthetische
+v2-Kopie (Weltpunkte aus den 2D-Punkten) zerlegte BTS in 31 Clips, die alle an `checkComplete`
+scheiterten, weil die Beine oft unsicher sind (6–11 von 12 Knochen). **Offen:** neue v2-Exporte
+messen; falls die Beine regelmäßig fehlen, über fehlende Beinknochen entscheiden (z. B. aus der
+Nachbarpose ergänzen oder Clips nur mit Armbewegung zulassen). Ob Video-Clips ausgeliefert
+werden, entscheidet der Nutzer (Lizenzfrage wie 14-0).
 
 **13g-0, 13f-1, 13g Generator und Messplatz – umgesetzt, Gerätetest offen.** Neue Songs mit
 automatischer Choreografie bekommen sie vom Generator (`src/lib/generator/`) statt von der festen
@@ -1034,7 +1057,7 @@ Flags per `ps` geprüft, 390×844 und 844×390): „Song hinzufügen“ (URL, St
 legt eine Choreo mit 95 Moves an, `pose3d` an allen 503 Frames, Konsole ohne Fehler. Das Spiel
 mit `?sim=1` konnte im Browser nicht geprüft werden (keine abspielbare Testdatei).
 13f-2 (Knopf „neu erzeugen“, Stil und Schwierigkeit)
-wartet auf Entscheidung 13-0.6; 13e-2 und 13h bleiben offen. **Nur am Gerät prüfbar, nicht
+wartet auf Entscheidung 13-0.6; 13h bleibt offen. **Nur am Gerät prüfbar, nicht
 getestet:** ob sich die Choreos besser anfühlen als die alte Posenfolge, ob dichte Stufe-3-Phrasen
 (bis 2 Moves/s) mitzumachen sind, ob die Beat-Phase aus der Audiodatei die Moves hörbar auf den
 Takt legt.

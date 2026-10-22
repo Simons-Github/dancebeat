@@ -3,8 +3,9 @@
 // measures them (src/lib/generator/metrics.ts) and compares with the old auto choreography as
 // baseline. Prints a table and writes all runs as JSON (default eval-results/eval-choreo.json,
 // ignored by git). Options: --seeds=N, --bpm=90,128, --noise=DEG, --miss=0..1, --out=path,
-// --baseline-only. At the default 10° noise every move of both variants is PERFECT (the scorer
-// keeps the best pose of ±250 ms); --noise=30 separates them.
+// --pack=path (motion pack, default src/data/motion-pack.json; e.g. one with video clips from
+// build-motion-pack), --baseline-only. At the default 10° noise every move of both variants is
+// PERFECT (the scorer keeps the best pose of ±250 ms); --noise=30 separates them.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { parseArgs } from "node:util";
@@ -36,12 +37,15 @@ const { values } = parseArgs({
     "baseline-only": { type: "boolean" },
     noise: { type: "string" },
     miss: { type: "string" },
+    pack: { type: "string" },
   },
 });
 
 const root = path.resolve(import.meta.dirname, "..");
 const pack = MotionPackSchema.parse(
-  JSON.parse(readFileSync(path.join(root, "src/data/motion-pack.json"), "utf8")),
+  JSON.parse(
+    readFileSync(path.resolve(values.pack ?? path.join(root, "src/data/motion-pack.json")), "utf8"),
+  ),
 );
 const params: EvalParams = {
   bpms: values.bpm ? parseBpms(values.bpm) : DEFAULT_BPMS,
