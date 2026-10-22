@@ -22,7 +22,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
 | 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen) | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
-| 14. Neue Demo-Songs                          | ⏳ (14a-1 ✅)                       | Opus für den Songaufbau, Sonnet für den Rest                          |
+| 14. Neue Demo-Songs                          | ⏳ (14a-1, 14b ✅)                  | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
 
@@ -1177,6 +1177,38 @@ später); Manifest-Objekte sind `.strict()`, Gold nicht in Intro/Outro und ohne 
 Nur per Gehör bzw. am Gerät prüfbar, nicht geprüft: Abschnittsgrenzen und Gold-Positionen wurden
 aus dem Energieverlauf geschätzt; ob die Phase im Browser (MP3-Decoder-Verzögerung) auf dem Beat
 liegt, zeigt erst 14b am Gerät.
+
+**14b Songaufbau über den Generator – umgesetzt.** `bun run build-demo
+src/data/demos/*.manifest.json` (`scripts/build-demo.ts`, Logik `src/lib/demoBuild.ts`) baut aus
+jedem Manifest `src/data/demos/<slug>.choreo.json`. Dabei ersetzt `planFromManifest`
+`planStructure`. Phrasen zu 8 Beats mit den Schlüsseln `<kind>-<A|B>` sorgen dafür, dass jeder
+Refrain und jede Strophe identisch ist. Feste Clip-Folgen ersetzen `selectMoves`, `"auto"` wählt
+mit der Song-ID als Seed. `realizeFrames` baut die Frames. Format und Regeln stehen in
+[choreography-format.md](choreography-format.md#demo-pipeline). Tests: `demoBuild.test.ts`, mit
+einer Prüfung, dass die eingecheckten JSON-Dateien einem frischen Build entsprechen.
+
+Abweichungen vom Plan:
+
+- Das Intro tanzt nur in seinen letzten 8 Beats (ohne Moves), weil die Manifest-Intros 16 Beats
+  lang sind.
+- Die Schlusspose ist kein Gold Move; Gold steht nur dort, wo das Manifest es angibt.
+- Rise Until The Morning (Schwierigkeit 3) hat 1,65 MB statt unter 1 MB, die übrigen Songs
+  0,64–0,87 MB.
+- `selectMoves` prüft jetzt auch verkürzte Vorkommen eines Phrasenschlüssels: Ein Clip folgt nie
+  direkt auf sich selbst, auch wenn eine Phrase vor ihrer letzten Position endet. Gefunden im
+  Review, in Lemonade Skies folgte `demo:flex` auf sich selbst. Für App-Songs ändert sich nichts: Dort ist
+  nur die letzte Phrase gekürzt, und sie hat keinen Nachfolger.
+- Das Manifest-Schema erlaubt das Intro nur als ersten und das Outro nur als letzten Abschnitt.
+- Feste Clip-Folgen werden wie bei `"auto"` geprüft: keine Ruhepose, nicht schwerer als der Song,
+  nicht länger als ein Slot.
+
+Offen:
+
+- Alle Phrasen stehen auf `"auto"` mit den `demo:*`-Clips; mit dem AIST-Paket muss neu gebaut
+  werden.
+- Seed und Einbindung folgen in 14a-2 bzw. 14c, die MP3s sind noch nicht eingecheckt.
+- Nur per Gehör bzw. am Gerät prüfbar, nicht geprüft: ob Moves auf dem Takt liegen und ob sich
+  der Refrain wiedererkennbar anfühlt.
 
 ## Offene Befunde
 

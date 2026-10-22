@@ -92,6 +92,21 @@ export const DemoManifestSchema = z
         path: ["beatPhaseMs"],
         message: `beatPhaseMs must be below one beat (${beatMs.toFixed(1)} ms)`,
       });
+    // The build treats the intro as the lead-in and the outro as the closing pose.
+    m.sections.forEach((s, i) => {
+      if (s.kind === "intro" && i !== 0)
+        ctx.addIssue({
+          code: "custom",
+          path: ["sections", i, "kind"],
+          message: "intro must be the first section",
+        });
+      if (s.kind === "outro" && i !== m.sections.length - 1)
+        ctx.addIssue({
+          code: "custom",
+          path: ["sections", i, "kind"],
+          message: "outro must be the last section",
+        });
+    });
     const kinds = new Set(m.sections.map((s) => s.kind));
     for (const kind of kinds)
       if (m.phrases[kind] === undefined)

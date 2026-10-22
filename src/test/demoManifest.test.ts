@@ -87,6 +87,16 @@ describe("DemoManifestSchema", () => {
     expect(messages({ ...valid(), gold: [twice, { ...twice }] })).toEqual(["duplicate gold 2:12"]);
   });
 
+  it("allows the intro only first and the outro only last", () => {
+    const [intro, verse, chorus, outro] = valid().sections;
+    expect(messages({ ...valid(), sections: [verse, intro, chorus, outro] })).toEqual([
+      "intro must be the first section",
+    ]);
+    expect(messages({ ...valid(), sections: [intro, outro, verse, chorus], gold: [] })).toEqual([
+      "outro must be the last section",
+    ]);
+  });
+
   it("rejects misspelled keys", () => {
     expect(messages({ ...valid(), golds: [] })).not.toEqual([]);
     expect(messages({ ...valid(), sections: [{ kind: "verse", beats: 16, bars: 4 }] })).not.toEqual(

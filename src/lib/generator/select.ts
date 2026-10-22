@@ -104,8 +104,9 @@ const nextPrev = (ctx: Context, prev: Prev, id: string): Prev => ({
 /**
  * Chooses clips for the plan. Phrase keys are filled in order of first occurrence; later
  * occurrences repeat the sequence. A clip never directly follows itself, also across phrase
- * boundaries: the first slot avoids the last clip of every already chosen phrase that ever
- * precedes this one, the last slot the first clip of every chosen phrase that ever follows it.
+ * boundaries: the first slot avoids the clip every already chosen phrase ends on where it
+ * precedes this one, and the slot an occurrence ends on avoids the first clip of every chosen
+ * phrase that follows that occurrence (shortened occurrences end before the last slot).
  * The closing pose is a symmetric clip (no mirror partner), weighted toward high energy.
  */
 export function selectMoves(
@@ -126,17 +127,17 @@ export function selectMoves(
   };
 
   const { phrases } = plan;
-  const preds = new Map<string, Set<string>>();
-  const succs = new Map<string, Set<string>>();
-  const link = (map: Map<string, Set<string>>, key: string, other: string) => {
-    const set = map.get(key) ?? new Set<string>();
-    map.set(key, set.add(other));
-  };
+  // Neighbours per phrase key, with the slot count of the occurrence: a shortened occurrence
+  // (fewer slots than the key's sequence) ends on an earlier clip, which must not repeat either.
+  const preds = new Map<string, { key: string; slots: number }[]>();
+  const succs = new Map<string, { key: string; slots: number }[]>();
+  const link = (map: typeof preds, key: string, other: { key: string; slots: number }) =>
+    map.set(key, [...(map.get(key) ?? []), other]);
   phrases.forEach((p, i) => {
     const next = phrases[i + 1];
     if (!next) return;
-    link(succs, p.key, next.key);
-    link(preds, next.key, p.key);
+    link(succs, p.key, { key: next.key, slots: p.slots.length });
+    link(preds, next.key, { key: p.key, slots: p.slots.length });
   });
   const slotCount = new Map<string, number>();
   for (const p of phrases)
@@ -153,15 +154,15 @@ export function selectMoves(
     for (let j = 0; j < n; j++) {
       const exclude = new Set<string>();
       if (j === 0)
-        for (const k of preds.get(p.key) ?? []) {
-          const last = content.get(k)?.at(-1);
+        for (const pred of preds.get(p.key) ?? []) {
+          const last = content.get(pred.key)?.[pred.slots - 1];
           if (last) exclude.add(last);
         }
-      if (j === n - 1) {
-        for (const k of succs.get(p.key) ?? []) {
-          const first = k === p.key ? seq[0] : content.get(k)?.[0];
-          if (first && !(k === p.key && n === 1)) exclude.add(first);
-        }
+      // First clips of the successors of every occurrence that ends with this slot.
+      for (const succ of succs.get(p.key) ?? []) {
+        if (succ.slots !== j + 1) continue;
+        const first = succ.key === p.key ? seq[0] : content.get(succ.key)?.[0];
+        if (first) exclude.add(first);
       }
       const slotLen = p.slots[j]?.lengthBeats ?? p.slots[0]!.lengthBeats;
       const pool = ctx.candidates.filter((c) => c.beats <= slotLen);

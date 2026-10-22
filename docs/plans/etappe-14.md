@@ -85,6 +85,9 @@ Choreografien aus 14b sinnvoll. Abschnittslängen in Beats (Vielfaches von 4) st
 
 ## 14b Songaufbau über den Generator
 
+Umgesetzt, Abweichungen siehe [roadmap.md](../roadmap.md) und
+[choreography-format.md](../choreography-format.md#demo-pipeline).
+
 `scripts/build-demo.ts` (`bun run build-demo <manifest>`), Logik rein in
 `src/lib/demoBuild.ts`:
 

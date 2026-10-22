@@ -384,7 +384,9 @@ Spiegelpartner des vorigen Clips zählt `MIRROR_BONUS` (4) mal, aber nicht zurü
 Clips genau der gewählten Schwierigkeit zählen `LEVEL_BONUS` (2) mal. Kein Clip folgt direkt auf
 sich selbst, auch nicht über Phrasengrenzen und Wiederholungen: Der erste Slot meidet den letzten
 Clip jeder schon gewählten Vorgängerphrase, der letzte Slot den ersten Clip jeder schon gewählten
-Nachfolgerphrase (auch der eigenen). Bleibt bei sehr kleinen Paketen nichts übrig, werden die
+Nachfolgerphrase (auch der eigenen). Endet ein Vorkommen früher (weniger Slots als die Folge des
+Schlüssels, z. B. eine 4-Beat-Phrase im Demo-Aufbau), gilt das für den Slot, auf dem es endet
+(seit 14b). Bleibt bei sehr kleinen Paketen nichts übrig, werden die
 Ausschlüsse gelockert. Schlusspose: symmetrischer Clip (ohne `mirrorOf`), gewichtet nach
 Energie². Ohne passenden Clip bricht der Generator mit „Motion-Paket enthält keine passenden
 Clips“ ab.
@@ -479,9 +481,9 @@ eigene Version (`1`) und keine Migration.
 - **Längen in Beats, Vielfaches von 4** (ein Takt), nicht in 8er-Zählzeiten: Die KI-Songs halten
   die 8er-Phrasierung nicht ein, Abschnittsgrenzen fallen auch auf Beat 4 mod 8.
 - **Phrasen:** Jeder vorkommende Abschnittstyp braucht einen Eintrag. `"auto"` heißt: der
-  Generator wählt mit dem Seed des Songs (14b). Clip-IDs müssen im Motion-Paket stehen
+  Generator wählt mit dem Seed des Songs ([Demo-Pipeline](#demo-pipeline)). Clip-IDs müssen im Motion-Paket stehen
   (`unknownClipIds`); solange das Paket nur die `demo:*`-Clips hat, stehen alle Phrasen auf `"auto"`.
-- **Prüfungen:** Gold-Abschnitt und -Beat liegen in den Abschnitten, nicht in Intro oder Outro,
+- **Prüfungen:** Intro nur als erster, Outro nur als letzter Abschnitt; Gold-Abschnitt und -Beat liegen in den Abschnitten, nicht in Intro oder Outro,
   ohne Dubletten; `beatPhaseMs` + Summe der
   Beats · 60000 / `bpm` ≤ `durationMs`; Beat-Phase kleiner als ein Beat. Unbekannte Felder sind Fehler (`.strict()`).
 - **Beat 0** ist ein Beat des gemessenen Rasters, kein gemessener Takt-Anfang; die
@@ -495,6 +497,59 @@ Projektabhängigkeit). Tempo: Grobschätzung und `refineBpm` wie in der App, dan
 auf dem Kick-Band (Tiefpass 120 Hz), weil das volle Band in manchen Songs auf die Hi-Hat-Offbeats
 einrastet. Dazu gibt das Skript die Länge und eine Tabelle der Energie (RMS voll und Kick-Band)
 je 4 Beats aus; daraus werden die Abschnitte geschätzt und danach per Gehör geprüft.
+
+### Demo-Pipeline
+
+Seit Etappe 14b baut `bun run build-demo src/data/demos/*.manifest.json` (`scripts/build-demo.ts`,
+Logik rein in `src/lib/demoBuild.ts`) aus jedem Manifest die Choreografie
+`src/data/demos/<slug>.choreo.json`. Das JSON ist kompakt, wird mit `ChoreographySchema` geprüft
+und ist von Prettier ausgenommen. Option `--pack=path` (Standard `src/data/motion-pack.json`).
+Deterministisch: Seed ist die Song-ID; ein Test vergleicht die eingecheckten Dateien mit einem
+frischen Build. Nach jeder Änderung an Manifest, Paket oder Generator neu bauen.
+
+```ts
+planFromManifest(manifest) → Plan                 // ersetzt planStructure
+buildDemoClips(manifest, pack, plan?) → ClipRef[] // selectMoves, feste Folgen ersetzen "auto"
+buildDemoChoreo(manifest, pack) → Choreography    // realizeFrames, ohne Moves im Intro
+```
+
+- **Phrasen:** Jeder Abschnitt außer dem Outro wird ab seinem Anfang in Phrasen zu 8 Beats
+  geteilt (die letzte darf 4 Beats haben). Schlüssel `<kind>-<A|B>` nach dem Muster A A B A
+  (Index der Phrase im Abschnitt). Jedes Vorkommen eines Typs wiederholt also dieselben Phrasen,
+  längere Refrains führen das Muster weiter.
+- **Dichte:** `stepBeats` mit Schwierigkeit und fester Energie je Typ (`MANIFEST_ENERGY`): Intro
+  0,2, Strophe 0,3, Pre-Chorus 0,5, Refrain 0,6, Bridge 0,4. Der Refrain bleibt unter ⅔, wird
+  bei Schwierigkeit 2 also nicht verdichtet (alle 2 Beats). Bei Schwierigkeit 3 haben Pre-Chorus,
+  Refrain und Bridge einen Move pro Beat, solange er mindestens 400 ms dauert.
+- **Intro:** Nur die letzten `INTRO_MOTION_BEATS` (8) Beats tanzen, davor steht die Ruhepose.
+  Die Moves dieser Clips werden entfernt (keine Wertung im Intro).
+- **Gold:** genau die Positionen aus dem Manifest. Liegt eine nicht auf einem Move-Beat, bricht
+  der Build ab. Die Schlusspose ist kein Gold Move.
+- **Schlusspose:** am Anfang des Outros (das Schema erlaubt das Outro nur als letzten Abschnitt), gehalten bis zum Songende (`selectMoves`: symmetrischer
+  Clip). Ohne Outro ersetzt sie den letzten Slot.
+- **Feste Clip-Folgen:** ersetzen die Auswahl. Pro Abschnittsvorkommen bekommen die Slots die IDs
+  der Reihe nach, zyklisch, jedes Vorkommen beginnt mit der ersten ID. Ein festes Outro schließt
+  mit der ersten ID. Abbruch bei unbekannter ID, Ruhepose (Energie unter `MIN_MOVE_ENERGY`),
+  Clip schwerer als der Song, Clip länger als ein Slot (außer Schlusspose) oder mehr als ±12 %
+  Tempounterschied (`sourceBpm`). `"auto"`-Phrasen wählt `selectMoves` mit denselben Regeln wie in der
+  App. Die Ausschlüsse an Phrasengrenzen kennen die festen Folgen nicht: An der Grenze
+  zwischen fester Folge und `"auto"` kann ein Clip direkt auf sich selbst folgen.
+- **Choreo-Felder:** `id` ist eine aus der Song-ID abgeleitete UUID (v4-Form), die Farben kommen
+  aus `SONG_PALETTES[palette]`, `offsetMs` ist 0 und `createdAt`/`updatedAt` sind 0 (setzt erst
+  der Seed, 14c).
+
+**Stand 14b** (Paket nur mit `demo:*`-Clips, alle Phrasen `"auto"`):
+
+| Song                   | Schwierigkeit | Moves | Gold | Größe   |
+| ---------------------- | ------------- | ----- | ---- | ------- |
+| Gold in My Pocket      | 2             | 140   | 2    | 0,87 MB |
+| Gold on the Glass      | 2             | 111   | 2    | 0,71 MB |
+| Lemonade Skies         | 1             | 102   | 2    | 0,64 MB |
+| Rise Until The Morning | 3             | 319   | 2    | 1,65 MB |
+
+Rise Until The Morning liegt über dem Ziel von 1 MB, weil Schwierigkeit 3 in Pre-Chorus, Refrain und
+Bridge jeden Beat einen Move setzt. Die Schwierigkeit ist vorläufig und wird in 14c festgelegt. Das Skript warnt
+über 1 MB.
 
 ## Video-Import
 
