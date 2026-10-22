@@ -1145,9 +1145,10 @@ Ausgelieferte Clips: Lizenz mit 14-0.1 geklärt (2026-10-22, Nutzer hat die Term
 
 ### 14. Neue Demo-Songs ⏳
 
-Vier Demos mit eigener Musik (Gemini, MP3 in `public/demo-audio/`); Songaufbau per Manifest über
+Vier Demos mit eigener KI-Musik (Gemini, MP3 in `public/demo-audio/`); Songaufbau per Manifest über
 den Generator aus 13 (fester Plan, Refrain identisch, Gold Moves am Höhepunkt); Credits. Lizenzklärung 14-0 erledigt
-(2026-10-22: AIST++-Bewegung darf ausgeliefert werden, alte Demos werden ersetzt); wartet auf die
+(2026-10-22: AIST++-Bewegung darf ausgeliefert werden; Musik mit Gemini erzeugt, Nachweis führt der
+Nutzer außerhalb des Repos; alte Demos werden ersetzt); wartet auf die
 MP3-Dateien und die Etappen 12 und 13. Plan: [plans/etappe-14.md](plans/etappe-14.md).
 
 ## Offene Befunde

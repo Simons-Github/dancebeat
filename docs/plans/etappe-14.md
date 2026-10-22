@@ -12,71 +12,52 @@ Generator daraus die Choreografie bauen.
 
 Gewählte Wege:
 
-- **Musik:** eigene Songs mit einem KI-Musikgenerator (Vorschlag: Suno, bezahlter Tarif).
+- **Musik:** vier eigene, KI-generierte Songs (Gemini, Pro-Abo des Nutzers), als MP3 im Repo.
 - **Choreo:** Clips aus dem Motion-Paket (AIST++, Demo-Posen, selbst getanzt über den
   Video-Import), Abfolge fest im Manifest.
 
-## 14-0 Entscheidungen und Lizenzen (Nutzer, vor jedem Code)
+## 14-0 Entscheidungen und Lizenzen (erledigt 2026-10-22)
 
-**Entschieden am 2026-10-22:**
-
-1. AIST++: Der Nutzer hat die Terms of Use gelesen; abgeleitete Bewegungsdaten dürfen
-   ausgeliefert werden. Namensnennung (CC BY 4.0, Google LLC) und Zitat des ISMIR-2019-Papers
-   kommen in die Credits (14c). Die AIST-Musik bleibt ausgeschlossen. Das gilt auch für das
-   Motion-Paket aus Etappe 13; die Freigabe 13-0.7 für den Python-Konverter (13h-2) bleibt
-   getrennt.
-2. Musik: erzeugt mit **Gemini** (Pro-Abo des Nutzers), **4 Songs** statt zwei bis drei. Die
-   Lizenzlage der Gemini-Ausgabe hat Claude nicht geprüft; der Nutzer legt einen Nachweis
-   außerhalb des Repos ab. Format: MP3.
-3. Audio liegt im Repo: Ausnahme in `.gitignore` nur für `public/demo-audio/*.mp3`, Ordner
-   `public/demo-audio/` angelegt. Die CLAUDE.md-Zeile zur Ausnahme folgt mit 14c.
-4. Alte Demos werden **ersetzt** (neue IDs); Löschen von Code nur nach Freigabe.
-
-**Stand:** 14-0 erledigt. 14a wartet auf die MP3-Dateien im Ordner und auf ausdrückliche
-Freigabe des Nutzers.
-
-Ursprüngliche Fragen und Empfehlungen:
-
-1. **AIST++-Bewegungen ausliefern** (Stand der Recherche 2026-10-21):
-   - Die AIST++-Annotationen (3D-Keypoints, SMPL) stehen laut Projektseite unter **CC BY 4.0**
-     (Google LLC). Weitergabe und kommerzielle Nutzung sind damit erlaubt, Namensnennung ist
-     Pflicht.
-   - Die Choreografien selbst stammen aus der **AIST Dance Video Database**. Deren
-     Nutzungsbedingungen (eigene Seite „Terms of Use“) sind noch nicht geprüft; die Startseite
-     verlangt, das ISMIR-2019-Paper zu zitieren. **Offen:** Erlauben die Bedingungen, abgeleitete
-     Bewegungsdaten in einer öffentlich gehosteten App auszuliefern? Der Nutzer liest die Terms
-     und entscheidet. Bei Nein: Clips aus der CMU Motion Capture Database (laut CMU frei für
-     alle Zwecke inklusive Produkte, nur kein Weiterverkauf der Rohdaten; Kategorie Tanz ist aber
-     klein) oder selbst getanzt über den Video-Import.
+1. **AIST++-Bewegungen werden ausgeliefert.**
+   - Die Annotationen (3D-Keypoints, SMPL) stehen unter **CC BY 4.0** (Google LLC): Weitergabe
+     und kommerzielle Nutzung erlaubt, Namensnennung Pflicht.
+   - Die Choreografien stammen aus der **AIST Dance Video Database**. Der Nutzer hat deren
+     Terms of Use gelesen: abgeleitete Bewegungsdaten dürfen in einer öffentlich gehosteten App
+     ausgeliefert werden. Claude hat die Terms nicht selbst geprüft; die Entscheidung beruht auf
+     der Aussage des Nutzers.
+   - Pflichten für die Credits (14c): CC-BY-Namensnennung (Google LLC) und Zitat des
+     ISMIR-2019-Papers (verlangt die AIST-Startseite).
    - Die AIST-Musik wird **nicht** verwendet (nur Bewegung).
-   - Gilt auch für das Motion-Paket aus Etappe 13, sobald es AIST-Clips enthält und
-     ausgeliefert wird.
-2. **KI-Musik:**
-   - Drittquellen berichten, dass Suno kommerzielle Rechte nur für Songs gewährt, die mit einem
-     **bezahlten** Tarif regulär heruntergeladen wurden. Nicht geprüft: Der Nutzer liest die
-     aktuellen Suno-Bedingungen selbst und hebt einen Nachweis (Tarif, Download-Datum) außerhalb
-     des Repos auf.
-   - Generator-Wahl liegt beim Nutzer; der Plan setzt nur eine MP3 oder WAV mit bekannter Länge
-     voraus.
-   - Inhaltliche Vorgaben für die Prompts: 4/4-Takt, feste BPM (passend zu den Clips im
-     Motion-Paket, siehe 14a), klarer Aufbau mit Refrain, tanzbarer Pop/Dance, kein Bezug auf
-     echte Künstler oder Songs („im Stil von …“ vermeiden).
-3. **Auslieferung der Audiodateien** (heute schließt `.gitignore` alle Audiodateien aus):
-   - **Empfehlung:** Ausnahme nur für `public/demo-audio/*.mp3` in `.gitignore`, Dateien werden
-     von der eigenen Adresse geladen (kein externer Abruf, keine neue Zeile in
-     „Externe Abrufe“) und vom Service Worker gecacht. Größe ca. 3–4 MB pro Song (MP3 128–160
-     kbit/s).
-   - Alternative: Audiodateien nicht im Repo, nur auf Vercel hochladen. Nachteil: Build nicht
-     reproduzierbar, `bun run dev` ohne Demos.
-   - Die Regel „Keine geschützten Songs im Repo“ bleibt erfüllt: Die Songs gehören dem Nutzer.
-     CLAUDE.md bekommt eine Zeile zur Ausnahme.
-4. **Alte Demos:** Ersetzen (neue IDs, alte werden beim nächsten Seed entfernt, sofern sie
-   noch Demo-Audio spielen und nicht bearbeitet wurden) oder behalten (als „Classic“)?
-   Empfehlung: ersetzen; Löschen von Code nur nach Freigabe (CLAUDE.md, Arbeitsweise).
+   - Gilt auch für das Motion-Paket aus Etappe 13, sobald es AIST-Clips enthält. Die
+     Fallbacks CMU Motion Capture Database und selbst getanzte Clips sind nicht nötig, bleiben
+     aber als Ergänzung möglich. Die Freigabe 13-0.7 (Python-Konverter, 13h-2) ist davon
+     getrennt.
+2. **Musik: KI-generiert mit Gemini (Pro-Abo des Nutzers), 4 Songs, MP3.**
+   - Dateien in `public/demo-audio/`: `Gold_in_My_Pocket`, `Gold_on_the_Glass`,
+     `Lemonade_Skies`, `Rise_Until_The_Morning`.
+   - **Lizenz:** Die Nutzungsbedingungen von Gemini für Musik hat Claude nicht geprüft. Der
+     Nutzer liest sie selbst und hebt einen Nachweis (Abo, Erzeugungs- bzw. Download-Datum)
+     außerhalb des Repos auf. Das Repo enthält keine Konto- oder Abodaten.
+   - Die Songs gehören dem Nutzer (kein geschütztes Fremdmaterial); die Credits kennzeichnen sie
+     als KI-generiert mit Gemini (genauer Wortlaut in 14c).
+   - Vorgaben für die Prompts waren: 4/4-Takt, feste BPM, klarer Aufbau mit Refrain,
+     tanzbarer Pop/Dance, kein Bezug auf echte Künstler oder Songs. Die tatsächliche BPM misst
+     14a nach (siehe Risiko „Tempo“), die Prompt-BPM zählt nicht.
+3. **Audio liegt im Repo.** Ausnahme in `.gitignore` nur für `public/demo-audio/*.mp3`, Ordner
+   angelegt. Die Dateien kommen von der eigenen Adresse (kein externer Abruf, keine neue Zeile in
+   „Externe Abrufe“) und werden vom Service Worker gecacht, ca. 3–4 MB pro Song. Die Regel
+   „Keine geschützten Songs im Repo“ bleibt erfüllt. CLAUDE.md bekommt die Zeile zur Ausnahme
+   mit 14c. Verworfen: Audio nur auf Vercel (Build nicht reproduzierbar, `bun run dev` ohne
+   Demos).
+4. **Alte Demos werden ersetzt** (neue IDs; die alten werden beim nächsten Seed entfernt, sofern
+   sie noch Demo-Audio spielen und nicht bearbeitet wurden). Löschen von Code nur nach Freigabe
+   (CLAUDE.md, Arbeitsweise).
+
+**Stand:** 14-0 erledigt. 14a startet erst nach ausdrücklicher Freigabe des Nutzers.
 
 ## 14a Musik erzeugen und Manifest
 
-- Nutzer erzeugt zwei bis drei Songs (Vorgaben aus 14-0.2). BPM je Song so wählen, dass genug
+- Der Nutzer hat vier Songs mit Gemini erzeugt (14-0.2). BPM je Song so wählen, dass genug
   Clips im Motion-Paket innerhalb ±12 % liegen (`bun run eval-choreo` aus 13g zeigt die
   Abdeckung pro BPM).
 - Pro Song ein **Manifest** `src/data/demos/<slug>.manifest.json` (von Hand, zod-geprüft):
@@ -151,7 +132,7 @@ Ursprüngliche Fragen und Empfehlungen:
 | Schritt | Inhalt                                   | Hängt ab von                  | Modell |
 | ------- | ---------------------------------------- | ----------------------------- | ------ |
 | 14-0    | Entscheidungen, Lizenzprüfung (erledigt) | –                             | –      |
-| 14a     | Musik erzeugen (Nutzer), Manifest, Seed  | 14-0.2, 14-0.3, 13e (BPM)     | Sonnet |
+| 14a     | Musik einbinden, Manifest, Seed          | 14-0.2, 14-0.3, 13e (BPM)     | Sonnet |
 | 14b     | Songaufbau über den Generator            | 14a, 13f-1, 14-0.1            | Opus   |
 | 14c     | Einbinden, Credits, Spielbarkeit, Doku   | 14b, 14-0.4, 12 (Darstellung) | Sonnet |
 | 14d     | Playwright, Gerätetest                   | alle                          | –      |
@@ -166,7 +147,8 @@ Ein Commit pro Teiletappe.
 - **Erkennung:** Schnelle oder gedrehte Bewegungen erkennt MediaPipe mit der Handykamera
   schlechter als das Mocap-System; die Wertung kann unfair wirken. Gegenmittel: Filter im
   Motion-Paket, Clips im Manifest ersetzen, Schwierigkeit ehrlich angeben.
-- **Lizenz:** Fällt 14-0.1 negativ aus, nutzen die Manifeste nur CMU- oder selbst getanzte
-  Clips; Code ändert sich nicht.
+- **Lizenz:** AIST++ ist freigegeben (14-0.1). Offen bleibt der Nachweis zur Gemini-Musik, den
+  der Nutzer außerhalb des Repos führt (14-0.2). Ändern sich die Bedingungen oder ist der
+  Nachweis nicht möglich, werden die MP3-Dateien ersetzt; Manifeste und Code bleiben.
 - **Tempo:** KI-Generatoren halten die gewünschte BPM nicht immer exakt. Deshalb BPM nach dem
   Erzeugen messen und die Grenze von ±12 % prüfen, statt der Prompt-BPM zu vertrauen.
