@@ -24,7 +24,11 @@ vi.mock("@/lib/library/repository", () => ({
     getAudio: async () => undefined,
   },
 }));
-vi.mock("@/data/demo", () => ({ seedDemos: async () => {}, markDemoDeleted: () => {} }));
+vi.mock("@/data/demo", () => ({
+  seedDemos: async () => {},
+  markDemoDeleted: () => {},
+  DEMO_TITLES: [],
+}));
 
 /** Fake audio: time runs (on the fake clock) only while playing. */
 const audio = vi.hoisted(() => ({

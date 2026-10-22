@@ -22,7 +22,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
 | 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen) | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
-| 14. Neue Demo-Songs                          | ⏳ (14a-1, 14b, 14a-2 ✅)           | Opus für den Songaufbau, Sonnet für den Rest                          |
+| 14. Neue Demo-Songs                          | ⏳ (14a-1, 14b, 14a-2, 14c-1 ✅)    | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
 
@@ -1240,6 +1240,33 @@ Nur am Gerät prüfbar, nicht geprüft:
   wartet auf den Seed).
 - Klang der MP3s am iPhone-Lautsprecher.
 - Ob die Moves auf dem Beat liegen (MP3-Decoder-Verzögerung im Browser).
+
+**14c-1 Credits – umgesetzt.** Abschnitt „Über und Credits“ am Ende der Einstellungen
+(`CreditList` in `SettingsScreen.tsx`, Inhalt in `src/data/credits.ts`). Er nennt die vier
+Demo-Songs (Titel aus den Manifesten, `DEMO_TITLES`) als „KI-generiert mit Gemini (Google)“.
+Die AIST-Einträge sind fertig formuliert (`AIST_CREDITS`): AIST++ mit „© Google LLC, CC BY 4.0“,
+Link und Zitat (Li et al., ICCV 2021), AIST Dance Video Database mit Zitat (Tsuchida et al.,
+ISMIR 2019). Sie erscheinen erst, wenn `SHIPS_AIST` auf `true` steht. Ein Test hält den Schalter
+gleich mit dem Motion-Paket (Quelle `video:AIST++ …`): Landen AIST-Clips in
+`src/data/motion-pack.json`, schlägt er fehl, bis die Credits umgestellt sind. Links nennen ihren
+Host, öffnen sich erst beim Tippen in einem neuen Tab (`noopener noreferrer`) und rufen beim
+Anzeigen nichts ab. Tests: `credits.test.ts`, `settings-screen.test.tsx`.
+
+Abweichungen vom Plan:
+
+- Die AIST-Credits sind vorbereitet, werden aber noch nicht angezeigt. Das ausgelieferte Paket
+  enthält bisher nur `demo`-Clips; eine Nennung ohne ausgelieferte Daten wäre falsch.
+- `DEMOS` liest Manifest und Choreo-JSON schon seit 14a-2; in 14c blieb dafür nichts zu tun.
+
+Nicht geprüft: Den Wortlaut der Zitate hat Claude aus den Paper-Angaben übernommen, nicht gegen
+die Vorgaben der AIST-Seiten abgeglichen. Das sollte vor dem Umschalten von `SHIPS_AIST`
+nachgeholt werden.
+
+Offen:
+
+- 14c-2: Spielbarkeit pro Song mit dem simulierten Spieler messen, danach die Schwierigkeit in
+  den Manifesten festlegen.
+- 14d: Playwright-Prüfung inklusive Credits in 390×844 und 844×390.
 
 ## Offene Befunde
 

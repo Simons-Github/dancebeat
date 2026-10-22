@@ -139,5 +139,7 @@ Motion, zod, MediaPipe Pose Landmarker, Vitest.
 
 Im Repo liegen keine geschützten Songs und keine Original-Assets; Audio- und Videodateien sind
 per `.gitignore` ausgeschlossen. Einzige Ausnahme sind die vier eigenen Demo-Songs in
-`public/demo-audio/` (KI-generiert mit Gemini, Credits folgen in Etappe 14c). Eigene Songs
-bleiben lokal im Browser.
+`public/demo-audio/` (KI-generiert mit Gemini). Die Credits stehen in der App unter
+Einstellungen → „Über und Credits“ (`src/data/credits.ts`). Sobald das Motion-Paket
+AIST++-Clips enthält, nennen sie zusätzlich AIST++ (CC BY 4.0, Google LLC) und die AIST Dance
+Video Database. Eigene Songs bleiben lokal im Browser.

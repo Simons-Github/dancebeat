@@ -17,6 +17,7 @@ import {
   type RedirectCheck,
   type SpotifyStatus,
 } from "@/lib/audio/spotifyAuth";
+import { CREDITS, type Credit } from "@/data/credits";
 import { mediaVolumeIgnored } from "@/lib/audio/unlock";
 import { getStorageUsage, type StorageUsage } from "@/lib/library/storage";
 import { DIFFICULTIES, type Difficulty } from "@/lib/scoring";
@@ -194,6 +195,42 @@ function SpotifySettings({
         </>
       )}
     </Section>
+  );
+}
+
+/** Credits with their links; a link names its host and opens only on tap (no fetch on render). */
+export function CreditList({ credits }: { credits: readonly Credit[] }) {
+  return (
+    <>
+      {credits.map((c) => (
+        <div key={c.title} className="flex flex-col gap-1">
+          <h3 className="text-base font-medium">{c.title}</h3>
+          {c.lines.map((line) => (
+            <p key={line} className={HINT}>
+              {line}
+            </p>
+          ))}
+          {c.links.length > 0 && (
+            <p className="flex flex-wrap gap-x-4 gap-y-1 text-sm">
+              {c.links.map((l) => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline underline-offset-2"
+                >
+                  {l.label} ({new URL(l.href).hostname})
+                </a>
+              ))}
+            </p>
+          )}
+        </div>
+      ))}
+      {credits.some((c) => c.links.length > 0) && (
+        <p className={HINT}>Links öffnen sich erst beim Tippen in einem neuen Tab.</p>
+      )}
+    </>
   );
 }
 
@@ -413,6 +450,10 @@ export function SettingsScreen() {
                 : `${formatMb(usage.usageBytes)} belegt von ${formatMb(usage.quotaBytes)}`}
           </p>
           <p className={HINT}>Songs und Audiodateien liegen nur auf diesem Gerät.</p>
+        </Section>
+
+        <Section title="Über und Credits">
+          <CreditList credits={CREDITS} />
         </Section>
       </div>
     </main>

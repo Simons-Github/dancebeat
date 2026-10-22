@@ -151,6 +151,8 @@ const DEMOS: readonly DemoEntry[] = [
 ];
 
 export const DEMO_IDS: readonly string[] = DEMOS.map((d) => d.id);
+/** Titles of the shipped demos, for the credits. */
+export const DEMO_TITLES: readonly string[] = DEMOS.map((d) => d.manifest.title);
 
 export const isDemoId = (id: string) => DEMO_IDS.includes(id);
 

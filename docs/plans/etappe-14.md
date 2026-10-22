@@ -112,6 +112,9 @@ Umgesetzt, Abweichungen siehe [roadmap.md](../roadmap.md) und
 
 ## 14c Einbinden, Credits, Spielbarkeit
 
+Aufgeteilt: **14c-1** Credits (umgesetzt, siehe [roadmap.md](../roadmap.md)); **14c-2**
+Spielbarkeit und Schwierigkeit.
+
 - `DEMOS` in `src/data/demo.ts` liest Manifest und Choreo-JSON statt `seq`/`POSES`.
 - Umgang mit den alten Demos laut Entscheidung 14-0.4.
 - **Credits:** Abschnitt „Über und Credits“ in den Einstellungen: AIST++ (CC BY 4.0, Google

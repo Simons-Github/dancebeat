@@ -411,6 +411,10 @@ UI benannt werden (die Gegenstelle sieht dabei die IP-Adresse):
 | Spotify-SDK, Login, Wiedergabe | sdk.scdn.co, accounts/api.spotify.com | Spotify-Song laden                        |
 | Audio-URL                      | vom Nutzer eingegebene Adresse        | in der Aufstellhilfe mit Hostname benannt |
 
+Die Links unter Einstellungen → „Über und Credits“ (Etappe 14c-1) sind keine Abrufe: Sie nennen
+ihren Host und öffnen sich erst beim Tippen in einem neuen Tab; beim Anzeigen wird nichts
+geladen.
+
 Sync-Test und Choreografie-Editor (Karte „Vorschau“, Etappe 8d-2b) laden dieselben Quellen
 (YouTube-Skript und -Player, Audio-URL) beim Öffnen und nennen sie dort ebenfalls.
 

@@ -3,6 +3,8 @@ import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/rea
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
+import { CreditList } from "@/components/SettingsScreen";
+import { AIST_CREDITS, CREDITS } from "@/data/credits";
 import { resetAudioUnlockForTests } from "@/lib/audio/unlock";
 import { routeTree } from "@/routeTree.gen";
 
@@ -26,10 +28,35 @@ afterEach(() => {
 describe("Einstellungen", () => {
   it("zeigt alle Abschnitte", async () => {
     await renderSettings();
-    for (const name of ["Spiel", "Ton", "Anzeige", "Kamera", "Speicher"]) {
+    for (const name of ["Spiel", "Ton", "Anzeige", "Kamera", "Speicher", "Über und Credits"]) {
       expect(screen.getByRole("heading", { name })).toBeInTheDocument();
     }
     expect(await screen.findByText("Nicht verfügbar")).toBeInTheDocument();
+  });
+
+  it("zeigt die Credits mit Musikquelle und Link-Hosts", async () => {
+    await renderSettings();
+    for (const c of CREDITS) {
+      expect(screen.getByRole("heading", { name: c.title })).toBeInTheDocument();
+      for (const l of c.links) {
+        const link = screen.getByRole("link", {
+          name: `${l.label} (${new URL(l.href).hostname})`,
+        });
+        expect(link).toHaveAttribute("href", l.href);
+        expect(link).toHaveAttribute("rel", "noopener noreferrer");
+      }
+    }
+    expect(screen.getByText(/KI-generiert mit Gemini/)).toBeInTheDocument();
+  });
+
+  it("zeigt Credit-Links mit Host, öffnet sie nur in einem neuen Tab", () => {
+    render(<CreditList credits={AIST_CREDITS} />);
+    const link = screen.getByRole("link", { name: "CC BY 4.0 (creativecommons.org)" });
+    expect(link).toHaveAttribute("href", "https://creativecommons.org/licenses/by/4.0/");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noopener noreferrer");
+    expect(screen.getAllByRole("link")).toHaveLength(3);
+    expect(screen.getByText(/erst beim Tippen/)).toBeInTheDocument();
   });
 
   it("speichert Schalter und Schwierigkeit", async () => {

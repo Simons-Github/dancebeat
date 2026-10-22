@@ -20,6 +20,9 @@ import type { Landmark, Landmark3d } from "./types";
 /** Sample spacing of the track in ms, as in the video analysis (about 20 Hz). */
 export const AIST_STEP_MS = 50;
 
+/** Video name prefix of AIST++ tracks; motion-pack clips get the source `video:<prefix><clip>`. */
+export const AIST_VIDEO_PREFIX = "AIST++ ";
+
 /** COCO-17 joint index to MediaPipe-33 landmark index (COCO odd indices are the left side). */
 export const COCO_TO_MEDIAPIPE: readonly (readonly [coco: number, mediapipe: number])[] = [
   [0, 0], // nose
@@ -198,7 +201,7 @@ export function aistPoseTrack(
   // buildPoseTrackFile rounds the world points like the video export.
   const file = buildPoseTrackFile({
     exportedAt: opts.now,
-    video: `AIST++ ${clip.name}`,
+    video: `${AIST_VIDEO_PREFIX}${clip.name}`,
     bpm: clip.bpm,
     beatPhaseMs: clip.beatPhaseMs ?? 0,
     range: { startMs: 0, endMs: samples.at(-1)?.timeMs ?? 0 },
