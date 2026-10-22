@@ -433,7 +433,7 @@ Optionen: `--seeds`, `--bpm`, `--noise`, `--miss`, `--out`, `--baseline-only`.
 | Schritt °   | mittlerer Winkelabstand aufeinanderfolgender Moves                                                                         |
 | Wiederh.    | Anteil aufeinanderfolgender Moves mit praktisch gleicher Pose (alle Winkel unter 5° Abstand)                               |
 | Abdeckung   | Anteil der Paket-Clips (ohne Ruheposen), die mindestens einmal vorkommen                                                   |
-| max/p95 °/s | höchste bzw. 95.-Perzentil-Winkelgeschwindigkeit einer Gliedmaße, `frameAt` alle 20 ms                                     |
+| max/p95 °/s | höchste bzw. 95.-Perzentil-Winkelgeschwindigkeit einer Gliedmaße, `frameAt` alle 20 ms; mit `pose3d` nur messbare Winkel   |
 | Quote sim   | Sternquote (0–1, seit N2 ohne Combo) des simulierten Spielers (`simulatedAngles`, 30 Bilder/s, 10° Rauschen, 10 % Ausfall) |
 
 Stand 13f-1 nach dem Review (20 Seeds, 10° Rauschen, 10 % Ausfall; Generator-Spitzen vor der

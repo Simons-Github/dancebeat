@@ -23,13 +23,15 @@ const MUSIC_CREDIT: Credit = {
   links: [],
 };
 
-// CC BY 4.0 attribution (Google LLC) plus paper citations (ISMIR 2019 required per 14-0.1). Check
-// the wording against the AIST pages before enabling SHIPS_AIST.
+// CC BY 4.0 attribution (Google LLC) plus paper citations (ISMIR 2019 required per 14-0.1).
+// Wording checked against the AIST pages on 2026-10-22 (docs/roadmap.md, 13h-2): the AIST++ page
+// says "licensed by Google LLC under CC BY 4.0"; the AIST Dance DB terms require the database name
+// and give the English sentence below for uses outside papers.
 export const AIST_CREDITS: readonly Credit[] = [
   {
     title: "AIST++ Dance Motion Dataset",
     lines: [
-      "Bewegungsdaten © Google LLC, lizenziert unter CC BY 4.0. Für DanceBeat in Clips geschnitten, gefiltert und auf die Strichfigur übertragen.",
+      "Bewegungsdaten (Annotationen) von Google LLC, lizenziert unter CC BY 4.0. Für DanceBeat in Clips geschnitten, gefiltert und auf die Strichfigur übertragen.",
       "R. Li, S. Yang, D. A. Ross, A. Kanazawa: AI Choreographer: Music Conditioned 3D Dance Generation with AIST++. ICCV 2021.",
     ],
     links: [
@@ -41,7 +43,8 @@ export const AIST_CREDITS: readonly Credit[] = [
     title: "AIST Dance Video Database",
     lines: [
       "Choreografien aus der AIST Dance Video Database; deren Musik wird nicht verwendet.",
-      "S. Tsuchida, S. Fukayama, M. Hamasaki, M. Goto: AIST Dance Video Database: Multi-genre, Multi-dancer, and Multi-camera Database for Dance Information Processing. ISMIR 2019.",
+      "We have used the AIST Dance Video Database (https://aistdancedb.ongaaccel.jp).",
+      "S. Tsuchida, S. Fukayama, M. Hamasaki, M. Goto: AIST Dance Video Database: Multi-genre, Multi-dancer, and Multi-camera Database for Dance Information Processing. ISMIR 2019, Delft, S. 501–510.",
     ],
     links: [{ label: "AIST Dance DB", href: "https://aistdancedb.ongaaccel.jp/" }],
   },

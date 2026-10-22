@@ -31,4 +31,12 @@ describe("Credits", () => {
     expect(aist).toContain("creativecommons.org/licenses/by/4.0");
     expect(aist).toContain("ISMIR 2019");
   });
+
+  it("nennen die AIST Dance DB mit dem Satz aus deren Terms of Use", () => {
+    const text = AIST_CREDITS.flatMap((c) => c.lines).join("\n");
+    expect(text).toContain(
+      "We have used the AIST Dance Video Database (https://aistdancedb.ongaaccel.jp).",
+    );
+    expect(text).not.toContain("©");
+  });
 });

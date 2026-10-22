@@ -189,6 +189,25 @@ describe("angular speed", () => {
     expect(m.p95SpeedDegPerS).toBeLessThanOrEqual(m.maxSpeedDegPerS);
   });
 
+  it("skips angles that are foreshortened in the 3D pose", () => {
+    // Left upper arm points at the camera: its 2D elbow angle flips by 180° within 100 ms
+    // although the arm hardly moves. The right shoulder turns 9° (90°/s) and stays measurable.
+    const at = (timeMs: number, ra: number, leftElbow: number): Frame => {
+      const f = frame(timeMs, { la: 0, ra }, 0);
+      const pose3d = f.pose3d!;
+      return {
+        ...f,
+        angles: { ...f.angles, leftElbow },
+        pose3d: { ...pose3d, bones: { ...pose3d.bones, leftUpperArm: [0, 0, -1] } },
+      };
+    };
+    const frames = [at(0, 0, 0), at(100, 9, 180)];
+    expect(Math.max(...speedSamples({ frames }))).toBeCloseTo(90, 0);
+    // Without pose3d (legacy frames) the flip counts.
+    const flat = frames.map(({ pose3d: _, ...f }) => f);
+    expect(Math.max(...speedSamples({ frames: flat }))).toBeCloseTo(1800, 0);
+  });
+
   it("percentile uses the nearest rank", () => {
     const xs = Array.from({ length: 20 }, (_, i) => i + 1);
     expect(percentile(xs, 0.95)).toBe(19);

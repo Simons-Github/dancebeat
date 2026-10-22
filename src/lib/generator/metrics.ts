@@ -3,7 +3,7 @@ import { ANGLE_SEGMENTS, angleDiff, frameAt } from "../pose";
 import { seededRandom } from "../random";
 import { MOVE_WINDOW_MS, Scorer, type ScoreSnapshot } from "../scorer";
 import { simulatedAngles } from "../game/simulatedPlayer";
-import type { AngleKey, Angles, Choreography, MotionPack } from "../types";
+import type { AngleKey, Angles, Choreography, Frame, MotionPack } from "../types";
 
 /**
  * Metrics of a choreography for the evaluation bench (Etappe 13g, scripts/eval-choreo.ts):
@@ -58,7 +58,10 @@ export interface ChoreoMetrics {
   repeatRate: number;
   /** Share (0..1) of the pack's non-rest clips (by `iconId`) used by at least one move. */
   coverage: number;
-  /** Highest angular speed of any limb angle (degrees per second), sampled every SPEED_STEP_MS. */
+  /**
+   * Highest angular speed of any limb angle (degrees per second), sampled every SPEED_STEP_MS;
+   * with `pose3d` only over measurable angles (see `speedSamples`).
+   */
   maxSpeedDegPerS: number;
   /** SPEED_PERCENTILE of the per-sample peak limb speed (degrees per second). */
   p95SpeedDegPerS: number;
@@ -148,9 +151,25 @@ export function coverage(c: ChoreoLike, pack: MotionPack): number {
 }
 
 /**
+ * The limb angles of a sampled frame that count for the speed: with `pose3d` only the
+ * `measurableAngles` (a foreshortened segment flips its 2D angle by up to 180° on a small 3D
+ * move, Etappe 13h-2), else (flat legacy frames) all of them.
+ */
+function speedAngles(f: Frame | null): Angles {
+  if (!f) return {};
+  if (!f.pose3d) return f.angles;
+  const out: Angles = {};
+  for (const k of measurableAngles(f.pose3d)) {
+    const v = f.angles[k];
+    if (v != null) out[k] = v;
+  }
+  return out;
+}
+
+/**
  * Peak limb angular speed (degrees per second) per sample step: `frameAt` every SPEED_STEP_MS
- * from the first to the last frame, the largest |Δangle| / Δt over limb angles present at both
- * ends of the step. Steps without a common angle are left out.
+ * from the first to the last frame, the largest |Δangle| / Δt over limb angles present (and,
+ * with `pose3d`, measurable) at both ends of the step. Steps without a common angle are left out.
  */
 export function speedSamples(c: Pick<Choreography, "frames">): number[] {
   const first = c.frames[0],
@@ -158,9 +177,9 @@ export function speedSamples(c: Pick<Choreography, "frames">): number[] {
   if (!first || !last) return [];
   const steps = Math.floor((last.timeMs - first.timeMs) / SPEED_STEP_MS);
   const out: number[] = [];
-  let prev = frameAt(c.frames, first.timeMs)?.angles ?? {};
+  let prev = speedAngles(frameAt(c.frames, first.timeMs));
   for (let i = 1; i <= steps; i++) {
-    const cur = frameAt(c.frames, first.timeMs + i * SPEED_STEP_MS)?.angles ?? {};
+    const cur = speedAngles(frameAt(c.frames, first.timeMs + i * SPEED_STEP_MS));
     const d = limbDiffs(prev, cur);
     if (d.length) out.push((Math.max(...d) * 1000) / SPEED_STEP_MS);
     prev = cur;

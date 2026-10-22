@@ -1150,12 +1150,63 @@ Ausgelieferte Clips: Lizenz mit 14-0.1 geklärt (2026-10-22, Nutzer hat die Term
   Winkelgeschwindigkeit steigt aber auf 1800–2700 °/s (p95 bis 1420), mit dem ausgelieferten
   Paket sind es 355–549 °/s.
 
+**Nachmessung der drei offenen Fragen (2026-10-22):**
+
+- **Knochengeschwindigkeit: Grenzwert 720 °/s bleibt.** Die 1800–2700 °/s aus `eval-choreo`
+  waren kein Versagen des Filters, sondern zwei andere Größen:
+  - 2D-Artefakt: Die Höchstwerte waren gesättigt. 1800 = 180° je 100-ms-Frame,
+    2727 = 180° je 66 ms. Bei einem in der Projektion verkürzten Oberarm klappt der
+    2D-Ellbogenwinkel um, obwohl sich der Arm in 3D kaum bewegt. Unter den Frame-Paaren über
+    1000 °/s hatten 50–75 % ein Segment kürzer als 0,05, und über die Hälfte lag in 3D unter
+    500 °/s. `speedSamples` zählt seitdem bei Frames mit `pose3d` nur die `measurableAngles`
+    (Test in `choreoMetrics.test.ts`). Das ausgelieferte Paket misst unverändert.
+  - Echte Gelenkgeschwindigkeit: Der Filter prüft absolute Knochenrichtungen zwischen
+    Keyframes. `eval-choreo` misst Gelenkwinkel. Drehen Ober- und Unterarm gegenläufig,
+    addieren sich beide. Dazu kommt, dass die hierarchische Interpolation den Unterarm zwischen
+    den Keyframes etwas schneller führt als die Sehne. Die übrigen Spitzen sind echte
+    Unterarm-Schnapper mit etwa 1000 °/s in 3D. Sie liegen alle innerhalb der Clips, nicht in
+    den Überblendungen. Das Zieltempo weicht höchstens 11 % vom Quelltempo ab.
+  - Neu gemessen mit dem AIST-Paket: p95 je nach BPM und Stufe 570–1008 °/s (vorher bis 1420),
+    max 1323–2522 °/s.
+  - Verteilung der Rohclips (5551 Clips, die alle anderen Filter bestehen, Quelltempo): Median
+    485 °/s, p90 748, Maximum 1253. Bei 540 °/s blieben 61 %, bei 720 88 %, bei 900 97 %.
+    Waacking ist am schnellsten (bei 720 bleiben 75 %), Jazz Ballet am langsamsten (94 %).
+  - Begründung: Bewertet wird nur am Haltepunkt (±250 ms). Schnelle Wege dazwischen kosten
+    keine Punkte, sie machen den Coach nur schwerer nachzumachen. Ein strengerer Wert nähme viele
+    Clips weg, ohne dass ein Nutzen belegt ist. Ob Ellbogen-Schnapper am Handy stören, zeigt
+    erst der Gerätetest. Ein Filter auf Gelenkwinkel statt Knochenrichtung wäre dann der nächste
+    Schritt.
+- **Haltepunkte: Die Anzahl kommt aus dem Verfahren, die Lage aus der Erkennung.**
+  `holdTimes` gibt je Fenster zu 2 Beats genau einen Haltepunkt aus (notfalls den Rasterpunkt).
+  Alle 693 Basic-Clips sind 16 Beats lang (8 Haltepunkte, 7 Clips), alle 122 Freestyle-Clips
+  64 Beats (32 Haltepunkte, 31 Clips). Innerhalb des Fensters wählt die Erkennung wirklich: Von
+  9448 Haltepunkten liegen 4436 auf dem ersten und 5012 auf dem zweiten Beat. Die Cliplängen
+  sind 1 Beat (2266×), 2 Beats (4512×) und 3 Beats (1855×).
+- **Beat-Phase: nicht gemessen, Phase 0 ist nicht belegt.** In `aist-tools` liegen nur die
+  Keypoints, keine Musik. Als Ersatz gemessen: kinematische Beats (Minima der geglätteten
+  mittleren Gelenkgeschwindigkeit, wie der Beat Align Score von AIST++), gefaltet auf die
+  Beatdauer. Ergebnis: Eine gemeinsame Phase gibt es nicht. Über alle 815 Clips ist die
+  Übereinstimmung gering (R = 0,19). Je Musikstück liegen die Mittel zwischen etwa −130° und
+  +170° eines Beats, bei mMH um −90°, bei mWA und mLH um +50° bis +100°. Innerhalb eines Stücks
+  stimmen die Tänzer teils deutlich überein (mWA2 R = 0,70, mWA5 0,72, mLO4 0,58). Das spricht
+  für einen echten Versatz je Stück, aber auch Tanzstile treffen den Beat verschieden (Bounce
+  unten oder oben), deshalb taugt die Bewegung nicht als Ersatz für die Musik. Messen lässt sich
+  die Phase nur mit den Musikdateien. Die AIST-Seite bietet sie unter „Get Only Music Data“ an.
+  Dazu kommt: AIST++ rechnet laut Download-Seite fest mit 60 fps, einige Videos haben leicht
+  abweichende Bildraten (Drift bei 48 s im Bereich weniger Dutzend ms).
+
 **Offen:**
 
-- Grenzwert für die Knochengeschwindigkeit für Mocap-Clips prüfen.
-- Beat-Phase gegen die AIST-Musik messen.
-- Klären, ob die gleichmäßigen 7 bzw. 31 Haltepunkte je Clip aus der Haltepunkt-Erkennung oder
-  aus dem Material kommen.
+- Beat-Phase mit den AIST-Musikdateien messen (Download nötig, siehe unten zur Lizenz).
+- Gerätetest: Stören die Ellbogen-Schnapper aus Mocap-Clips beim Nachmachen?
+- **Lizenz vor dem Ausliefern erneut prüfen.** Die Terms of Use der AIST Dance DB, gelesen
+  am 2026-10-22, sagen: „AIST Dance DB may not be used for any purpose other than academic
+  research.“ Kommerzielle Nutzung nur mit vorheriger schriftlicher Zustimmung von AIST, und
+  „Unauthorized redistribution of any content of the database is prohibited.“ Ob abgeleitete
+  Bewegungsdaten als „content“ gelten, sagen die Terms nicht. Die AIST++-Annotationen selbst
+  stehen unter CC BY 4.0 (Google LLC). Das widerspricht der Annahme in 14-0.1, nach der
+  abgeleitete Bewegungsdaten öffentlich ausgeliefert werden dürfen. `SHIPS_AIST` bleibt aus,
+  bis der Nutzer das geklärt hat, zum Beispiel per Anfrage an AIST. Keine Rechtsberatung.
 
 ### 14. Neue Demo-Songs ✅ (Gerätetest offen)
 
@@ -1272,9 +1323,19 @@ Abweichungen vom Plan:
   enthält bisher nur `demo`-Clips; eine Nennung ohne ausgelieferte Daten wäre falsch.
 - `DEMOS` liest Manifest und Choreo-JSON schon seit 14a-2; in 14c blieb dafür nichts zu tun.
 
-Nicht geprüft: Den Wortlaut der Zitate hat Claude aus den Paper-Angaben übernommen, nicht gegen
-die Vorgaben der AIST-Seiten abgeglichen. Das sollte vor dem Umschalten von `SHIPS_AIST`
-nachgeholt werden.
+Zitate gegen die AIST-Seiten abgeglichen (2026-10-22, Abruf nur lesend: AIST++-Startseite,
+`factsfigures.html`, `download.html`, AIST Dance DB Startseite und `terms_of_use/`):
+
+- AIST++: Die Seite sagt „licensed by Google LLC under CC BY 4.0“. Aus „© Google LLC“ wird
+  „Bewegungsdaten (Annotationen) von Google LLC, lizenziert unter CC BY 4.0“. Der Hinweis auf
+  die Änderungen (geschnitten, gefiltert, übertragen) bleibt, CC BY verlangt ihn. Das Zitat
+  passt: Titel, Autoren und ICCV 2021 wie in der Paperliste der Seite. Das BibTeX dort trägt
+  noch den arXiv-Titel „Learn to Dance with AIST++“.
+- AIST Dance DB: Die Terms verlangen, den Namen der Datenbank deutlich zu nennen. Außerhalb
+  von Papers geben sie den Satz „We have used the AIST Dance Video Database
+  (https://aistdancedb.ongaaccel.jp).“ vor. Er steht jetzt wörtlich in den Credits. Das
+  ISMIR-Zitat hat jetzt Ort und Seiten (Delft, S. 501–510). Test in `credits.test.ts`.
+- Lizenzbefund zu den Terms: siehe 13h-2, „Offen“. `SHIPS_AIST` bleibt aus.
 
 **14c-2 Spielbarkeit und Schwierigkeit – umgesetzt.** `bun run eval-demos`
 (`scripts/eval-demos.ts`, Logik `scripts/evalDemos.ts`) baut jedes Demo-Manifest mit
@@ -1312,8 +1373,9 @@ Nur am Gerät prüfbar, nicht geprüft (Plan 14d): Klang am iPhone-Lautsprecher,
 auf dem Takt, Refrain wiedererkennbar, Erkennung der Clips durch die Kamera und passende
 Schwierigkeit, Wartezeit des ersten Starts über Mobilfunk.
 
-Offen: Neubau der Demos mit dem AIST-Paket, sobald 13h-2 mit echten Daten gemessen ist (dann
-`SHIPS_AIST` umschalten, Zitate gegen die AIST-Seiten abgleichen).
+Offen: Neubau der Demos mit dem AIST-Paket, sobald die Beat-Phase aus 13h-2 gemessen und die
+Lizenzfrage (13h-2, „Offen“) geklärt ist; dann `SHIPS_AIST` umschalten. Die Zitate sind
+abgeglichen (14c-1).
 
 ## Offene Befunde
 
