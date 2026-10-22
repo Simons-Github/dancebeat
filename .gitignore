@@ -66,3 +66,6 @@ coverage
 
 # Evaluation bench output (bun run eval-choreo)
 eval-results/
+
+# Python bytecode (scripts/aist)
+__pycache__/

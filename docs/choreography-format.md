@@ -281,8 +281,21 @@ Entscheidung. Ohne Dateien erzeugt das Skript unverändert das ausgelieferte Pak
 ### Quelle AIST++ (Etappe 13h)
 
 <a id="aist"></a>Mocap-Clips aus AIST++ werden zu Pose-Spuren v2 und laufen dann denselben Weg
-wie Video-Spuren. Ablauf: `.pkl` → Python-Konverter (13h-2, noch offen) → neutrales JSON →
+wie Video-Spuren. Ablauf: `.pkl` → `scripts/aist/convert.py` → neutrales JSON und Clip-Liste →
 `bun run aist-track` → `*.posetrack.json` → `build-motion-pack`. Logik in `src/lib/aist.ts`.
+
+- **Konverter** (Python, `numpy` aus `scripts/aist/requirements.txt` in einer venv außerhalb des
+  Repos, immer mit `python -I`):
+  `<venv>/bin/python -I scripts/aist/convert.py --out=Ordner [--ignore=ignore_list.txt] *.pkl`.
+  Die Pickles sind fremde Daten. Ein eingeschränkter Unpickler löst nur die
+  NumPy-Hilfsfunktionen zum Wiederaufbau von Arrays auf; jede andere Klasse bricht die Datei ab.
+  Gelesen wird `keypoints3d_optim`, das ein Float-Array der Form (N, 17, 3) sein muss. Gelenke
+  mit nicht endlichen Werten werden `null`, Zentimeter sind auf 0,01 gerundet. Der Konverter
+  überspringt Genres ohne stehenden Tanz und Namen aus der `ignore_list.txt` von AIST++. Er
+  schreibt `clips.json` mit dem BPM des Musikstücks laut AIST Dance DB: House `mHO0`–`mHO5`
+  110–135 in 5er-Schritten, alle anderen 80–130 in 10er-Schritten. Ohne `beatPhaseMs`, weil
+  die Daten keine Angabe zum ersten Beat enthalten. Test:
+  `<venv>/bin/python -I scripts/aist/test_convert.py` (nicht Teil von `bun run test`).
 
 - **Eingabe** `<Clipname>.aist.json`: `{ "fps": 60, "joints": [[[x, y, z] | null, … 17], …] }`,
   `keypoints3d_optim` als COCO-17 in Zentimetern, AIST-Welt mit y nach oben, rechtshändig.

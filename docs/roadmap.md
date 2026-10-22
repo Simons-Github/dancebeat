@@ -1102,10 +1102,46 @@ Abweichungen vom Plan:
 - Die Quelle heißt `video:AIST++ …`, weil `videoMotionSource` unverändert genutzt wird.
 
 Tests: `src/test/aist.test.ts`, unabhängig vom Code geschrieben.
-**Offen (13h-2, braucht Freigabe 13-0.7, Python mit numpy):** `scripts/aist/convert.py` mit
-eingeschränktem Unpickler und eigenem Test, Clip-Auswahl und Clip-Liste mit den AIST-Tempi.
-Danach mit echten Dateien messen, ob die Achsenannahme (y nach oben, rechtshändig) stimmt und wie
-viele Clips die Filter bestehen.
+
+**13h-2 Python-Konverter – umgesetzt (Freigabe 13-0.7 am 2026-10-22), Messung mit echten Daten offen.**
+`scripts/aist/convert.py` liest die `.pkl` von AIST++ mit einem eingeschränkten Unpickler. Er
+lässt nur die NumPy-Hilfsfunktionen zum Wiederaufbau von Arrays zu (Protokolle 2–5, Pfade aus
+numpy 1 und 2). Geschrieben werden `<Clip>.aist.json` und `clips.json`. Die Clip-Auswahl läuft
+über Genre und `ignore_list.txt`, das BPM kommt aus der Tempo-Tabelle der AIST Dance DB.
+`numpy==2.5.4` (`scripts/aist/requirements.txt`) liegt in einer venv außerhalb des Repos und
+wurde nur mit Versionen installiert, die älter als 24 h sind. Tests:
+`scripts/aist/test_convert.py` (7 Tests, unter anderem Angriff über `os.system` und
+Objekt-Arrays). Abweichung vom Plan: Die Clip-Liste erzeugt der Konverter aus den Clipnamen,
+statt sie von Hand neben das Skript zu legen. Die Beat-Phase fehlt weiter.
+Die AIST Dance DB erlaubt laut Nutzungsbedingungen nur akademische Forschung und verbietet die
+Weitergabe. Der Nutzer hat am 2026-10-22 zugestimmt. Die Daten liegen außerhalb des Repos.
+Ausgelieferte Clips brauchen eine Anfrage bei AIST (zusammen mit 14-0.1).
+
+**Messung mit echten Daten (`keypoints3d.zip` v1.0, 1408 Clips):**
+
+- Alle Pickles lassen sich mit dem eingeschränkten Unpickler lesen: `keypoints3d` und
+  `keypoints3d_optim`, je (N, 17, 3) als float64.
+- 815 Clips sind umgewandelt, ohne Fehler. 593 wurden übersprungen: Break, Krump, Pop, Street
+  Jazz und die `ignore_list`.
+- `aist-track` meldet keine einzige Warnung. Die Achsenannahme (y nach oben, rechtshändig)
+  stimmt also.
+- `build-motion-pack` schneidet 7761 Clips: 7 je Basic-Clip, 31 je Freestyle-Clip, keiner
+  beim Schneiden verworfen. Die Filter verwerfen davon 3767:
+  - 2963 wegen der Blickrichtung (über 45°)
+  - 685 wegen der Knochengeschwindigkeit
+  - 113 als Bodenarbeit
+  - 6 mit zu wenig messbaren Winkeln
+- Es bleiben 3982 AIST-Clips aus allen sechs Genres. Spiegelpaare gibt es keine.
+- `eval-choreo` mit diesem Paket: Der simulierte Score bleibt gleich. Die höchste
+  Winkelgeschwindigkeit steigt aber auf 1800–2700 °/s (p95 bis 1420), mit dem ausgelieferten
+  Paket sind es 355–549 °/s.
+
+**Offen:**
+
+- Grenzwert für die Knochengeschwindigkeit für Mocap-Clips prüfen.
+- Beat-Phase gegen die AIST-Musik messen.
+- Klären, ob die gleichmäßigen 7 bzw. 31 Haltepunkte je Clip aus der Haltepunkt-Erkennung oder
+  aus dem Material kommen.
 
 ### 14. Neue Demo-Songs ⏳
 
