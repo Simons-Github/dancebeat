@@ -22,7 +22,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
 | 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen) | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
-| 14. Neue Demo-Songs                          | ⏳ (14a-1–14c-2 ✅)                 | Opus für den Songaufbau, Sonnet für den Rest                          |
+| 14. Neue Demo-Songs                          | ✅ (Gerätetest offen)               | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
 
@@ -1143,7 +1143,7 @@ Ausgelieferte Clips: Lizenz mit 14-0.1 geklärt (2026-10-22, Nutzer hat die Term
 - Klären, ob die gleichmäßigen 7 bzw. 31 Haltepunkte je Clip aus der Haltepunkt-Erkennung oder
   aus dem Material kommen.
 
-### 14. Neue Demo-Songs ⏳
+### 14. Neue Demo-Songs ✅ (Gerätetest offen)
 
 Vier Demos mit eigener KI-Musik (Gemini, MP3 in `public/demo-audio/`); Songaufbau per Manifest über
 den Generator aus 13 (fester Plan, Refrain identisch, Gold Moves am Höhepunkt); Credits. Lizenzklärung 14-0 erledigt
@@ -1279,9 +1279,27 @@ Abweichungen vom Plan:
 Nur am Gerät prüfbar, nicht geprüft: Erkennt die Kamera die Clips, fühlen sich die Stufen
 richtig an? Clips, die schlecht erkannt werden, im Manifest ersetzen.
 
-Offen:
+**14d Playwright-Prüfung – erledigt (2026-10-22), Gerätetest offen.** Projektlokaler Server,
+Flags per `ps` geprüft, Dev-Server mit frischem Profil (Seed lief vollständig). Kein Code
+geändert, keine Befunde.
 
-- 14d: Playwright-Prüfung (Bibliothek, Spiel mit `?sim=1`, Credits) in 390×844 und 844×390.
+- Bibliothek: genau die vier Demos (Pink Pulse und Sunset Kick fehlen), BPM 111/120/122/128,
+  Schwierigkeit 1, 2, 2, 3; Speicher danach 15,6 MB. Hoch- und Querformat ohne Überlauf.
+- Spiel mit `?sim=1&noise=10&miss=0.1`: alle vier Demos gestartet (Countdown bis Spielbeginn
+  5,4 s), Lemonade Skies und Gold on the Glass im Hochformat, Rise Until The Morning und Gold in
+  My Pocket im Querformat, Lemonade Skies mit Wechsel ins Querformat mitten im Song. Coach,
+  Piktogramm-Leiste und Skelett werden gezeichnet. Lemonade Skies lief bis zum Ergebnis-Screen
+  (102× PERFECT, 5 Sterne, Megastar, neuer Highscore; Befund N2), Ergebnis in beiden Formaten.
+- Credits: vier Titel, „KI-generiert mit Gemini (Google)“, keine AIST-Einträge (`SHIPS_AIST`
+  aus), keine Links, kein Abruf an fremde Hosts. Beide Formate ohne horizontales Scrollen.
+- Konsole über die ganze Sitzung: keine Fehler, keine Warnungen.
+
+Nur am Gerät prüfbar, nicht geprüft (Plan 14d): Klang am iPhone-Lautsprecher, Moves und Coach
+auf dem Takt, Refrain wiedererkennbar, Erkennung der Clips durch die Kamera und passende
+Schwierigkeit, Wartezeit des ersten Starts über Mobilfunk.
+
+Offen: Neubau der Demos mit dem AIST-Paket, sobald 13h-2 mit echten Daten gemessen ist (dann
+`SHIPS_AIST` umschalten, Zitate gegen die AIST-Seiten abgleichen).
 
 ## Offene Befunde
 
