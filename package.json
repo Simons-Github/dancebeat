@@ -10,6 +10,7 @@
     "tune-video": "bun scripts/tune-video-choreo.ts",
     "build-motion-pack": "bun scripts/build-motion-pack.ts",
     "eval-choreo": "bun scripts/eval-choreo.ts",
+    "eval-demos": "bun scripts/eval-demos.ts",
     "aist-track": "bun scripts/aist/to-pose-track.ts",
     "measure-audio": "bun scripts/measure-audio.ts",
     "build-demo": "bun scripts/build-demo.ts",

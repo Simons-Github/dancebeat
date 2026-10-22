@@ -22,7 +22,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
 | 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen) | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
-| 14. Neue Demo-Songs                          | ⏳ (14a-1, 14b, 14a-2, 14c-1 ✅)    | Opus für den Songaufbau, Sonnet für den Rest                          |
+| 14. Neue Demo-Songs                          | ⏳ (14a-1–14c-2 ✅)                 | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
 
@@ -1262,11 +1262,26 @@ Nicht geprüft: Den Wortlaut der Zitate hat Claude aus den Paper-Angaben überno
 die Vorgaben der AIST-Seiten abgeglichen. Das sollte vor dem Umschalten von `SHIPS_AIST`
 nachgeholt werden.
 
+**14c-2 Spielbarkeit und Schwierigkeit – umgesetzt.** `bun run eval-demos`
+(`scripts/eval-demos.ts`, Logik `scripts/evalDemos.ts`) baut jedes Demo-Manifest mit
+Schwierigkeit 1, 2 und 3 und wertet es mit dem simulierten Spieler aus (Tabelle, JSON in
+`eval-results/`). Ergebnis und Regel in
+[choreography-format.md](choreography-format.md#demo-pipeline). Test: `evalDemos.test.ts`.
+
+Abweichungen vom Plan:
+
+- Die Schwierigkeit kommt nicht aus Score und Sternen: Der simulierte Spieler erreicht auf jeder
+  Stufe 5 Sterne, auch bei 60° Rauschen (Befund N2). Messbar trennt nur Stufe 3 (doppelte
+  Dichte); 1 oder 2 folgt dem Tempo des Songs. Die Stufen 1, 2, 2, 3 der Manifeste bleiben
+  unverändert (kein Neubau nötig).
+- Statt `?sim=1` im Browser misst ein Skript headless; die App-Ansicht mit `?sim=1` folgt in 14d.
+
+Nur am Gerät prüfbar, nicht geprüft: Erkennt die Kamera die Clips, fühlen sich die Stufen
+richtig an? Clips, die schlecht erkannt werden, im Manifest ersetzen.
+
 Offen:
 
-- 14c-2: Spielbarkeit pro Song mit dem simulierten Spieler messen, danach die Schwierigkeit in
-  den Manifesten festlegen.
-- 14d: Playwright-Prüfung inklusive Credits in 390×844 und 844×390.
+- 14d: Playwright-Prüfung (Bibliothek, Spiel mit `?sim=1`, Credits) in 390×844 und 844×390.
 
 ## Offene Befunde
 
@@ -1279,4 +1294,4 @@ Aus dem Gegenlesen; erledigte stehen oben unter „Erledigt“.
 | W10 | iOS: Laden vor Nutzergeste (Code erledigt, URL-Quelle am Gerät prüfen) | 3b     |
 | W13 | Kamera-Rückfall: Continuity-Kamera am Mac prüfen (Fehler, Hänger)      | 2      |
 | N1  | `normalizeLandmarks` ungenutzt, prüft Sichtbarkeit nicht               | 11     |
-| N2  | Sternquote kann über 100 % liegen; Stufen am Gerät abstimmen           | 11     |
+| N2  | Sternquote über 100 %: Sim-Spieler hat überall 5 Sterne (14c-2)        | 11     |

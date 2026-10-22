@@ -552,8 +552,42 @@ buildDemoChoreo(manifest, pack) → Choreography    // realizeFrames, ohne Moves
 | Rise Until The Morning | 3             | 319   | 2    | 1,65 MB |
 
 Rise Until The Morning liegt über dem Ziel von 1 MB, weil Schwierigkeit 3 in Pre-Chorus, Refrain und
-Bridge jeden Beat einen Move setzt. Die Schwierigkeit ist vorläufig und wird in 14c festgelegt. Das Skript warnt
+Bridge jeden Beat einen Move setzt. Die Schwierigkeit ist seit 14c-2 festgelegt (siehe unten). Das Skript warnt
 über 1 MB.
+
+**Spielbarkeit (14c-2):** `bun run eval-demos` (`scripts/eval-demos.ts`, Logik
+`scripts/evalDemos.ts`) baut jedes Manifest mit Schwierigkeit 1, 2 und 3 (Überschreibung, das
+Manifest bleibt unverändert) und wertet jeden Build mit dem simulierten Spieler je Seed aus.
+Ausgabe: Tabelle mit den Spalten des Messplatzes, `*` markiert die Stufe des Manifests; nicht
+baubare Stufen (feste Clips schwerer als die Stufe) stehen mit Grund unter der Tabelle. Alle
+Läufe als JSON in `eval-results/eval-demos.json`. Optionen: `--seeds` (Standard 20), `--noise`,
+`--miss`, `--out`, `--pack`.
+
+Ergebnis (20 Seeds; Moves/min und p95 sind je Stufe fest):
+
+| Song                   | Stufe | Moves/min (1 / 2 / 3) | p95 °/s (1 / 2 / 3) | Sterne bei 10° / 30° / 60° |
+| ---------------------- | ----- | --------------------- | ------------------- | -------------------------- |
+| Lemonade Skies         | 1     | 45 / 45 / 90          | 273 / 288 / 350     | 5 / 5 / 5                  |
+| Gold on the Glass      | 2     | 50 / 50 / 100         | 372 / 348 / 348     | 5 / 5 / 5                  |
+| Gold in My Pocket      | 2     | 54 / 54 / 109         | 382 / 301 / 382     | 5 / 5 / 5                  |
+| Rise Until The Morning | 3     | 61 / 61 / 121         | 417 / 288 / 438     | 5 / 5 / 5                  |
+
+- **Sterne trennen nicht:** Auf jeder Stufe und in jedem Lauf gibt es 5 Sterne, auch bei 60°
+  Rauschen und 20 % Ausfall, wo fast kein Move mehr PERFECT ist (Quote im Mittel 1,06–1,10, kein Lauf unter 1,0). Ursache ist
+  die Referenz der Sternquote (×2 Combo, echte Läufe erreichen ×4), Befund N2 in der
+  [Roadmap](roadmap.md#offene-befunde).
+- **Regel stattdessen:** Messbar trennt nur Stufe 3 (doppelte Dichte). Stufe 1 und 2 sind bei
+  gleicher Energie gleich dicht (`BASE_STEP_BEATS`, die höchste `MANIFEST_ENERGY` 0,6 liegt unter
+  `HIGH_ENERGY`); sie unterscheiden sich nur in der Clip-Auswahl. Die Zuordnung 1 oder 2 folgt
+  deshalb dem Song selbst: Lemonade Skies ist am langsamsten (111 BPM, 45 Moves/min) und bleibt
+  1, die beiden Gold-Songs (120–122 BPM, 50–54 Moves/min) bleiben 2, Rise Until The Morning
+  (128 BPM, 121 Moves/min auf Stufe 3) bleibt 3. Die Manifeste bleiben unverändert.
+- Bei 10° Rauschen ergeben alle Seeds denselben Score (alles PERFECT); die Seeds wirken erst ab
+  etwa 30° Rauschen.
+  Das Paket hat keine Clips der Stufe 3, Stufe 3 heißt also nur doppelte Dichte. Die
+  Clip-Schwierigkeit hängt nicht am Tempo: Rise Until The Morning ist auf Stufe 1 schneller (p95 417) als auf Stufe 2 (288).
+- Nicht headless prüfbar: wie gut die Kamera die Clips erkennt und ob sich die Stufen am Gerät
+  richtig anfühlen.
 
 ## Video-Import
 
