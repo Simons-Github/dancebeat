@@ -130,21 +130,6 @@ export function computeAngles(lm: Landmark[], opts: AngleOptions = {}): Angles {
   return out;
 }
 
-/** Zentriert auf Hüftmitte und skaliert nach Rumpflänge. */
-export function normalizeLandmarks(lm: Landmark[]): Landmark[] {
-  const lh = lm[23],
-    rh = lm[24],
-    ls = lm[11],
-    rs = lm[12];
-  if (!lh || !rh || !ls || !rs) return lm;
-  const hx = (lh[0] + rh[0]) / 2,
-    hy = (lh[1] + rh[1]) / 2;
-  const sx = (ls[0] + rs[0]) / 2,
-    sy = (ls[1] + rs[1]) / 2;
-  const s = Math.hypot(sx - hx, sy - hy) || 1;
-  return lm.map((p) => [(p[0] - hx) / s, (p[1] - hy) / s, vis(p)] as Landmark);
-}
-
 export function bodyCheck(lm: Landmark[] | null) {
   const ok = (i: number) => !!lm && isVisible(lm[i]);
   return {
