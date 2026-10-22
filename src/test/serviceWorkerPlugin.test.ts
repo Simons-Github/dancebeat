@@ -29,12 +29,13 @@ const dist = (): Map<string, string> =>
   ]);
 
 describe("Service-Worker-Plugin: Precache-Liste", () => {
-  it("schließt MediaPipe, sw.js, Sourcemaps und robots.txt aus", () => {
+  it("schließt MediaPipe, Demo-Audio, sw.js, Sourcemaps und robots.txt aus", () => {
     expect(isPrecacheExcluded("mediapipe/wasm/vision_wasm_nosimd_internal.wasm")).toBe(true);
     expect(isPrecacheExcluded("mediapipe/models/pose_landmarker_lite.task")).toBe(true);
     expect(isPrecacheExcluded("sw.js")).toBe(true);
     expect(isPrecacheExcluded("assets/index-abc.js.map")).toBe(true);
     expect(isPrecacheExcluded("robots.txt")).toBe(true);
+    expect(isPrecacheExcluded("demo-audio/Gold_in_My_Pocket.mp3")).toBe(true);
     expect(isPrecacheExcluded("assets/vision_bundle-abc.js")).toBe(false);
   });
 

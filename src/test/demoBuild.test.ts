@@ -2,6 +2,7 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
 import { describe, expect, it } from "vitest";
+import { z } from "zod";
 
 import packJson from "@/data/motion-pack.json";
 import {
@@ -9,6 +10,8 @@ import {
   MANIFEST_ENERGY,
   buildDemoChoreo,
   buildDemoClips,
+  demoChoreoId,
+  demoSongId,
   planFromManifest,
   sectionStarts,
 } from "@/lib/demoBuild";
@@ -494,4 +497,21 @@ describe("shipped demo choreographies", () => {
       expect(parsed, `${slug}.choreo.json is stale: run bun run build-demo`).toEqual(fresh);
     },
   );
+});
+
+describe("demoSongId", () => {
+  const uuid = z.string().uuid();
+  const ids = SHIPPED.map((s) => s.manifest.id);
+
+  it("is a valid, stable UUID that differs from the choreo id", () => {
+    for (const id of ids) {
+      expect(uuid.safeParse(demoSongId(id)).success, id).toBe(true);
+      expect(demoSongId(id)).toBe(demoSongId(id));
+      expect(demoSongId(id)).not.toBe(demoChoreoId(id));
+    }
+  });
+
+  it("differs between the demos", () => {
+    expect(new Set(ids.map(demoSongId)).size).toBe(ids.length);
+  });
 });

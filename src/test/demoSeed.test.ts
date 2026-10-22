@@ -4,19 +4,40 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { act, renderHook, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
+import goldInMyPocket from "@/data/demos/gold-in-my-pocket.manifest.json";
+import goldOnTheGlass from "@/data/demos/gold-on-the-glass.manifest.json";
+import lemonadeSkies from "@/data/demos/lemonade-skies.manifest.json";
+import riseUntilTheMorning from "@/data/demos/rise-until-the-morning.manifest.json";
+import { demoSongId } from "@/lib/demoBuild";
+import { DemoManifestSchema } from "@/lib/demoManifest";
 import type { SongRepository } from "@/lib/library/repository";
-import { makeSong } from "./fixtures";
+import { SongSchema } from "@/lib/schema";
+import type { Song } from "@/lib/types";
+import { makeChoreo, makeSong } from "./fixtures";
 
 type DemoModule = typeof import("@/data/demo");
+
+const DEMOS = [goldInMyPocket, goldOnTheGlass, lemonadeSkies, riseUntilTheMorning].map((raw) => {
+  const m = DemoManifestSchema.parse(raw);
+  return { id: demoSongId(m.id), file: m.audio, title: m.title };
+});
+const ALL = DEMOS.map((d) => d.id).sort();
+const FILES = DEMOS.map((d) => d.file).sort();
+const FIRST = DEMOS[0]!.id;
+const OTHERS = DEMOS.slice(1).map((d) => d.id);
+const without = (id: string) => ALL.filter((x) => x !== id);
 
 const PINK = "d4e0c1a2-0001-4000-8000-000000000001";
 const SUNSET = "d4e0c1a2-0002-4000-8000-000000000002";
 const DELETED_KEY = "dancebeat.deletedDemos";
 const AUDIO_KEY = "dancebeat.demoAudioVersion";
 
-// jsdom has no OfflineAudioContext, and jsdom's Blob does not survive fake-indexeddb's
-// structured clone; the repository does not inspect the stored audio.
-const synth = vi.fn(() => Promise.resolve("wav" as unknown as Blob));
+// jsdom's Blob does not survive fake-indexeddb's structured clone; the repository does not
+// inspect the stored audio, so a string stands in for the MP3.
+const audio = (tag: string) => tag as unknown as Blob;
+const loadAudio = vi.fn((file: string) => Promise.resolve(audio(`mp3:${file}`)));
+const restoreLoadAudio = () =>
+  loadAudio.mockImplementation((file: string) => Promise.resolve(audio(`mp3:${file}`)));
 
 let repo: SongRepository;
 let demo: DemoModule;
@@ -26,91 +47,124 @@ beforeEach(async () => {
   vi.resetModules(); // fresh DB connection and in-flight state per test
   repo = (await import("@/lib/library/repository")).songRepository;
   demo = await import("@/data/demo");
-  synth.mockClear();
+  restoreLoadAudio();
+  loadAudio.mockClear();
 });
 
 afterEach(() => localStorage.clear());
 
 const ids = async () => (await repo.list()).map((s) => s.id).sort();
+const calledFiles = () => loadAudio.mock.calls.map(([f]) => f).sort();
+
+/** Former synthesized demo as the old seed stored it: demo audio, unedited choreo. */
+const legacySong = (id: string): Song => ({
+  ...makeSong(),
+  id,
+  title: id === PINK ? "Pink Pulse" : "Sunset Kick",
+  artist: "DanceBeat Demo",
+  source: { type: "local", blobId: id },
+});
 
 describe("seedDemos", () => {
-  it("seeds both demos into a fresh library", async () => {
-    await demo.seedDemos(repo, synth);
-    expect(await ids()).toEqual([PINK, SUNSET].sort());
-    expect(synth).toHaveBeenCalledTimes(2);
-    expect(await repo.getAudio(PINK)).toBe("wav");
+  it("seeds all four demos into a fresh library", async () => {
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual(ALL);
+    expect([...demo.DEMO_IDS].sort()).toEqual(ALL);
+    expect(calledFiles()).toEqual(FILES);
+    for (const d of DEMOS) {
+      expect(await repo.getAudio(d.id)).toBe(`mp3:${d.file}`);
+      const song = await repo.get(d.id);
+      expect(SongSchema.safeParse(song).success, d.title).toBe(true);
+      expect(song).toMatchObject({ title: d.title, source: { type: "local", blobId: d.id } });
+      expect(song?.createdAt).toBeGreaterThan(0);
+      expect(song?.choreo.createdAt).toBeGreaterThan(0);
+      expect(song?.choreo.updatedAt).toBe(song?.choreo.createdAt);
+    }
   });
 
   it("does not overwrite an existing demo, even without any marker", async () => {
-    await demo.seedDemos(repo, synth);
-    const pink = await repo.get(PINK);
-    if (!pink) throw new Error("demo missing");
-    await repo.save({ ...pink, highscore: 9000, stars: 4 });
+    await demo.seedDemos(repo, loadAudio);
+    const first = await repo.get(FIRST);
+    if (!first) throw new Error("demo missing");
+    await repo.save({ ...first, highscore: 9000, stars: 4 });
     localStorage.clear();
     localStorage.setItem(AUDIO_KEY, String(demo.DEMO_AUDIO_VERSION)); // audio is current: no upgrade run either
 
-    await demo.seedDemos(repo, synth);
-    expect(await repo.get(PINK)).toMatchObject({ highscore: 9000, stars: 4 });
-    expect(synth).toHaveBeenCalledTimes(2); // nothing synthesized the second time
+    await demo.seedDemos(repo, loadAudio);
+    expect(await repo.get(FIRST)).toMatchObject({ highscore: 9000, stars: 4 });
+    expect(loadAudio).toHaveBeenCalledTimes(4); // nothing downloaded the second time
   });
 
   it("does not re-seed a demo the player deleted", async () => {
-    await demo.seedDemos(repo, synth);
-    await repo.delete(PINK);
-    demo.markDemoDeleted(PINK);
+    await demo.seedDemos(repo, loadAudio);
+    await repo.delete(FIRST);
+    demo.markDemoDeleted(FIRST);
 
-    await demo.seedDemos(repo, synth);
-    expect(await ids()).toEqual([SUNSET]);
-    expect(demo.getDeletedDemos()).toEqual([PINK]);
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual(without(FIRST));
+    expect(demo.getDeletedDemos()).toEqual([FIRST]);
   });
 
   it("re-seeds missing demos after the database was wiped", async () => {
-    await demo.seedDemos(repo, synth);
+    await demo.seedDemos(repo, loadAudio);
     localStorage.setItem("dancebeat.seeded", "1"); // stale marker of the old rule
     globalThis.indexedDB = new IDBFactory();
     vi.resetModules();
     repo = (await import("@/lib/library/repository")).songRepository;
     demo = await import("@/data/demo");
 
-    await demo.seedDemos(repo, synth);
-    expect(await ids()).toEqual([PINK, SUNSET].sort());
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual(ALL);
     expect(localStorage.getItem("dancebeat.seeded")).toBeNull();
   });
 
   it("shares one run between concurrent calls", async () => {
     const save = vi.spyOn(repo, "save");
-    const a = demo.seedDemos(repo, synth);
-    const b = demo.seedDemos(repo, synth);
+    const a = demo.seedDemos(repo, loadAudio);
+    const b = demo.seedDemos(repo, loadAudio);
     expect(b).toBe(a);
     await Promise.all([a, b]);
-    expect(synth).toHaveBeenCalledTimes(2);
-    expect(save).toHaveBeenCalledTimes(2);
+    expect(calledFiles()).toEqual(FILES); // once per demo
+    expect(save).toHaveBeenCalledTimes(4);
     // A later call starts a new run (and finds nothing to do).
-    await demo.seedDemos(repo, synth);
-    expect(synth).toHaveBeenCalledTimes(2);
+    await demo.seedDemos(repo, loadAudio);
+    expect(loadAudio).toHaveBeenCalledTimes(4);
   });
 
-  it("does not save a demo deleted while its audio was being synthesized", async () => {
+  it("does not save a demo deleted while its audio was downloading", async () => {
     let release = () => {};
-    synth.mockImplementationOnce(
-      () =>
-        new Promise<Blob>((resolve) => {
-          release = () => resolve("wav" as unknown as Blob);
-        }),
+    loadAudio.mockImplementation((file: string) =>
+      file === DEMOS[0]!.file
+        ? new Promise<Blob>((resolve) => {
+            release = () => resolve(audio("late"));
+          })
+        : Promise.resolve(audio(`mp3:${file}`)),
     );
-    const run = demo.seedDemos(repo, synth);
-    await vi.waitFor(() => expect(synth).toHaveBeenCalledTimes(1));
-    demo.markDemoDeleted(PINK); // first demo is Pink Pulse
+    const run = demo.seedDemos(repo, loadAudio);
+    await vi.waitFor(() => expect(loadAudio).toHaveBeenCalledTimes(4));
+    demo.markDemoDeleted(FIRST);
     release();
     await run;
-    expect(await ids()).toEqual([SUNSET]);
+    expect(await ids()).toEqual(without(FIRST));
   });
 
-  it("can retry after a failed run", async () => {
-    synth.mockRejectedValueOnce(new Error("no audio"));
-    await expect(demo.seedDemos(repo, synth)).rejects.toThrow("no audio");
-    await demo.seedDemos(repo, synth);
-    expect(await ids()).toEqual([PINK, SUNSET].sort());
+  it("skips only a failing demo, warns and adds it on the next seed", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    loadAudio.mockImplementation((file: string) =>
+      file === DEMOS[0]!.file
+        ? Promise.reject(new Error("offline"))
+        : Promise.resolve(audio(`mp3:${file}`)),
+    );
+    await expect(demo.seedDemos(repo, loadAudio)).resolves.toBeUndefined();
+    expect(await ids()).toEqual(without(FIRST));
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+
+    restoreLoadAudio();
+    loadAudio.mockClear();
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual(ALL);
+    expect(calledFiles()).toEqual([DEMOS[0]!.file]);
   });
 
   it.each(["{kaputt", '{"a":1}', "[1,2]", '"text"', "null"])(
@@ -118,8 +172,8 @@ describe("seedDemos", () => {
     async (raw) => {
       localStorage.setItem(DELETED_KEY, raw);
       expect(demo.getDeletedDemos()).toEqual([]);
-      await demo.seedDemos(repo, synth);
-      expect(await ids()).toEqual([PINK, SUNSET].sort());
+      await demo.seedDemos(repo, loadAudio);
+      expect(await ids()).toEqual(ALL);
     },
   );
 
@@ -129,53 +183,172 @@ describe("seedDemos", () => {
     });
     try {
       expect(demo.getDeletedDemos()).toEqual([]);
-      await demo.seedDemos(repo, synth);
-      expect(await ids()).toEqual([PINK, SUNSET].sort());
+      await demo.seedDemos(repo, loadAudio);
+      expect(await ids()).toEqual(ALL);
     } finally {
       get.mockRestore();
     }
   });
 });
 
+describe("default audio loader", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  /** Minimal fetch response; `type` is the Content-Type header. */
+  const response = (url: string, type = "audio/mpeg", ok = true) => ({
+    ok,
+    status: ok ? 200 : 404,
+    headers: new Headers(type ? { "Content-Type": type } : {}),
+    blob: () => Promise.resolve(audio(url)),
+  });
+
+  it("fetches the MP3s from the app's own origin", async () => {
+    const fetchMock = vi.fn((url: string) => Promise.resolve(response(url)));
+    vi.stubGlobal("fetch", fetchMock);
+    await demo.seedDemos(repo);
+    const urls = fetchMock.mock.calls.map(([u]) => u).sort();
+    expect(urls).toEqual(FILES.map((f) => `${import.meta.env.BASE_URL}demo-audio/${f}`));
+    expect(await ids()).toEqual(ALL);
+  });
+
+  it("treats an HTTP error as a failed demo", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    vi.stubGlobal("fetch", (url: string) => Promise.resolve(response(url, "audio/mpeg", false)));
+    await demo.seedDemos(repo);
+    expect(await ids()).toEqual([]);
+    expect(warn).toHaveBeenCalledTimes(4);
+    warn.mockRestore();
+  });
+
+  it("treats the SPA fallback (200 with index.html) as a failed demo and retries", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const missing = DEMOS[0]!.file;
+    vi.stubGlobal("fetch", (url: string) =>
+      Promise.resolve(url.endsWith(missing) ? response(url, "text/html") : response(url)),
+    );
+    await demo.seedDemos(repo);
+    expect(await ids()).toEqual(without(FIRST));
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+
+    vi.stubGlobal("fetch", (url: string) => Promise.resolve(response(url)));
+    await demo.seedDemos(repo);
+    expect(await ids()).toEqual(ALL);
+  });
+
+  it("rejects a response without content type", async () => {
+    vi.stubGlobal("fetch", (url: string) => Promise.resolve(response(url, "")));
+    await expect(demo.fetchDemoAudio("a.mp3")).rejects.toThrow("expected audio");
+  });
+
+  it("aborts a stalled download after the timeout", async () => {
+    vi.stubGlobal(
+      "fetch",
+      (_url: string, init: RequestInit) =>
+        new Promise((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(new Error("aborted")));
+        }),
+    );
+    await expect(demo.fetchDemoAudio("a.mp3", 10)).rejects.toThrow("aborted");
+  });
+
+  it("uses a generous default timeout", () => {
+    expect(demo.DEMO_AUDIO_TIMEOUT_MS).toBe(60_000);
+  });
+});
+
+describe("invalid choreography", () => {
+  afterEach(() => vi.doUnmock("@/data/demos/gold-in-my-pocket.choreo.json"));
+
+  it("skips a demo whose choreography fails the schema", async () => {
+    vi.doMock("@/data/demos/gold-in-my-pocket.choreo.json", () => ({ default: { id: 1 } }));
+    vi.resetModules();
+    repo = (await import("@/lib/library/repository")).songRepository;
+    demo = await import("@/data/demo");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual(without(FIRST));
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+  });
+});
+
+describe("legacy demos", () => {
+  it("removes untouched former demos without marking them deleted", async () => {
+    await repo.save(legacySong(PINK), audio("wav"));
+    await repo.save(legacySong(SUNSET), audio("wav"));
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual(ALL);
+    expect(await repo.getAudio(PINK)).toBeUndefined();
+    expect(demo.getDeletedDemos()).toEqual([]);
+    expect(demo.isDemoId(PINK)).toBe(false);
+  });
+
+  it("keeps a former demo whose choreography was edited", async () => {
+    const choreo = { ...makeChoreo(), createdAt: 1, updatedAt: 2 };
+    await repo.save({ ...legacySong(PINK), choreo }, audio("wav"));
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual([...ALL, PINK].sort());
+  });
+
+  it.each([
+    ["renamed", { title: "Mein Pink" }],
+    ["new artist", { artist: "Ich" }],
+    ["calibrated", { syncOffsetMs: 80 }],
+    ["with start offset", { startOffsetMs: 3000 }],
+    ["with playback rate", { playbackRate: 0.75 }],
+  ] satisfies [string, Partial<Song>][])("keeps a former demo %s", async (_, change) => {
+    await repo.save({ ...legacySong(PINK), ...change }, audio("wav"));
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual([...ALL, PINK].sort());
+  });
+
+  it("keeps a former demo whose audio source the player replaced", async () => {
+    await repo.save({
+      ...legacySong(SUNSET),
+      source: { type: "url", url: "https://example.com/a.mp3" },
+    });
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual([...ALL, SUNSET].sort());
+  });
+});
+
 describe("demo audio upgrade", () => {
-  /** Library seeded with the old audio: demos present, no version marker. */
+  /** Library seeded with older audio: demos present, no version marker. */
   async function seedOldLibrary() {
-    synth.mockImplementation(() => Promise.resolve("old" as unknown as Blob));
-    await demo.seedDemos(repo, synth);
+    loadAudio.mockImplementation(() => Promise.resolve(audio("old")));
+    await demo.seedDemos(repo, loadAudio);
     localStorage.removeItem(AUDIO_KEY);
-    synth.mockImplementation(() => Promise.resolve("wav" as unknown as Blob));
-    synth.mockClear();
+    restoreLoadAudio();
+    loadAudio.mockClear();
   }
 
-  afterEach(() => synth.mockImplementation(() => Promise.resolve("wav" as unknown as Blob)));
-
-  it("sets the marker on a fresh install without extra synthesis", async () => {
-    await demo.seedDemos(repo, synth);
-    expect(synth).toHaveBeenCalledTimes(2);
+  it("sets the marker on a fresh install without extra downloads", async () => {
+    await demo.seedDemos(repo, loadAudio);
+    expect(loadAudio).toHaveBeenCalledTimes(4);
     expect(localStorage.getItem(AUDIO_KEY)).toBe(String(demo.DEMO_AUDIO_VERSION));
   });
 
   it("replaces the audio of existing demos once and keeps their song data", async () => {
     await seedOldLibrary();
-    const pink = await repo.get(PINK);
-    if (!pink) throw new Error("demo missing");
-    await repo.save({ ...pink, title: "Mein Pink", syncOffsetMs: 80, highscore: 9000, stars: 4 });
+    const first = await repo.get(FIRST);
+    if (!first) throw new Error("demo missing");
+    await repo.save({ ...first, title: "Mein Demo", syncOffsetMs: 80, highscore: 9000, stars: 4 });
 
-    await demo.seedDemos(repo, synth);
-    expect(synth).toHaveBeenCalledTimes(2);
-    expect(await repo.getAudio(PINK)).toBe("wav");
-    expect(await repo.getAudio(SUNSET)).toBe("wav");
-    expect(await repo.get(PINK)).toMatchObject({
-      title: "Mein Pink",
+    await demo.seedDemos(repo, loadAudio);
+    expect(calledFiles()).toEqual(FILES);
+    for (const d of DEMOS) expect(await repo.getAudio(d.id)).toBe(`mp3:${d.file}`);
+    expect(await repo.get(FIRST)).toMatchObject({
+      title: "Mein Demo",
       syncOffsetMs: 80,
       highscore: 9000,
       stars: 4,
-      createdAt: pink.createdAt,
+      createdAt: first.createdAt,
     });
     expect(localStorage.getItem(AUDIO_KEY)).toBe(String(demo.DEMO_AUDIO_VERSION));
 
-    await demo.seedDemos(repo, synth);
-    expect(synth).toHaveBeenCalledTimes(2); // second run: nothing to upgrade
+    await demo.seedDemos(repo, loadAudio);
+    expect(loadAudio).toHaveBeenCalledTimes(4); // second run: nothing to upgrade
   });
 
   it.each(["{kaputt", "0", '"2"', "1.5"])(
@@ -183,143 +356,95 @@ describe("demo audio upgrade", () => {
     async (raw) => {
       await seedOldLibrary();
       localStorage.setItem(AUDIO_KEY, raw);
-      await demo.seedDemos(repo, synth);
-      expect(synth).toHaveBeenCalledTimes(2);
-      expect(await repo.getAudio(PINK)).toBe("wav");
+      await demo.seedDemos(repo, loadAudio);
+      expect(loadAudio).toHaveBeenCalledTimes(4);
+      expect(await repo.getAudio(FIRST)).toBe(`mp3:${DEMOS[0]!.file}`);
     },
   );
 
   it("neither re-adds nor upgrades a deleted demo", async () => {
     await seedOldLibrary();
-    await repo.delete(PINK);
-    demo.markDemoDeleted(PINK);
-    await demo.seedDemos(repo, synth);
-    expect(synth).toHaveBeenCalledTimes(1);
-    expect(await ids()).toEqual([SUNSET]);
-    expect(await repo.getAudio(PINK)).toBeUndefined();
-    expect(await repo.getAudio(SUNSET)).toBe("wav");
+    await repo.delete(FIRST);
+    demo.markDemoDeleted(FIRST);
+    await demo.seedDemos(repo, loadAudio);
+    expect(loadAudio).toHaveBeenCalledTimes(3);
+    expect(await ids()).toEqual(without(FIRST));
+    expect(await repo.getAudio(FIRST)).toBeUndefined();
   });
 
-  it("skips a demo deleted while its new audio was being synthesized", async () => {
+  it("keeps changes saved while the new audio was downloading", async () => {
     await seedOldLibrary();
     let release = () => {};
-    synth.mockImplementationOnce(
-      () =>
-        new Promise<Blob>((resolve) => {
-          release = () => resolve("wav" as unknown as Blob);
-        }),
+    loadAudio.mockImplementation((file: string) =>
+      file === DEMOS[0]!.file
+        ? new Promise<Blob>((resolve) => {
+            release = () => resolve(audio("new"));
+          })
+        : Promise.resolve(audio(`mp3:${file}`)),
     );
-    const save = vi.spyOn(repo, "save");
-    const run = demo.seedDemos(repo, synth);
-    await vi.waitFor(() => expect(synth).toHaveBeenCalledTimes(1));
-    demo.markDemoDeleted(PINK);
+    const run = demo.seedDemos(repo, loadAudio);
+    await vi.waitFor(() => expect(loadAudio).toHaveBeenCalledTimes(4));
+    const first = await repo.get(FIRST);
+    if (!first) throw new Error("demo missing");
+    await repo.save({ ...first, highscore: 1234 });
     release();
     await run;
-    expect(save).toHaveBeenCalledTimes(1); // only Sunset Kick
-    expect(await repo.getAudio(PINK)).toBe("old");
-  });
-
-  it("keeps changes saved while the new audio was being synthesized", async () => {
-    await seedOldLibrary();
-    let release = () => {};
-    synth.mockImplementationOnce(
-      () =>
-        new Promise<Blob>((resolve) => {
-          release = () => resolve("wav" as unknown as Blob);
-        }),
-    );
-    const run = demo.seedDemos(repo, synth);
-    await vi.waitFor(() => expect(synth).toHaveBeenCalledTimes(1));
-    const pink = await repo.get(PINK);
-    if (!pink) throw new Error("demo missing");
-    await repo.save({ ...pink, highscore: 1234 });
-    release();
-    await run;
-    expect(await repo.get(PINK)).toMatchObject({ highscore: 1234 });
-    expect(await repo.getAudio(PINK)).toBe("wav");
+    expect(await repo.get(FIRST)).toMatchObject({ highscore: 1234 });
+    expect(await repo.getAudio(FIRST)).toBe("new");
   });
 
   it("does not touch a demo whose source the player replaced", async () => {
     await seedOldLibrary();
-    const pink = await repo.get(PINK);
-    if (!pink) throw new Error("demo missing");
-    await repo.save({ ...pink, source: { type: "url", url: "https://example.com/a.mp3" } });
-    await demo.seedDemos(repo, synth);
-    expect(synth).toHaveBeenCalledTimes(1);
-    expect(await repo.get(PINK)).toMatchObject({ source: { type: "url" } });
+    const first = await repo.get(FIRST);
+    if (!first) throw new Error("demo missing");
+    await repo.save({ ...first, source: { type: "url", url: "https://example.com/a.mp3" } });
+    await demo.seedDemos(repo, loadAudio);
+    expect(loadAudio).toHaveBeenCalledTimes(3);
+    expect(await repo.get(FIRST)).toMatchObject({ source: { type: "url" } });
   });
 
   it("logs a failed upgrade, keeps seeding and leaves the marker for a retry", async () => {
     await seedOldLibrary();
-    await repo.delete(SUNSET); // missing demo: must still be seeded
+    await repo.delete(OTHERS[0]!); // missing demo: must still be seeded
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
-    synth.mockRejectedValueOnce(new Error("no audio"));
-    await demo.seedDemos(repo, synth);
+    loadAudio.mockImplementation((file: string) =>
+      file === DEMOS[0]!.file
+        ? Promise.reject(new Error("offline"))
+        : Promise.resolve(audio(`mp3:${file}`)),
+    );
+    await demo.seedDemos(repo, loadAudio);
     expect(warn).toHaveBeenCalledOnce();
     warn.mockRestore();
-    expect(await ids()).toEqual([PINK, SUNSET].sort());
-    expect(await repo.getAudio(PINK)).toBe("old");
+    expect(await ids()).toEqual(ALL);
+    expect(await repo.getAudio(FIRST)).toBe("old");
     expect(localStorage.getItem(AUDIO_KEY)).toBeNull();
 
-    // The retry re-synthesizes both (the marker is global; Sunset Kick's redo is harmless).
-    await demo.seedDemos(repo, synth);
-    expect(synth).toHaveBeenCalledTimes(4);
-    expect(await repo.getAudio(PINK)).toBe("wav");
+    restoreLoadAudio();
+    loadAudio.mockClear();
+    await demo.seedDemos(repo, loadAudio);
+    expect(loadAudio).toHaveBeenCalledTimes(4); // the marker is global: all are fetched again
+    expect(await repo.getAudio(FIRST)).toBe(`mp3:${DEMOS[0]!.file}`);
     expect(localStorage.getItem(AUDIO_KEY)).toBe(String(demo.DEMO_AUDIO_VERSION));
-  });
-});
-
-describe("encodeWav", () => {
-  const ascii = (v: DataView, o: number, n: number) =>
-    String.fromCharCode(...Array.from({ length: n }, (_, i) => v.getUint8(o + i)));
-  const pcm = (ab: ArrayBuffer) => new Int16Array(ab.slice(44));
-
-  it("writes a valid mono 16-bit RIFF header", () => {
-    const ab = demo.encodeWav(new Float32Array(100), 22050);
-    const v = new DataView(ab);
-    expect(ab.byteLength).toBe(44 + 200);
-    expect(ascii(v, 0, 4)).toBe("RIFF");
-    expect(v.getUint32(4, true)).toBe(36 + 200);
-    expect(ascii(v, 8, 4)).toBe("WAVE");
-    expect(ascii(v, 12, 4)).toBe("fmt ");
-    expect(v.getUint16(20, true)).toBe(1);
-    expect(v.getUint16(22, true)).toBe(1);
-    expect(v.getUint32(24, true)).toBe(22050);
-    expect(v.getUint32(28, true)).toBe(44100);
-    expect(v.getUint16(34, true)).toBe(16);
-    expect(ascii(v, 36, 4)).toBe("data");
-    expect(v.getUint32(40, true)).toBe(200);
-  });
-
-  it("normalizes an over-loud signal to DEMO_PEAK", () => {
-    const loud = Float32Array.from({ length: 1000 }, (_, i) => 2.5 * Math.sin(i / 7));
-    const peak = Math.max(...pcm(demo.encodeWav(loud, 22050)).map(Math.abs)) / 0x7fff;
-    expect(peak).toBeLessThanOrEqual(demo.DEMO_PEAK + 1e-4);
-    expect(peak).toBeGreaterThan(demo.DEMO_PEAK - 1e-3);
-  });
-
-  it("keeps silence silent", () => {
-    expect(pcm(demo.encodeWav(new Float32Array(50), 22050)).every((s) => s === 0)).toBe(true);
   });
 });
 
 describe("markDemoDeleted / isDemoId", () => {
   it("only records demo ids, once each", () => {
-    expect(demo.isDemoId(PINK)).toBe(true);
+    expect(demo.isDemoId(FIRST)).toBe(true);
     expect(demo.isDemoId("some-song")).toBe(false);
     demo.markDemoDeleted("some-song");
     expect(localStorage.getItem(DELETED_KEY)).toBeNull();
-    demo.markDemoDeleted(PINK);
-    demo.markDemoDeleted(PINK);
-    demo.markDemoDeleted(SUNSET);
-    expect(demo.getDeletedDemos()).toEqual([PINK, SUNSET]);
+    demo.markDemoDeleted(FIRST);
+    demo.markDemoDeleted(FIRST);
+    demo.markDemoDeleted(OTHERS[0]!);
+    expect(demo.getDeletedDemos()).toEqual([FIRST, OTHERS[0]]);
   });
 });
 
 describe("useSongLibrary", () => {
   beforeEach(() => {
-    // Skip seeding (needs OfflineAudioContext) by marking both demos as deleted.
-    localStorage.setItem(DELETED_KEY, JSON.stringify([PINK, SUNSET]));
+    // Skip seeding (would fetch the MP3s) by marking every demo as deleted.
+    localStorage.setItem(DELETED_KEY, JSON.stringify(DEMOS.map((d) => d.id)));
   });
 
   /** Fresh cache per test; pass a client to share it between hook instances. */
@@ -383,35 +508,35 @@ describe("useSongLibrary", () => {
   });
 
   it("remove() deletes the song and marks a demo as deleted", async () => {
-    localStorage.setItem(DELETED_KEY, JSON.stringify([SUNSET]));
-    await repo.save({ ...makeSong(), id: PINK, title: "Pink Pulse" });
+    localStorage.setItem(DELETED_KEY, JSON.stringify(OTHERS));
+    await repo.save({ ...makeSong(), id: FIRST, title: "Demo" });
     const other = await repo.save(makeSong());
     const { result } = await renderLibrary();
     expect(result.current.songs).toHaveLength(2);
 
     await act(() => result.current.remove(other));
-    expect(demo.getDeletedDemos()).toEqual([SUNSET]); // non-demo: list untouched
+    expect(demo.getDeletedDemos()).toEqual(OTHERS); // non-demo: list untouched
 
-    const pink = result.current.songs.find((s) => s.id === PINK);
-    if (!pink) throw new Error("demo missing");
-    await act(() => result.current.remove(pink));
+    const first = result.current.songs.find((s) => s.id === FIRST);
+    if (!first) throw new Error("demo missing");
+    await act(() => result.current.remove(first));
     expect(result.current.songs).toEqual([]);
-    expect(demo.getDeletedDemos()).toEqual([SUNSET, PINK]);
+    expect(demo.getDeletedDemos()).toEqual([...OTHERS, FIRST]);
   });
 
   it("remove() marks the demo before deleting it", async () => {
-    localStorage.setItem(DELETED_KEY, JSON.stringify([SUNSET])); // keeps seeding out of it
-    await repo.save({ ...makeSong(), id: PINK, title: "Pink Pulse" });
+    localStorage.setItem(DELETED_KEY, JSON.stringify(OTHERS)); // keeps seeding out of it
+    await repo.save({ ...makeSong(), id: FIRST, title: "Demo" });
     const { result } = await renderLibrary();
-    const pink = result.current.songs.find((s) => s.id === PINK);
-    if (!pink) throw new Error("demo missing");
+    const first = result.current.songs.find((s) => s.id === FIRST);
+    if (!first) throw new Error("demo missing");
     const del = vi.spyOn(repo, "delete").mockImplementationOnce(() => {
-      expect(demo.getDeletedDemos()).toContain(PINK);
+      expect(demo.getDeletedDemos()).toContain(FIRST);
       return Promise.reject(new Error("disk"));
     });
-    await expect(result.current.remove(pink)).rejects.toThrow("disk");
+    await expect(result.current.remove(first)).rejects.toThrow("disk");
     expect(del).toHaveBeenCalledOnce();
-    expect(demo.getDeletedDemos()).toContain(PINK); // stale mark is harmless
+    expect(demo.getDeletedDemos()).toContain(FIRST); // stale mark is harmless
   });
 
   it("a failing reload after a successful write is not a write error", async () => {

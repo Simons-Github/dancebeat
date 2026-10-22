@@ -3,8 +3,15 @@ import { z } from "zod";
 import { computeAngles, figure, type FigureParams } from "@/lib/pose";
 import { DEFAULT_STYLE, generateChoreo, type EnergyCurve } from "@/lib/generator";
 import type { Choreography, Frame, MotionPack, Move, Song } from "@/lib/types";
-import { CHOREO_VERSION } from "@/lib/schema";
+import { CHOREO_VERSION, ChoreographySchema } from "@/lib/schema";
 import type { SongRepository } from "@/lib/library/repository";
+import { demoSongId } from "@/lib/demoBuild";
+import { DemoManifestSchema, type DemoManifest } from "@/lib/demoManifest";
+
+import goldInMyPocket from "./demos/gold-in-my-pocket.manifest.json";
+import goldOnTheGlass from "./demos/gold-on-the-glass.manifest.json";
+import lemonadeSkies from "./demos/lemonade-skies.manifest.json";
+import riseUntilTheMorning from "./demos/rise-until-the-morning.manifest.json";
 
 /** Built-in poses (id → label and figure); also the first source of the motion pack (13e). */
 export const DEMO_POSES: Readonly<Record<string, { label: string; p: FigureParams }>> = {
@@ -66,178 +73,84 @@ function build(
   };
 }
 
-/** Lower edge of the demo mix: phone speakers cannot play below it and distort when driven. */
-const DEMO_HIGHPASS_HZ = 150;
-
-/** Peak level of the demo audio (−6 dBFS): leaves headroom for music plus sound effects. */
-export const DEMO_PEAK = 0.5;
+/**
+ * Pose id sequences of the former synthesized demos Pink Pulse and Sunset Kick (until Etappe
+ * 14a-2). No longer seeded; kept unchanged as the source of the motion pack's transition counts
+ * (13e), so `bun run build-motion-pack` stays reproducible.
+ */
+export const DEMO_SEQUENCES: readonly (readonly string[])[] = [
+  [
+    "arms-up",
+    "t-pose",
+    "left-up",
+    "right-up",
+    "flex",
+    "star",
+    "disco-l",
+    "disco-r",
+    "arms-up",
+    "squat",
+    "t-pose",
+    "star",
+    "left-up",
+    "right-up",
+    "flex",
+    "arms-up",
+  ],
+  [
+    "kick-l",
+    "kick-r",
+    "disco-l",
+    "disco-r",
+    "squat",
+    "arms-up",
+    "star",
+    "flex",
+    "kick-l",
+    "kick-r",
+    "t-pose",
+    "squat",
+    "disco-l",
+    "disco-r",
+    "star",
+    "arms-up",
+    "left-up",
+    "right-up",
+  ],
+];
 
 /**
- * Encodes mono samples as 16-bit PCM WAV. The signal is first peak-normalized to DEMO_PEAK, so
- * it can never clip whatever the mix; silence stays silence.
+ * The former synthesized demos with their original metadata. The seed removes them while they
+ * are untouched (see `removeLegacyDemos`).
  */
-export function encodeWav(samples: Float32Array, sampleRate: number): ArrayBuffer {
-  let peak = 0;
-  for (const s of samples) peak = Math.max(peak, Math.abs(s));
-  const scale = peak > 0 ? DEMO_PEAK / peak : 0;
-  const ab = new ArrayBuffer(44 + samples.length * 2);
-  const v = new DataView(ab);
-  const w = (o: number, s: string) => [...s].forEach((c, i) => v.setUint8(o + i, c.charCodeAt(0)));
-  w(0, "RIFF");
-  v.setUint32(4, 36 + samples.length * 2, true);
-  w(8, "WAVE");
-  w(12, "fmt ");
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); // PCM
-  v.setUint16(22, 1, true); // mono
-  v.setUint32(24, sampleRate, true);
-  v.setUint32(28, sampleRate * 2, true);
-  v.setUint16(32, 2, true);
-  v.setUint16(34, 16, true);
-  w(36, "data");
-  v.setUint32(40, samples.length * 2, true);
-  for (let i = 0; i < samples.length; i++) {
-    const s = Math.max(-1, Math.min(1, (samples[i] ?? 0) * scale));
-    v.setInt16(44 + i * 2, Math.round(s * 0x7fff), true);
-  }
-  return ab;
+const LEGACY_DEMOS: readonly { id: string; title: string }[] = [
+  { id: "d4e0c1a2-0001-4000-8000-000000000001", title: "Pink Pulse" },
+  { id: "d4e0c1a2-0002-4000-8000-000000000002", title: "Sunset Kick" },
+];
+const LEGACY_DEMO_ARTIST = "DanceBeat Demo";
+
+interface DemoEntry {
+  /** Library song id (`demoSongId` of the manifest id). */
+  id: string;
+  manifest: DemoManifest;
+  /** Loads the prebuilt choreography (`bun run build-demo`); a separate chunk per demo. */
+  loadChoreo: () => Promise<unknown>;
 }
 
-/** Shapes a gain envelope: short linear attack (no click), then exponential decay. */
-function envelope(g: GainNode, t: number, level: number, attack: number, decay: number) {
-  g.gain.setValueAtTime(0, t);
-  g.gain.linearRampToValueAtTime(level, t + attack);
-  g.gain.exponentialRampToValueAtTime(0.001, t + decay);
+function demoEntry(manifest: unknown, load: () => Promise<{ default: unknown }>): DemoEntry {
+  const m = DemoManifestSchema.parse(manifest);
+  return { id: demoSongId(m.id), manifest: m, loadChoreo: async () => (await load()).default };
 }
 
-/**
- * Synthesizes a beat track as WAV. Mixed for phone speakers, which boost and distort deep bass:
- * everything passes a highpass at DEMO_HIGHPASS_HZ, the kick is a short, high knock, the bass
- * plays two octaves up through a lowpass, the hihat is highpassed noise (a square wave at this
- * sample rate aliases).
- */
-async function synthTrack(bpm: number, seconds: number, root: number): Promise<Blob> {
-  // 48 kHz like the output hardware: iOS resampled the former 22.05 kHz audio on the Web Audio
-  // path (see unlock.ts) audibly dull and noisy. Mono 16-bit, about 5.8 MB per minute.
-  const sr = 48000;
-  const ctx = new OfflineAudioContext(1, sr * seconds, sr);
-  const beat = 60 / bpm;
-  const notes = [0, 3, 7, 5];
-  const noise = ctx.createBuffer(1, Math.ceil(sr * 0.05), sr);
-  const nd = noise.getChannelData(0);
-  for (let i = 0; i < nd.length; i++) nd[i] = Math.random() * 2 - 1;
-  const out = ctx.createBiquadFilter();
-  out.type = "highpass";
-  out.frequency.value = DEMO_HIGHPASS_HZ;
-  out.connect(ctx.destination);
-  for (let i = 0; i * beat < seconds; i++) {
-    const t = i * beat;
-    // Kick
-    const o = ctx.createOscillator(),
-      g = ctx.createGain();
-    o.frequency.setValueAtTime(220, t);
-    o.frequency.exponentialRampToValueAtTime(90, t + 0.08);
-    envelope(g, t, 0.35, 0.004, 0.15);
-    o.connect(g).connect(out);
-    o.start(t);
-    o.stop(t + 0.2);
-    // Hihat offbeat
-    const ht = t + beat / 2;
-    const h = ctx.createBufferSource(),
-      hf = ctx.createBiquadFilter(),
-      hg = ctx.createGain();
-    h.buffer = noise;
-    hf.type = "highpass";
-    hf.frequency.value = 6500;
-    envelope(hg, ht, 0.15, 0.002, 0.045);
-    h.connect(hf).connect(hg).connect(out);
-    h.start(ht);
-    h.stop(ht + 0.05);
-    // Bass, two octaves above the root so phone speakers play it without booming
-    const b = ctx.createOscillator(),
-      bf = ctx.createBiquadFilter(),
-      bg = ctx.createGain();
-    b.type = "sawtooth";
-    b.frequency.value = root * 4 * Math.pow(2, (notes[Math.floor(i / 4) % 4] ?? 0) / 12); // index is always in range; 0 = root note
-    bf.type = "lowpass";
-    bf.frequency.value = 1500;
-    envelope(bg, t, 0.2, 0.005, beat * 0.6);
-    b.connect(bf).connect(bg).connect(out);
-    b.start(t);
-    b.stop(t + beat);
-  }
-  const buf = await ctx.startRendering();
-  return new Blob([encodeWav(buf.getChannelData(0), sr)], { type: "audio/wav" });
-}
-
-const DEMOS = [
-  {
-    // Fixed UUIDs keep the demos stable across re-seeding.
-    id: "d4e0c1a2-0001-4000-8000-000000000001",
-    choreoId: "d4e0c1a2-0001-4000-8000-000000000101",
-    title: "Pink Pulse",
-    artist: "DanceBeat Demo",
-    bpm: 112,
-    diff: 1 as const,
-    root: 55,
-    colors: ["#FF2E93", "#00E5FF"] as [string, string],
-    seq: [
-      "arms-up",
-      "t-pose",
-      "left-up",
-      "right-up",
-      "flex",
-      "star",
-      "disco-l",
-      "disco-r",
-      "arms-up",
-      "squat",
-      "t-pose",
-      "star",
-      "left-up",
-      "right-up",
-      "flex",
-      "arms-up",
-    ],
-    gold: [5, 15],
-  },
-  {
-    id: "d4e0c1a2-0002-4000-8000-000000000002",
-    choreoId: "d4e0c1a2-0002-4000-8000-000000000102",
-    title: "Sunset Kick",
-    artist: "DanceBeat Demo",
-    bpm: 124,
-    diff: 2 as const,
-    root: 49,
-    colors: ["#FF8A00", "#7CFF4F"] as [string, string],
-    seq: [
-      "kick-l",
-      "kick-r",
-      "disco-l",
-      "disco-r",
-      "squat",
-      "arms-up",
-      "star",
-      "flex",
-      "kick-l",
-      "kick-r",
-      "t-pose",
-      "squat",
-      "disco-l",
-      "disco-r",
-      "star",
-      "arms-up",
-      "left-up",
-      "right-up",
-    ],
-    gold: [6, 14, 17],
-  },
+/** The shipped demo songs (Etappe 14): manifest plus lazily loaded choreography each. */
+const DEMOS: readonly DemoEntry[] = [
+  demoEntry(goldInMyPocket, () => import("./demos/gold-in-my-pocket.choreo.json")),
+  demoEntry(goldOnTheGlass, () => import("./demos/gold-on-the-glass.choreo.json")),
+  demoEntry(lemonadeSkies, () => import("./demos/lemonade-skies.choreo.json")),
+  demoEntry(riseUntilTheMorning, () => import("./demos/rise-until-the-morning.choreo.json")),
 ];
 
 export const DEMO_IDS: readonly string[] = DEMOS.map((d) => d.id);
-
-/** Pose id sequences of the demo songs; source of the motion pack's transition counts (13e). */
-export const DEMO_SEQUENCES: readonly (readonly string[])[] = DEMOS.map((d) => d.seq);
 
 export const isDemoId = (id: string) => DEMO_IDS.includes(id);
 
@@ -272,13 +185,14 @@ export function markDemoDeleted(id: string) {
 }
 
 /**
- * Version of the synthesized demo audio. Raise it when `synthTrack` changes audibly: the next seed
+ * Version of the demo audio. Raise it when the demo audio changes audibly: the next seed
  * replaces the audio of demos already in the library once (song data stays untouched).
- * 1 – original mix (clipped) · 2 – phone-friendly mix, normalized to DEMO_PEAK · 3 – less bass
+ * 1 – original mix (clipped) · 2 – phone-friendly mix, normalized · 3 – less bass
  * (highpass, higher kick and bass; device test: bass still too strong on an iPhone 11) ·
- * 4 – rendered at 48 kHz (iPhone 11: 22.05 kHz sounded dull and noisy)
+ * 4 – rendered at 48 kHz (iPhone 11: 22.05 kHz sounded dull and noisy) ·
+ * 5 – MP3 demos (Etappe 14a-2) replace the synthesis
  */
-export const DEMO_AUDIO_VERSION = 4;
+export const DEMO_AUDIO_VERSION = 5;
 const AUDIO_VERSION_KEY = "dancebeat.demoAudioVersion";
 const AudioVersionSchema = z.number().int().positive();
 
@@ -302,97 +216,176 @@ function setDemoAudioVersion(version: number) {
   }
 }
 
-type Demo = (typeof DEMOS)[number];
+/** Loads the audio file of a demo (file name from the manifest). */
+export type LoadDemoAudio = (file: string) => Promise<Blob>;
 
-const buildDemoChoreo = (d: Demo) => build(d.choreoId, d.title, d.bpm, d.seq, d.gold, d.colors);
+/**
+ * Upper limit for one demo download. Generous for about 4 MB on a slow mobile connection; without
+ * it a stalled request would hang the library, which waits for the seed.
+ */
+export const DEMO_AUDIO_TIMEOUT_MS = 60_000;
 
-/** Track length for a demo: last move plus a short tail. */
-const demoSeconds = (lastMove: Move) => Math.ceil(lastMove.timeMs / 1000) + 4;
+/**
+ * Fetches a demo MP3 from the app's own origin (public/demo-audio/). A missing file comes back as
+ * 200 with index.html (SPA fallback on Vercel and in the dev server), so anything that is not
+ * audio counts as an error, as does a download that takes longer than `timeoutMs`.
+ */
+export async function fetchDemoAudio(
+  file: string,
+  timeoutMs = DEMO_AUDIO_TIMEOUT_MS,
+): Promise<Blob> {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${import.meta.env.BASE_URL}demo-audio/${file}`, {
+      signal: controller.signal,
+    });
+    if (!response.ok) throw new Error(`Demo audio ${file}: HTTP ${response.status}`);
+    const type = response.headers.get("Content-Type") ?? "";
+    if (!type.startsWith("audio/"))
+      throw new Error(`Demo audio ${file}: expected audio, got "${type || "no content type"}"`);
+    return await response.blob();
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
-/** True if the stored song still plays the synthesized demo audio (not a source the player set). */
+/** True if the stored song still plays the shipped demo audio (not a source the player set). */
 const usesDemoAudio = (song: Song) =>
   song.source.type === "local" && song.source.blobId === song.id;
 
 /**
- * Replaces the audio of a demo already in the library with a fresh synthesis. The stored song
+ * True while a former demo is exactly as the old seed stored it: original title and artist, demo
+ * audio, no sync or start offset, no playback rate and the choreography never edited (the editor
+ * sets `updatedAt`; renaming and calibration do not, hence the metadata checks).
+ */
+const isUntouchedLegacyDemo = (song: Song, title: string) =>
+  song.title === title &&
+  song.artist === LEGACY_DEMO_ARTIST &&
+  usesDemoAudio(song) &&
+  song.syncOffsetMs === 0 &&
+  song.startOffsetMs === 0 &&
+  song.playbackRate === undefined &&
+  song.choreo.updatedAt === song.choreo.createdAt;
+
+/**
+ * Removes the former synthesized demos while the player left them untouched; otherwise they stay
+ * as normal songs. Not recorded as deleted: their ids are never seeded again anyway.
+ */
+async function removeLegacyDemos(repo: SongRepository) {
+  for (const { id, title } of LEGACY_DEMOS) {
+    try {
+      const song = await repo.get(id);
+      if (song && isUntouchedLegacyDemo(song, title)) await repo.delete(id);
+    } catch (e) {
+      console.warn("Alte Demo konnte nicht entfernt werden:", e);
+    }
+  }
+}
+
+/**
+ * Replaces the audio of a demo already in the library with a fresh download. The stored song
  * (highscore, sync offset, edits) is saved back unchanged. Returns false if the upgrade failed;
  * the failure is logged, not thrown, so seeding the other demos goes on.
  */
-async function upgradeDemoAudio(repo: SongRepository, synth: typeof synthTrack, d: Demo) {
-  const lastMove = buildDemoChoreo(d).moves.at(-1);
-  if (!lastMove) return true; // no moves: nothing to play
+async function upgradeDemoAudio(repo: SongRepository, loadAudio: LoadDemoAudio, d: DemoEntry) {
   try {
-    const blob = await synth(d.bpm, demoSeconds(lastMove), d.root);
-    // Synthesis is slow: re-read so changes made meanwhile (highscore, deletion) are kept.
+    const blob = await loadAudio(d.manifest.audio);
+    // The download is slow: re-read so changes made meanwhile (highscore, deletion) are kept.
     if (getDeletedDemos().includes(d.id)) return true;
     const current = await repo.get(d.id);
     if (!current || !usesDemoAudio(current)) return true;
     await repo.save(current, blob);
     return true;
   } catch (e) {
-    console.warn(`Audio der Demo „${d.title}“ konnte nicht erneuert werden:`, e);
+    console.warn(`Audio der Demo „${d.manifest.title}“ konnte nicht erneuert werden:`, e);
     return false;
   }
 }
 
-async function seedMissingDemos(repo: SongRepository, synth: typeof synthTrack) {
+/** Adds one missing demo. Failures are logged, not thrown; the next seed tries again. */
+async function addDemo(repo: SongRepository, loadAudio: LoadDemoAudio, d: DemoEntry) {
   try {
-    localStorage.removeItem(LEGACY_SEEDED_KEY);
-  } catch {
-    // storage unavailable: nothing to clean up
-  }
-  const deleted = getDeletedDemos();
-  const outdated = getDemoAudioVersion() < DEMO_AUDIO_VERSION;
-  let upgradeFailed = false;
-  for (const d of DEMOS) {
-    if (deleted.includes(d.id)) continue;
-    // Never overwrite an existing demo: it carries the player's highscore and stars. Only its
-    // audio is replaced, once, when the synthesis changed.
-    const existing = await repo.get(d.id);
-    if (existing) {
-      if (outdated && usesDemoAudio(existing) && !(await upgradeDemoAudio(repo, synth, d)))
-        upgradeFailed = true;
-      continue;
-    }
-    const choreo = buildDemoChoreo(d);
-    const lastMove = choreo.moves.at(-1);
-    if (!lastMove) continue; // no moves: nothing to seed
-    const blob = await synth(d.bpm, demoSeconds(lastMove), d.root);
-    // Synthesis is slow: the demo may have been deleted or saved meanwhile (e.g. other tab).
-    if (getDeletedDemos().includes(d.id) || (await repo.get(d.id))) continue;
+    const [rawChoreo, blob] = await Promise.all([d.loadChoreo(), loadAudio(d.manifest.audio)]);
+    const choreo = ChoreographySchema.parse(rawChoreo);
+    // The download is slow: the demo may have been deleted or saved meanwhile (e.g. other tab).
+    if (getDeletedDemos().includes(d.id) || (await repo.get(d.id))) return;
     const now = Date.now();
+    const m = d.manifest;
     const song: Song = {
       id: d.id,
-      title: d.title,
-      artist: d.artist,
-      bpm: d.bpm,
-      difficulty: d.diff,
+      title: m.title,
+      artist: m.artist,
+      bpm: m.bpm,
+      difficulty: m.difficulty,
       source: { type: "local", blobId: d.id },
       syncOffsetMs: 0,
       startOffsetMs: 0,
-      choreo,
+      // The prebuilt file carries 0 as times; equal times also mark the choreo as unedited.
+      choreo: { ...choreo, createdAt: now, updatedAt: now },
       highscore: 0,
       stars: 0,
       createdAt: now,
       updatedAt: now,
     };
     await repo.save(song, blob);
+  } catch (e) {
+    console.warn(`Demo „${d.manifest.title}“ konnte nicht angelegt werden:`, e);
   }
+}
+
+/**
+ * Seeds or upgrades one demo. Returns false only if the audio upgrade of an existing demo
+ * failed (the version marker then stays for a retry).
+ */
+async function seedDemo(
+  repo: SongRepository,
+  loadAudio: LoadDemoAudio,
+  d: DemoEntry,
+  outdated: boolean,
+): Promise<boolean> {
+  if (getDeletedDemos().includes(d.id)) return true;
+  // Never overwrite an existing demo: it carries the player's highscore and stars. Only its
+  // audio is replaced, once, when the demo audio changed.
+  let existing: Song | undefined;
+  try {
+    existing = await repo.get(d.id);
+  } catch (e) {
+    console.warn(`Demo „${d.manifest.title}“ konnte nicht gelesen werden:`, e);
+    return !outdated;
+  }
+  if (existing)
+    return outdated && usesDemoAudio(existing) ? upgradeDemoAudio(repo, loadAudio, d) : true;
+  await addDemo(repo, loadAudio, d);
+  return true;
+}
+
+async function seedMissingDemos(repo: SongRepository, loadAudio: LoadDemoAudio) {
+  try {
+    localStorage.removeItem(LEGACY_SEEDED_KEY);
+  } catch {
+    // storage unavailable: nothing to clean up
+  }
+  await removeLegacyDemos(repo);
+  const outdated = getDemoAudioVersion() < DEMO_AUDIO_VERSION;
+  // In parallel: the first start downloads every demo (about 15 MB).
+  const results = await Promise.all(DEMOS.map((d) => seedDemo(repo, loadAudio, d, outdated)));
   // Only after every upgrade succeeded; otherwise the next seed tries again.
-  if (outdated && !upgradeFailed) setDemoAudioVersion(DEMO_AUDIO_VERSION);
+  if (outdated && results.every(Boolean)) setDemoAudioVersion(DEMO_AUDIO_VERSION);
 }
 
 // One run for all callers; there is only one repository in the app, so no per-repo keying.
 let seeding: Promise<void> | null = null;
 
 /**
- * Adds every demo that is neither in the library nor deleted by the player and, once per
- * DEMO_AUDIO_VERSION, replaces the audio of demos already there. Concurrent calls
- * (StrictMode runs effects twice) share one run, so no demo is synthesized twice.
- * `synth` is replaceable for tests (jsdom has no OfflineAudioContext).
+ * Adds every demo that is neither in the library nor deleted by the player, removes untouched
+ * former demos and, once per DEMO_AUDIO_VERSION, replaces the audio of demos already there.
+ * A demo that fails to load is skipped and retried on the next call. Concurrent calls
+ * (StrictMode runs effects twice) share one run, so no demo is downloaded twice.
+ * `loadAudio` is replaceable for tests (default: fetch from public/demo-audio/).
  */
-export function seedDemos(repo: SongRepository, synth: typeof synthTrack = synthTrack) {
-  seeding ??= seedMissingDemos(repo, synth).finally(() => {
+export function seedDemos(repo: SongRepository, loadAudio: LoadDemoAudio = fetchDemoAudio) {
+  seeding ??= seedMissingDemos(repo, loadAudio).finally(() => {
     seeding = null;
   });
   return seeding;

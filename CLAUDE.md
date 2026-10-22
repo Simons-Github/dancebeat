@@ -64,6 +64,8 @@ das im Bericht ausdrücklich sagen statt es als getestet auszugeben.
   in `sessionStorage`.
 - Jeder externe Abruf (CDN, YouTube, Spotify) muss in der UI benannt sein.
   Liste: [docs/architecture.md](docs/architecture.md#externe-abrufe).
+- Mediendateien werden nie eingecheckt; einzige Ausnahme `public/demo-audio/*.mp3` (eigene
+  Demo-Songs, [docs/plans/etappe-14.md](docs/plans/etappe-14.md) 14-0.3).
 
 **Spiel-Logik**
 

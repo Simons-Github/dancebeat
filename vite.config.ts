@@ -17,6 +17,9 @@ export default defineConfig({
   // Reachable from the phone only for `dev:https`; plain dev stays on localhost.
   server: useHttps ? { host: true } : {},
   preview: { host: true },
+  // The demo choreographies (src/data/demos/*.choreo.json, lazy chunks, up to 1.4 MB raw but
+  // ~120 kB gzip) exceed Vite's 500 kB default; code chunks stay far below this limit.
+  build: { chunkSizeWarningLimit: 1500 },
   plugins: [
     // Must run before the React plugin so generated route files are picked up.
     tanstackRouter({ target: "react", autoCodeSplitting: true }),

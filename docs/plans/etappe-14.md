@@ -45,9 +45,10 @@ Gewählte Wege:
      14a nach (siehe Risiko „Tempo“), die Prompt-BPM zählt nicht.
 3. **Audio liegt im Repo.** Ausnahme in `.gitignore` nur für `public/demo-audio/*.mp3`, Ordner
    angelegt. Die Dateien kommen von der eigenen Adresse (kein externer Abruf, keine neue Zeile in
-   „Externe Abrufe“) und werden vom Service Worker gecacht, ca. 3–4 MB pro Song. Die Regel
-   „Keine geschützten Songs im Repo“ bleibt erfüllt. CLAUDE.md bekommt die Zeile zur Ausnahme
-   mit 14c. Verworfen: Audio nur auf Vercel (Build nicht reproduzierbar, `bun run dev` ohne
+   „Externe Abrufe“), ca. 3–4 MB pro Song. Abweichung in 14a-2: Der Service Worker cacht sie
+   nicht, weil der Seed sie einmal nach IndexedDB kopiert (sonst lägen sie doppelt vor). Die
+   Regel „Keine geschützten Songs im Repo“ bleibt erfüllt. CLAUDE.md hat die Zeile zur Ausnahme
+   seit 14a-2. Verworfen: Audio nur auf Vercel (Build nicht reproduzierbar, `bun run dev` ohne
    Demos).
 4. **Alte Demos werden ersetzt** (neue IDs; die alten werden beim nächsten Seed entfernt, sofern
    sie noch Demo-Audio spielen und nicht bearbeitet wurden). Löschen von Code nur nach Freigabe
@@ -58,8 +59,8 @@ Gewählte Wege:
 ## 14a Musik erzeugen und Manifest
 
 Aufgeteilt: **14a-1** Messung (`bun run measure-audio`), Manifest-Schema und die vier Manifeste
-(umgesetzt, siehe [roadmap.md](../roadmap.md)); **14a-2** Seed mit den MP3s, zusammen mit den
-Choreografien aus 14b sinnvoll. Abschnittslängen in Beats (Vielfaches von 4) statt
+(umgesetzt, siehe [roadmap.md](../roadmap.md)); **14a-2** Seed mit den MP3s (umgesetzt,
+Abweichungen siehe [roadmap.md](../roadmap.md)). Abschnittslängen in Beats (Vielfaches von 4) statt
 8er-Zählzeiten.
 
 - Der Nutzer hat vier Songs mit Gemini erzeugt (14-0.2). BPM je Song so wählen, dass genug

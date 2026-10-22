@@ -215,6 +215,17 @@ export function demoChoreoId(songId: string): string {
 }
 
 /**
+ * Deterministic version-4 UUID of a demo song in the library, derived from the manifest id
+ * (`demo-<slug>` is no UUID, `SongSchema.id` needs one). Salted differently from `demoChoreoId`.
+ */
+export function demoSongId(manifestId: string): string {
+  const hex = (n: number) => n.toString(16).padStart(8, "0");
+  const a = hex(hashSeed(`${manifestId}#song`)),
+    b = hex(hashSeed(`${manifestId}#song-id`));
+  return `${a}-${b.slice(0, 4)}-4${b.slice(4, 7)}-8${a.slice(1, 4)}-${b}${a.slice(4, 8)}`;
+}
+
+/**
  * The complete choreography of a demo song. Moves inside the intro are dropped (the intro dances
  * without moves); times are fixed (0), the seed sets them when it stores the song (14c).
  */

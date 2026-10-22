@@ -9,7 +9,7 @@ das Gerät nie, die Song-Bibliothek liegt in IndexedDB. Die Oberfläche ist auf 
 
 ## Funktionen
 
-- **Bibliothek** mit zwei selbst erzeugten Demo-Songs, Highscore und Sternen pro Song.
+- **Bibliothek** mit vier eigenen Demo-Songs, Highscore und Sternen pro Song.
 - **Aufstellhilfe:** Kamerabild mit Zielrahmen und Skelett. Das Spiel startet, sobald der ganze
   Körper erkannt wird.
 - **Spiel:** Piktogramm-Leiste, Coach-Figur, Urteile (PERFECT bis X), Combo, Gold Moves, Pause,
@@ -138,5 +138,6 @@ Motion, zod, MediaPipe Pose Landmarker, Vitest.
 ## Rechtliches
 
 Im Repo liegen keine geschützten Songs und keine Original-Assets; Audio- und Videodateien sind
-per `.gitignore` ausgeschlossen. Die Demo-Musik wird zur Laufzeit synthetisch erzeugt. Eigene
-Songs bleiben lokal im Browser.
+per `.gitignore` ausgeschlossen. Einzige Ausnahme sind die vier eigenen Demo-Songs in
+`public/demo-audio/` (KI-generiert mit Gemini, Credits folgen in Etappe 14c). Eigene Songs
+bleiben lokal im Browser.

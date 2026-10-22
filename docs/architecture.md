@@ -340,9 +340,19 @@ erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle
   fehlt und ihre ID nicht in `dancebeat.deletedDemos` steht. Vorhandene Einträge (Highscore,
   Umbenennung) werden nie überschrieben. Die Liste liegt bewusst in `localStorage` statt in
   einem eigenen IndexedDB-Store (keine neue DB-Version); geht sie verloren, kehren gelöschte
-  Demos zurück. Ändert sich die Synthese hörbar, wird `DEMO_AUDIO_VERSION` erhöht: der nächste
-  Seed ersetzt bei vorhandenen Demos einmalig nur das Audio (`save` mit dem unveränderten
-  gespeicherten Song), danach steht die Version in `localStorage` `dancebeat.demoAudioVersion`.
+  Demos zurück. Die vier Demos (Etappe 14) bestehen aus Manifest, vorgebauter Choreografie
+  (eigener Chunk, per `import()` geladen) und MP3, das `seedDemos` per `fetch` von der eigenen
+  Origin holt (`demo-audio/<Datei>`, kein externer Abruf) und in den Store `blobs` kopiert. Die
+  Demos laden parallel; scheitert eine (HTTP-Fehler, Antwort ohne `audio/*`-Typ wie der
+  SPA-Fallback auf `index.html`, Zeitlimit 60 s, ungültige Choreografie), wird sie mit Warnung
+  übersprungen und beim nächsten Start erneut versucht. Ändert sich das Demo-Audio hörbar, wird `DEMO_AUDIO_VERSION` erhöht (aktuell
+  5, MP3 statt Synthese): der nächste Seed ersetzt bei vorhandenen Demos einmalig nur das Audio
+  (`save` mit dem unveränderten gespeicherten Song), danach steht die Version in `localStorage`
+  `dancebeat.demoAudioVersion`. Die alten synthetischen Demos (Pink Pulse, Sunset Kick) entfernt
+  der Seed nur, solange sie exakt dem alten Seed entsprechen: Originaltitel, Interpret
+  „DanceBeat Demo“, Demo-Audio, Sync- und Start-Offset 0, keine Wiedergaberate und eine nie
+  bearbeitete Choreografie (`choreo.updatedAt` = `createdAt`). Sonst bleiben sie als normale Songs.
+  Der Service Worker nimmt `demo-audio/` nicht in den Precache, die MP3s lägen sonst doppelt vor.
 - `src/lib/library/storage.ts`: `requestPersistentStorage()` (Safari löscht sonst Daten nicht
   installierter Seiten nach 7 Tagen ohne Nutzung) und `getStorageUsage()` für die Anzeige.
 
@@ -1022,7 +1032,8 @@ Adresse ab, deshalb gibt es keinen neuen Eintrag unter [Externe Abrufe](#externe
   Worker (HMR); `vite preview` hat einen.
 - **Caches:**
   - `dancebeat-precache-<version>`: `index.html`, alle gehashten JS/CSS-Dateien (auch die
-    Routen-Chunks), Schriften, Manifest, Favicon, Icons. Version = SHA-256 über Namen und
+    Routen-Chunks und Demo-Choreografien), Schriften, Manifest, Favicon, Icons; nicht die
+    Demo-MP3s unter `demo-audio/` (liegen nach dem Seed in IndexedDB). Version = SHA-256 über Namen und
     Inhalte. Wird bei `install` vollständig geladen (`cache: "reload"`), danach cache-first.
   - `dancebeat-mediapipe-<hash>`: WASM und Modell, cache-first, beim ersten erfolgreichen Abruf
     gefüllt. So liegt nur die wirklich geladene WASM-Variante im Cache (ca. 13 MB plus 5,8 MB

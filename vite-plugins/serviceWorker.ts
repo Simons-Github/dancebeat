@@ -25,7 +25,10 @@ export function isPrecacheExcluded(file: string): boolean {
     // Dotfiles and dot-directories (.well-known/, .DS_Store, ...) are not app files.
     file.split("/").some((segment) => segment.startsWith(".")) ||
     // MediaPipe WASM (13 MB per variant) and models: runtime cache, only what is loaded.
-    RUNTIME_PREFIXES.some((p) => file.startsWith(p))
+    RUNTIME_PREFIXES.some((p) => file.startsWith(p)) ||
+    // Demo MP3s (about 15 MB): the seed copies them into IndexedDB once; precaching would store
+    // them twice and lengthen the install.
+    file.startsWith("demo-audio/")
   );
 }
 

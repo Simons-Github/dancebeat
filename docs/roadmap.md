@@ -22,7 +22,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
 | 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen) | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
-| 14. Neue Demo-Songs                          | ⏳ (14a-1, 14b ✅)                  | Opus für den Songaufbau, Sonnet für den Rest                          |
+| 14. Neue Demo-Songs                          | ⏳ (14a-1, 14b, 14a-2 ✅)           | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
 
@@ -1206,9 +1206,40 @@ Offen:
 
 - Alle Phrasen stehen auf `"auto"` mit den `demo:*`-Clips; mit dem AIST-Paket muss neu gebaut
   werden.
-- Seed und Einbindung folgen in 14a-2 bzw. 14c, die MP3s sind noch nicht eingecheckt.
+- Der Seed ist mit 14a-2 erledigt; Einbindung und Credits folgen in 14c.
 - Nur per Gehör bzw. am Gerät prüfbar, nicht geprüft: ob Moves auf dem Takt liegen und ob sich
   der Refrain wiedererkennbar anfühlt.
+
+**14a-2 Seed mit den MP3-Demos – umgesetzt, Gerätetest offen.** `seedDemos` in
+`src/data/demo.ts` legt die vier Demos aus Manifest und vorgebauter Choreografie an. Die
+Choreografien sind eigene Chunks (`import()`), die MP3s kommen per `fetch` von der eigenen Origin
+(`public/demo-audio/`) und landen wie bisher in IndexedDB. Die Demos laden parallel, jede mit
+eigener Fehlerbehandlung: Scheitert eine (HTTP-Fehler, Antwort ohne `audio/*`-Typ, etwa der
+SPA-Fallback auf `index.html` bei fehlender Datei, Zeitlimit 60 s je Download, Schema), wird sie
+mit Warnung übersprungen und beim nächsten Start erneut versucht. Das Zeitlimit verhindert, dass
+eine hängende Mobilverbindung die ganze Bibliothek blockiert (`loadSongs` wartet auf den Seed). Vorhandene Demos werden nie überschrieben (Highscore),
+gelöschte nicht wieder angelegt. `DEMO_AUDIO_VERSION` steht auf 5. Pink Pulse und Sunset Kick
+entfernt der Seed nur, solange sie exakt dem alten Seed entsprechen (Originaltitel, Interpret
+„DanceBeat Demo“, Demo-Audio, Sync- und Start-Offset 0, keine Wiedergaberate, Choreografie nie
+bearbeitet); sonst bleiben sie als normale Songs. Tests: `demoSeed.test.ts`, `demoBuild.test.ts`
+(`demoSongId`), `serviceWorkerPlugin.test.ts`.
+
+Abweichungen vom Plan:
+
+- Die Song-ID in der Bibliothek ist `demoSongId(<Manifest-ID>)`, eine feste UUID, weil
+  `SongSchema.id` eine UUID verlangt und `demo-<slug>` keine ist.
+- Der Service Worker nimmt `demo-audio/` nicht in den Precache: Der Seed kopiert die MP3s einmal
+  nach IndexedDB, im Precache lägen rund 15 MB doppelt, und die Installation dauerte länger.
+- Der Synthese-Code (`synthTrack`, `encodeWav`) ist entfernt (Freigabe des Nutzers 2026-10-22).
+  Die Pose-Folgen der alten Demos bleiben als `DEMO_SEQUENCES`, weil das Motion-Paket daraus
+  gebaut wird (`bun run build-motion-pack` ergibt dieselbe Datei).
+
+Nur am Gerät prüfbar, nicht geprüft:
+
+- Der erste Start wartet auf rund 15 MB Download, bevor die Bibliothek erscheint (`loadSongs`
+  wartet auf den Seed).
+- Klang der MP3s am iPhone-Lautsprecher.
+- Ob die Moves auf dem Beat liegen (MP3-Decoder-Verzögerung im Browser).
 
 ## Offene Befunde
 

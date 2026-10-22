@@ -536,7 +536,11 @@ buildDemoChoreo(manifest, pack) → Choreography    // realizeFrames, ohne Moves
   zwischen fester Folge und `"auto"` kann ein Clip direkt auf sich selbst folgen.
 - **Choreo-Felder:** `id` ist eine aus der Song-ID abgeleitete UUID (v4-Form), die Farben kommen
   aus `SONG_PALETTES[palette]`, `offsetMs` ist 0 und `createdAt`/`updatedAt` sind 0 (setzt erst
-  der Seed, 14c).
+  der Seed).
+- **Seed (14a-2):** `seedDemos` (`src/data/demo.ts`) lädt die Choreografie per `import()`, prüft
+  sie mit `ChoreographySchema` und setzt `createdAt` = `updatedAt` = jetzt. Titel, Interpret, BPM,
+  Schwierigkeit und Audiodatei kommen aus dem Manifest; die Song-ID ist `demoSongId(<id>)`, eine
+  feste UUID, weil `demo-<slug>` keine ist.
 
 **Stand 14b** (Paket nur mit `demo:*`-Clips, alle Phrasen `"auto"`):
 
