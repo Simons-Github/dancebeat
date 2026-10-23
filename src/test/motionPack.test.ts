@@ -15,10 +15,14 @@ import {
   difficulty,
   energy,
   groupClips,
+  isAistClip,
   loadMotionPack,
   MAX_BONE_SPEED_DEG_PER_S,
   playability,
+  selectShippedClips,
+  SHIP_CLIPS_PER_BUCKET,
   type RawClip,
+  withoutAistClips,
 } from "@/lib/motionPack";
 import { figure3d, type FigureParams } from "@/lib/pose";
 import { MOTION_PACK_VERSION, MotionPackSchema } from "@/lib/schema";
@@ -55,7 +59,7 @@ const clip = (id: string, extra: Partial<MotionClip> = {}): MotionClip => ({
   ...extra,
 });
 
-const pack = (clips: MotionClip[], transitions: MotionPack["transitions"] = {}) => ({
+const pack = (clips: MotionClip[], transitions: MotionPack["transitions"] = {}): MotionPack => ({
   version: MOTION_PACK_VERSION,
   clips,
   transitions,
@@ -350,17 +354,108 @@ describe("buildMotionPack", () => {
     expect(pack.transitions).toEqual({ s: {} });
   });
 
-  it("committed src/data/motion-pack.json is up to date", () => {
-    expect(
-      committed,
-      "src/data/motion-pack.json ist veraltet: `bun run build-motion-pack` ausführen",
-    ).toEqual(demo().pack);
+  it("committed src/data/motion-pack.json has up-to-date demo clips and a valid AIST subset", () => {
+    const shipped = MotionPackSchema.parse(committed);
+    const reproduce =
+      "src/data/motion-pack.json ist veraltet: " +
+      "`bun run build-motion-pack -- --ship eval-results/aist/*.posetrack.json` ausführen";
+    expect(withoutAistClips(shipped), reproduce).toEqual(demo().pack);
+    const buckets = new Map<string, number>();
+    for (const c of shipped.clips.filter(isAistClip)) {
+      const key = `${c.sourceBpm}/${c.difficulty}`;
+      buckets.set(key, (buckets.get(key) ?? 0) + 1);
+    }
+    expect(buckets.size).toBeGreaterThan(0);
+    for (const n of buckets.values()) expect(n).toBeLessThanOrEqual(SHIP_CLIPS_PER_BUCKET);
   });
 
   it("loadMotionPack parses the shipped pack", async () => {
     const loaded = await loadMotionPack();
     expect(loaded.version).toBe(MOTION_PACK_VERSION);
-    expect(loaded.clips).toHaveLength(Object.keys(DEMO_POSES).length);
+    expect(loaded.clips.filter((c) => !isAistClip(c))).toHaveLength(Object.keys(DEMO_POSES).length);
+    expect(loaded.clips.length).toBe(MotionPackSchema.parse(committed).clips.length);
     expect(await loadMotionPack()).toBe(loaded);
+  });
+});
+
+describe("selectShippedClips", () => {
+  const AIST = "video:AIST++ test";
+  /** AIST clip with the given arm angles, tempo and difficulty. */
+  const aist = (id: string, p: FigureParams, extra: Partial<MotionClip> = {}): MotionClip => ({
+    ...clip(id, { source: AIST, sourceBpm: 120, ...extra }),
+    keyframes: [
+      { beat: 0, pose3d: figure3d(p) },
+      { beat: 1, pose3d: figure3d(p) },
+    ],
+  });
+  const ids = (p: MotionPack) => p.clips.map((c) => c.id);
+
+  it("keeps every non-AIST clip and drops AIST rest poses", () => {
+    const p = pack([
+      clip("demo:a", { source: "demo" }),
+      clip("video:other", { source: "video:Fremdvideo", energy: 0.05 }),
+      aist("x:rest", { la: 10, ra: 10 }, { energy: 0.05 }),
+      aist("x:move", { la: 90, ra: 90 }),
+    ]);
+    expect(ids(selectShippedClips(p))).toEqual(["demo:a", "video:other", "x:move"]);
+  });
+
+  it("caps every (sourceBpm, difficulty) bucket separately, keeping the pack order", () => {
+    const clips = [10, 40, 70, 100, 130, 160].flatMap((la) => [
+      aist(`a:${la}`, { la, ra: 10 }),
+      aist(`b:${la}`, { la, ra: 10 }, { sourceBpm: 90 }),
+      aist(`c:${la}`, { la, ra: 10 }, { difficulty: 2 }),
+    ]);
+    const shipped = selectShippedClips(pack(clips), 2);
+    expect(shipped.clips).toHaveLength(6);
+    for (const prefix of ["a:", "b:", "c:"])
+      expect(shipped.clips.filter((c) => c.id.startsWith(prefix))).toHaveLength(2);
+    const order = clips.map((c) => c.id).filter((id) => ids(shipped).includes(id));
+    expect(ids(shipped)).toEqual(order);
+  });
+
+  it("starts with the most playable clip, then picks the farthest pose", () => {
+    const p = pack([
+      aist("a", { la: 90, ra: 90 }, { playability: 0.75 }),
+      aist("b", { la: 100, ra: 90 }),
+      aist("c", { la: 110, ra: 90 }),
+      aist("d", { la: 170, ra: 170 }),
+    ]);
+    // b is the most playable of the energy ties (smallest id), d is farthest from b.
+    expect(ids(selectShippedClips(p, 2))).toEqual(["b", "d"]);
+    // Third pick: a and c are both 10° from b, their nearest pick; the tie goes to the smaller id.
+    expect(ids(selectShippedClips(p, 3))).toEqual(["a", "b", "d"]);
+  });
+
+  it("is deterministic and independent of the input order for the picks", () => {
+    const clips = [20, 50, 80, 110, 140, 170].map((la, i) =>
+      aist(`x:${i}`, { la, ra: 180 - la }, { energy: 0.2 + i * 0.05 }),
+    );
+    const a = selectShippedClips(pack(clips), 3);
+    const b = selectShippedClips(pack([...clips].reverse()), 3);
+    expect(selectShippedClips(pack(clips), 3)).toEqual(a);
+    expect([...ids(b)].sort()).toEqual([...ids(a)].sort());
+  });
+
+  it("drops mirrors and transitions of dropped clips and stays schema-valid", () => {
+    const p = pack(
+      [
+        clip("demo:a", { source: "demo" }),
+        aist("x:1", { la: 90, ra: 10 }, { mirrorOf: "x:2" }),
+        aist("x:2", { la: 10, ra: 90 }, { mirrorOf: "x:1" }),
+        aist("x:3", { la: 170, ra: 170 }),
+      ],
+      { party: { "demo:a": { "x:1": 2 }, "x:3": { "x:2": 1, "demo:a": 1 }, "x:1": { "x:2": 1 } } },
+    );
+    expect(MotionPackSchema.safeParse(p).success).toBe(true);
+    // All tie on playability and energy: x:1 first, then x:3 (160° away, x:2 only 80°).
+    const shipped = selectShippedClips(p, 2);
+    expect(ids(shipped)).toEqual(["demo:a", "x:1", "x:3"]);
+    expect(shipped.clips.find((c) => c.id === "x:1")?.mirrorOf).toBeUndefined();
+    expect(shipped.transitions).toEqual({
+      party: { "demo:a": { "x:1": 2 }, "x:3": { "demo:a": 1 } },
+    });
+    expect(MotionPackSchema.safeParse(shipped).success).toBe(true);
+    expect(withoutAistClips(p)).toEqual(pack([clip("demo:a", { source: "demo" })], {}));
   });
 });

@@ -165,7 +165,9 @@ Version (seit Etappe 13e-1): `src/data/motion-pack.json`, erzeugt mit `bun run b
 (`scripts/build-motion-pack.ts`, Logik in `src/lib/motionPack.ts`), zur Laufzeit erst bei Bedarf
 per dynamischem `import()` geladen (`loadMotionPack`) und gegen `MotionPackSchema`
 (`src/lib/schema.ts`) geprüft. Die Datei ist generiert: nicht von Hand bearbeiten (in
-`.prettierignore`); ein Test schlägt fehl, wenn sie nicht mehr zum Erzeugungsergebnis passt.
+`.prettierignore`); ein Test schlägt fehl, wenn ihre Demo-Clips nicht mehr zum Erzeugungsergebnis
+passen. Seit Etappe 13i enthält sie neben den 12 Demo-Clips eine Auswahl der AIST++-Clips
+(Abschnitt [Ausgelieferte AIST-Auswahl](#aist-auswahl)), als kompaktes JSON.
 
 ```json
 {
@@ -284,8 +286,9 @@ ignoriert); prüfen mit `bun run eval-choreo --pack=Pfad`. Unlesbare Dateien wer
 übersprungen; die Ausgabe nennt je Datei geschnittene und verworfene Clips, die Filtergründe,
 behaltene Clips (davon Video), Spiegelpaare unter den Video-Clips und Übergänge je Stil. Ein Paket
 mit Video-Clips wird nie nach `src/data/motion-pack.json` geschrieben (das Skript bricht ab): Die
-Rechte an fremden Choreografien sind ungeklärt, das Ausliefern braucht eine ausdrückliche
-Entscheidung. Ohne Dateien erzeugt das Skript unverändert das ausgelieferte Paket.
+Rechte an fremden Choreografien sind ungeklärt. Ausgeliefert werden nur AIST++-Clips (`--ship`,
+siehe unten). Ohne Dateien erzeugt das Skript das reine Demo-Paket; enthält
+`src/data/motion-pack.json` schon AIST++-Clips, bricht es ab und nennt den `--ship`-Aufruf.
 
 ### Quelle AIST++ (Etappe 13h)
 
@@ -336,8 +339,34 @@ wie Video-Spuren. Ablauf: `.pkl` → `scripts/aist/convert.py` → neutrales JSO
 
 Aufruf: `bun run aist-track --list=clips.json [--out=Ordner] a.aist.json …`, Ausgabe standardmäßig
 `eval-results/aist/<Clipname>.posetrack.json`. `*.aist.json` und Pose-Spuren sind von git
-ignoriert, weil es fremde Daten sind. Für ausgelieferte Clips gilt dieselbe Lizenzfrage wie bei
-Video-Clips (14-0.1).
+ignoriert, weil es fremde Daten sind. Das AIST erlaubt die nicht-kommerzielle Nutzung
+(Auskunft 2026-10-23, 14-0.1); ausgeliefert wird eine Auswahl (nächster Abschnitt).
+
+### Ausgelieferte AIST-Auswahl (Etappe 13i)
+
+<a id="aist-auswahl"></a>Aufruf:
+`bun run build-motion-pack -- --ship eval-results/aist/*.posetrack.json`. Mit `--ship` müssen alle
+Dateien lesbare AIST++-Spuren sein (Videoname beginnt mit `AIST++ `), sonst bricht das Skript ohne
+Schreiben ab. Es baut das volle Paket wie oben, wählt mit `selectShippedClips`
+(`src/lib/motionPack.ts`) aus und schreibt `src/data/motion-pack.json` kompakt; die Ausgabe nennt
+Clipzahl, Clips je Eimer und Dateigröße.
+
+- **Unverändert:** jeder Clip, der nicht aus AIST++ stammt (`source` beginnt nicht mit
+  `video:AIST++ `), also die Demo-Clips.
+- **Eimer:** AIST++-Clips mit `energy` ≥ `MIN_MOVE_ENERGY` (0,1; Ruheposen nutzt der Generator nie
+  als Move) je Paar aus `sourceBpm` und `difficulty`, wie die Tempo- und Stufenfilter des
+  Generators. Je Eimer höchstens `SHIP_CLIPS_PER_BUCKET` (12).
+- **Auswahl im Eimer** (Farthest-Point, gierig auf der Ankerpose, Abstand `boneDistance`): zuerst
+  der Clip mit der höchsten `playability`, dann `energy`, dann kleinster ID; danach jeweils der
+  Clip mit dem größten Abstand zum nächsten schon gewählten, bei Gleichstand die kleinere ID.
+  Clips ohne Ankerpose fallen weg.
+- **Aufräumen:** `mirrorOf` auf einen nicht behaltenen Clip entfällt, Übergänge bleiben nur
+  zwischen behaltenen Clips (leere Zeilen und Stile entfallen). Reihenfolge wie im vollen Paket,
+  deterministisch, Ergebnis gegen `MotionPackSchema` geprüft.
+
+Stand 13i: 192 Clips (12 Demo, 180 AIST++ aus 15 Eimern zu je 12), 0,76 MB, im Build ein eigener
+Chunk von 648 kB (149 kB gzip). Die Demo-Songs bauen nur aus den Clips ohne AIST++
+(`withoutAistClips` in `buildDemoClips` und `buildDemoChoreo`), ihre Choreografien bleiben gleich.
 
 ## Generator
 
@@ -512,7 +541,8 @@ je 4 Beats aus; daraus werden die Abschnitte geschätzt und danach per Gehör ge
 Seit Etappe 14b baut `bun run build-demo src/data/demos/*.manifest.json` (`scripts/build-demo.ts`,
 Logik rein in `src/lib/demoBuild.ts`) aus jedem Manifest die Choreografie
 `src/data/demos/<slug>.choreo.json`. Das JSON ist kompakt, wird mit `ChoreographySchema` geprüft
-und ist von Prettier ausgenommen. Option `--pack=path` (Standard `src/data/motion-pack.json`).
+und ist von Prettier ausgenommen. Option `--pack=path` (Standard `src/data/motion-pack.json`);
+genutzt werden nur dessen Clips ohne AIST++ (Etappe 13i).
 Deterministisch: Seed ist die Song-ID; ein Test vergleicht die eingecheckten Dateien mit einem
 frischen Build. Nach jeder Änderung an Manifest, Paket oder Generator neu bauen.
 

@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)                                                                   | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                                                                      | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)                                                                   | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen)                                                     | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1, 13h-2, 13i ✅; Beat-Phase und Gerätetest offen)                     | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ✅ (Gerätetest offen)                                                                   | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -1251,7 +1251,7 @@ kommerziell ist; siehe 13h-2, „Offen“, und 14-0.1).
   - 6 mit zu wenig messbaren Winkeln
 - Es bleiben 3982 AIST-Clips aus allen sechs Genres. Spiegelpaare gibt es keine.
 - `eval-choreo` mit diesem Paket: Der simulierte Score bleibt gleich. Die höchste
-  Winkelgeschwindigkeit steigt aber auf 1800–2700 °/s (p95 bis 1420), mit dem ausgelieferten
+  Winkelgeschwindigkeit steigt aber auf 1800–2700 °/s (p95 bis 1420), mit dem damals ausgelieferten
   Paket sind es 355–549 °/s.
 
 **Nachmessung der drei offenen Fragen (2026-10-22):**
@@ -1310,8 +1310,54 @@ kommerziell ist; siehe 13h-2, „Offen“, und 14-0.1).
   DanceBeat ist erlaubt, solange sie nicht kommerziell ist. Die Auskunft liegt beim Nutzer, nicht
   im Repo. Folgen: DanceBeat steht unter der PolyForm Noncommercial License 1.0.0
   (`LICENSE.md`), der AIST-Credit nennt die Bedingung. `SHIPS_AIST` ist kein Lizenzschalter mehr:
-  Er folgt nur noch dem Motion-Paket (Test in `credits.test.ts`) und springt um, sobald AIST-Clips
-  ausgeliefert werden. Keine Rechtsberatung.
+  Er folgt nur noch dem Motion-Paket (Test in `credits.test.ts`) und steht seit 13i auf `true`.
+  Keine Rechtsberatung.
+
+**13i AIST-Clips ausliefern – umgesetzt, Gerätetest offen.** `src/data/motion-pack.json` enthält
+jetzt neben den 12 Demo-Clips 180 AIST++-Clips (192 Clips, 0,76 MB kompaktes JSON, im Build ein
+eigener Chunk mit 648 kB, gzip 149 kB). Die Auswahl trifft `selectShippedClips` in
+`src/lib/motionPack.ts`: Clips ohne AIST++ bleiben unverändert. Die AIST++-Clips ab
+`MIN_MOVE_ENERGY` kommen in Eimer je Quelltempo und Stufe, davon behält jeder Eimer höchstens 12
+(`SHIP_CLIPS_PER_BUCKET`). Gewählt wird per Farthest-Point auf der Ankerpose: zuerst der
+spielbarste Clip, dann jeweils der Clip, der am weitesten vom nächsten schon gewählten entfernt ist.
+`mirrorOf` und Übergänge zu weggefallenen Clips entfallen. Alle 15 Eimer sind voll (80–130 BPM
+Stufe 1 und 2, 115/125/135 BPM nur Stufe 2). Neu bauen:
+`bun run build-motion-pack -- --ship eval-results/aist/*.posetrack.json`. Mit `--ship` nimmt das
+Skript nur AIST++-Spuren an; Clips aus fremden Videos bleiben ausgeschlossen. Ohne Argumente
+überschreibt es ein Paket mit AIST++-Clips nicht mehr und nennt stattdessen diesen Aufruf. Details
+in [choreography-format.md](choreography-format.md#aist-auswahl). `SHIPS_AIST` steht auf `true`,
+die AIST-Credits erscheinen.
+
+Die Demo-Songs bauen weiter nur aus den Demo-Clips (`withoutAistClips` in `buildDemoClips` und
+`buildDemoChoreo`). Ihre eingecheckten Choreografien bleiben gleich, `eval-demos` misst mit dem
+alten und dem neuen Paket dasselbe. AIST++-Clips nutzt der Generator für eigene Songs und beim
+Neu-Erzeugen.
+
+`eval-choreo` (4 Tempi × 3 Stufen × 20 Seeds) gegen das reine Demo-Paket:
+
+- simulierte Quote im Mittel 0,9997 statt 1,000, schlechtester Lauf 0,985
+- höchste Winkelgeschwindigkeit 1344–2670 °/s statt 355–549 °/s, p95 485–1098 °/s statt 229–488 °/s
+- bei 150 BPM Stufe 1 gleich wie vorher: Kein Stufe-1-Eimer liegt innerhalb von ±12 %
+- messbare Winkel 0,98 statt 1,00
+
+Die Spitzen sind die Ellbogen-Schnapper aus der Nachmessung zu 13h-2. Das volle AIST-Paket
+(3982 Clips) misst fast gleich (max 1323–2522 °/s).
+
+Tests: `motionPack.test.ts`. Neu sind Tests für `selectShippedClips`: Nicht-AIST-Clips bleiben,
+Obergrenze je Eimer, Energiefilter, Farthest-Point, Determinismus, Aufräumen von Spiegeln und
+Übergängen, gültiges Schema. Der Aktualitätstest vergleicht die Demo-Clips des Pakets mit einem
+frischen Demo-Bau und prüft die Obergrenze je Eimer. In `generator.test.ts` kennen zwei Tests
+jetzt AIST++-Clips: Die Liste der Beinmoves gilt nur für Demo-Clips, und der Intro-Test rechnet
+mit dem `anchorBeat` des ersten Clips.
+
+**Offen:**
+
+- Beat-Phase der AIST-Musik messen (13h-2). Bis dahin sitzen AIST++-Clips mit Phase 0 im Takt.
+- Gerätetest: Stören die Ellbogen-Schnapper beim Nachmachen, und sind die AIST++-Moves mit der
+  Kamera erkennbar?
+- Übergänge: Zwischen behaltenen AIST++-Clips bleiben nur 8 Übergänge. Der Generator verbindet
+  die übrigen Clips mit dem Grundgewicht.
+- Neubau der Demos mit AIST++-Clips (siehe 14).
 
 ### 14. Neue Demo-Songs ✅ (Gerätetest offen)
 
@@ -1425,8 +1471,8 @@ Anzeigen nichts ab. Tests: `credits.test.ts`, `settings-screen.test.tsx`.
 
 Abweichungen vom Plan:
 
-- Die AIST-Credits sind vorbereitet, werden aber noch nicht angezeigt. Das ausgelieferte Paket
-  enthält bisher nur `demo`-Clips; eine Nennung ohne ausgelieferte Daten wäre falsch.
+- Die AIST-Credits waren vorbereitet und wurden erst angezeigt, als das Paket AIST++-Clips enthielt
+  (seit 13i). Eine Nennung ohne ausgelieferte Daten wäre falsch gewesen.
 - `DEMOS` liest Manifest und Choreo-JSON schon seit 14a-2; in 14c blieb dafür nichts zu tun.
 
 Zitate gegen die AIST-Seiten abgeglichen (2026-10-22, Abruf nur lesend: AIST++-Startseite,
@@ -1480,8 +1526,8 @@ Nur am Gerät prüfbar, nicht geprüft (Plan 14d): Klang am iPhone-Lautsprecher,
 auf dem Takt, Refrain wiedererkennbar, Erkennung der Clips durch die Kamera und passende
 Schwierigkeit, Wartezeit des ersten Starts über Mobilfunk.
 
-Offen: Neubau der Demos mit dem AIST-Paket, sobald die Beat-Phase aus 13h-2 gemessen ist; dann
-`SHIPS_AIST` umschalten. Die Lizenzfrage ist geklärt (2026-10-23, nur nicht-kommerziell), die
+Offen: Neubau der Demos mit dem AIST-Paket, sobald die Beat-Phase aus 13h-2 gemessen ist. Die
+Demos nutzen bis dahin nur die Demo-Clips (13i), `SHIPS_AIST` steht schon auf `true`. Die Lizenzfrage ist geklärt (2026-10-23, nur nicht-kommerziell), die
 Zitate sind abgeglichen (14c-1).
 
 **Lizenzhinweise – umgesetzt (2026-10-23).** Bisher nannten die Credits nur die Musik. Jetzt

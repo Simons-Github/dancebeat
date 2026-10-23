@@ -19,6 +19,7 @@ import {
   type PlannedPhrase,
   type Slot,
 } from "./generator";
+import { withoutAistClips } from "./motionPack";
 import { hashSeed, randomFromString } from "./random";
 import { CHOREO_VERSION } from "./schema";
 import type { Choreography, MotionPack } from "./types";
@@ -147,13 +148,15 @@ export const manifestInput = (m: DemoManifest): GenerationInput => ({
  * sequences replace them, cycling through the ids within each section occurrence, so every
  * occurrence starts with the first id. A fixed outro closes with its first id. Fixed clips must be
  * known moves (not rest poses), no harder than the song, fit their slot and lie within
- * TEMPO_TOLERANCE, else the build aborts.
+ * TEMPO_TOLERANCE, else the build aborts. Only the clips without AIST++ (`withoutAistClips`) are
+ * used (Etappe 13i), so the shipped demo choreographies do not change with the AIST subset.
  */
 export function buildDemoClips(
   m: DemoManifest,
-  pack: MotionPack,
+  fullPack: MotionPack,
   plan: Plan = planFromManifest(m),
 ): ClipRef[] {
+  const pack = withoutAistClips(fullPack);
   const byId = new Map(pack.clips.map((c) => [c.id, c]));
   const beatMs = beatMsOf(m.bpm);
   for (const kind of SECTION_KINDS) {
@@ -227,9 +230,11 @@ export function demoSongId(manifestId: string): string {
 
 /**
  * The complete choreography of a demo song. Moves inside the intro are dropped (the intro dances
- * without moves); times are fixed (0), the seed sets them when it stores the song (14c).
+ * without moves); times are fixed (0), the seed sets them when it stores the song (14c). Built
+ * from the clips without AIST++, as `buildDemoClips`.
  */
-export function buildDemoChoreo(m: DemoManifest, pack: MotionPack): Choreography {
+export function buildDemoChoreo(m: DemoManifest, fullPack: MotionPack): Choreography {
+  const pack = withoutAistClips(fullPack);
   const plan = planFromManifest(m);
   const { frames, moves } = realizeFrames(plan, buildDemoClips(m, pack, plan), pack);
   const introEndMs = Math.round(m.beatPhaseMs + plan.introBeats * beatMsOf(m.bpm));

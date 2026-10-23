@@ -4,6 +4,7 @@ import { autoChoreo } from "@/data/demo";
 import { simulatedAngles } from "@/lib/game/simulatedPlayer";
 import {
   BASE_STEP_BEATS,
+  BLEND_BEATS,
   END_MARGIN_BEATS,
   GROUP_PATTERN,
   MAX_STEP_BEATS,
@@ -23,7 +24,7 @@ import {
   type GenerationInput,
   type Plan,
 } from "@/lib/generator";
-import { loadMotionPack } from "@/lib/motionPack";
+import { isAistClip, loadMotionPack } from "@/lib/motionPack";
 import { computeAngles, figure3d, type FigureParams } from "@/lib/pose";
 import { roundSkeleton } from "@/lib/precision";
 import { randomFromString } from "@/lib/random";
@@ -393,7 +394,10 @@ describe("selectMoves", () => {
 
   it("difficulty 1 uses no difficulty-2 clips, difficulty 2 and 3 use leg moves", () => {
     const byIcon = clipByIcon(PACK);
-    const hard = new Set(PACK.clips.filter((c) => c.difficulty > 1).map((c) => c.iconId));
+    // The demo leg moves; AIST++ clips of difficulty 2 only fit some tempos, so they are not listed.
+    const hard = new Set(
+      PACK.clips.filter((c) => c.difficulty > 1 && !isAistClip(c)).map((c) => c.iconId),
+    );
     expect(hard).toEqual(new Set(["kick-l", "kick-r", "squat", "star"]));
     for (const seed of SEEDS) {
       const { moves } = generateChoreo(input({ difficulty: 1, seed, durationMs: 120_000 }), PACK);
@@ -589,10 +593,13 @@ describe("realizeFrames", () => {
     const neutral = PACK.clips.find((c) => c.id === "demo:neutral")!;
     const rest = roundSkeleton(neutral.keyframes[0]!.pose3d);
     const inp = input({ bpm: 90 });
-    const { plan, frames } = pipeline(inp);
+    const { plan, clips, frames } = pipeline(inp);
     const beatMs = beatMsOf(inp.bpm);
-    // Blend into the first clip starts one beat before its first move.
-    const blendStart = plan.beatPhaseMs + (plan.introBeats - 1) * beatMs;
+    // The first clip starts `anchorBeat` before its move; the blend into it BLEND_BEATS earlier.
+    const first = clips[0]!;
+    const firstClip = PACK.clips.find((c) => c.id === first.clipId)!;
+    const startBeat = first.beat - firstClip.anchorBeat + firstClip.keyframes[0]!.beat;
+    const blendStart = plan.beatPhaseMs + (startBeat - BLEND_BEATS) * beatMs;
     const intro = frames.filter((f) => f.timeMs <= blendStart);
     expect(intro.length).toBeGreaterThan(0);
     for (const f of intro) expect(f.pose3d).toEqual(rest);

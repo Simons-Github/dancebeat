@@ -11,8 +11,9 @@ export interface Credit {
 /**
  * Whether the shipped motion pack contains AIST++ clips (source `video:AIST++ …`). A test checks
  * this against src/data/motion-pack.json, so the AIST credits appear exactly when the data ships.
+ * Since Etappe 13i the pack ships a subset of the AIST++ clips (`selectShippedClips`).
  */
-export const SHIPS_AIST = false;
+export const SHIPS_AIST = true;
 
 // The app's own license (LICENSE.md); the Required Notice line must reach every recipient.
 const APP_CREDIT: Credit = {

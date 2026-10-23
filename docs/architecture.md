@@ -373,7 +373,7 @@ erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle
 - Choreografie: automatisch (`autoChoreo` über den Generator, seit Etappe 13f-1, Farbpaar
   zufällig aus `SONG_PALETTES`; siehe
   [Generator](choreography-format.md#generator)). Erst beim Speichern lädt `loadMotionPack()`
-  das Motion-Paket als eigenen Chunk (vom Service Worker vorab gecacht, also auch offline, kein
+  das Motion-Paket (Demo- und AIST++-Clips, rund 650 kB) als eigenen Chunk (vom Service Worker vorab gecacht, also auch offline, kein
   externer Abruf). Seed ist die neue Song-ID, die Schwierigkeit kommt aus dem Formular, bei einer
   analysierten Audiodatei auch Energie (Onset-Hüllkurve) und Beat-Phase. Import
   einer Exportdatei (`parseChoreoFile`) oder aus einem Tanzvideo (siehe
@@ -509,7 +509,7 @@ selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gib
 Google Fonts oder ein anderes CDN.
 
 **Lizenzhinweise:** Die Credits in den Einstellungen (`src/data/credits.ts`) nennen DanceBeat
-(PolyForm Noncommercial 1.0.0, `LICENSE.md`), die Demo-Musik, AIST (sobald ausgeliefert),
+(PolyForm Noncommercial 1.0.0, `LICENSE.md`), die Demo-Musik, AIST++ und die AIST Dance DB (seit Etappe 13i im Motion-Paket),
 MediaPipe mit Pose-Modellen (Apache 2.0), Fredoka (OFL 1.1) und die npm-Pakete. Darunter lädt
 „Lizenztexte“ erst beim Aufklappen die vollständigen Texte (`src/lib/licenses.ts`): Apache 2.0
 aus `src/data/licenses/`, OFL aus `@fontsource/fredoka/LICENSE`, die Paketliste aus

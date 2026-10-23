@@ -1,4 +1,5 @@
 import { angleDiff } from "./angle";
+import { MIN_MOVE_ENERGY } from "./generator/select";
 import { ANGLE_SEGMENTS, computeAngles, figure3d, type FigureParams } from "./pose";
 import { MOTION_PACK_VERSION, MotionPackSchema } from "./schema";
 import { interpolate } from "./skeleton/interpolate";
@@ -503,6 +504,119 @@ export function buildMotionPack(input: {
   }
   const pack = MotionPackSchema.parse({ version: MOTION_PACK_VERSION, clips, transitions });
   return { pack, rejected };
+}
+
+// ---- Shipping ----
+
+/** Video name prefix of AIST++ tracks (src/lib/aist.ts); their clips get the source below. */
+export const AIST_VIDEO_PREFIX = "AIST++ ";
+/** Source prefix of clips cut from AIST++ tracks (`video:` + AIST_VIDEO_PREFIX + clip name). */
+export const AIST_SOURCE_PREFIX = `video:${AIST_VIDEO_PREFIX}`;
+/** AIST clips kept per (sourceBpm, difficulty) bucket in the shipped pack (Etappe 13i). */
+export const SHIP_CLIPS_PER_BUCKET = 12;
+
+/** Whether a clip was cut from an AIST++ track. */
+export const isAistClip = (c: Pick<MotionClip, "source">) =>
+  c.source.startsWith(AIST_SOURCE_PREFIX);
+
+const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
+
+/**
+ * Greedy farthest-point pick of up to `n` clips by anchor pose: the first is the most playable
+ * (then highest energy, then smallest id), each next one the clip whose distance to its nearest
+ * already picked clip is largest (ties by id). Spreads the picks over the pose space instead of
+ * taking near-duplicates. Clips without an anchor pose are skipped.
+ */
+function farthestPoints(clips: readonly MotionClip[], n: number): MotionClip[] {
+  const pool = clips
+    .map((c) => ({ c, pose: anchorPose(c) }))
+    .filter((x): x is { c: MotionClip; pose: Skeleton3D } => x.pose !== null)
+    .sort((a, b) => b.c.playability - a.c.playability || b.c.energy - a.c.energy || byId(a.c, b.c));
+  const first = pool[0];
+  if (!first || n <= 0) return [];
+  const picked = [first];
+  const rest = pool.slice(1).sort((a, b) => byId(a.c, b.c));
+  const nearest = rest.map((x) => boneDistance(x.pose, first.pose));
+  while (picked.length < n && rest.length) {
+    let best = 0;
+    // `rest` is sorted by id and only a strictly larger distance wins: ties go to the smaller id.
+    for (let i = 1; i < rest.length; i++) if (nearest[i]! > nearest[best]!) best = i;
+    const [next] = rest.splice(best, 1);
+    nearest.splice(best, 1);
+    picked.push(next!);
+    rest.forEach((x, i) => (nearest[i] = Math.min(nearest[i]!, boneDistance(x.pose, next!.pose))));
+  }
+  return picked.map((x) => x.c);
+}
+
+/**
+ * The subset of a built pack that ships in src/data/motion-pack.json (Etappe 13i): every clip
+ * not from AIST++ unchanged, of the AIST++ clips (AIST_SOURCE_PREFIX) with at least
+ * MIN_MOVE_ENERGY (the generator never uses rest poses as moves) up to `perBucket` per
+ * (sourceBpm, difficulty), spread by `farthestPoints`. The buckets follow the generator's
+ * filters (tempo tolerance, difficulty), so every tempo and level keeps its own variety.
+ * Mirrors and transitions are cut to the kept clips (`restrictPack`). Clip order as in `pack`;
+ * deterministic; validated with MotionPackSchema.
+ */
+export function selectShippedClips(
+  pack: MotionPack,
+  perBucket = SHIP_CLIPS_PER_BUCKET,
+): MotionPack {
+  const buckets = new Map<string, MotionClip[]>();
+  for (const c of pack.clips) {
+    if (!isAistClip(c) || c.energy < MIN_MOVE_ENERGY) continue;
+    const key = `${c.sourceBpm ?? ""}/${c.difficulty}`;
+    const list = buckets.get(key);
+    if (list) list.push(c);
+    else buckets.set(key, [c]);
+  }
+  const keep = new Set(pack.clips.filter((c) => !isAistClip(c)).map((c) => c.id));
+  for (const list of buckets.values())
+    for (const c of farthestPoints(list, perBucket)) keep.add(c.id);
+
+  return MotionPackSchema.parse(restrictPack(pack, keep));
+}
+
+/**
+ * `pack` with only the clips in `keep` (order unchanged): a `mirrorOf` to a dropped clip is
+ * removed, transitions are kept only between kept clips, empty rows and styles dropped.
+ */
+function restrictPack(pack: MotionPack, keep: ReadonlySet<string>): MotionPack {
+  const clips = pack.clips
+    .filter((c) => keep.has(c.id))
+    .map((c) => {
+      if (!c.mirrorOf || keep.has(c.mirrorOf)) return c;
+      const { mirrorOf: _, ...rest } = c;
+      return rest;
+    });
+  const transitions: MotionPack["transitions"] = {};
+  for (const [style, rows] of Object.entries(pack.transitions)) {
+    const kept: Record<string, Record<string, number>> = {};
+    for (const [a, row] of Object.entries(rows)) {
+      if (!keep.has(a)) continue;
+      const r = Object.fromEntries(Object.entries(row).filter(([b]) => keep.has(b)));
+      if (Object.keys(r).length) kept[a] = r;
+    }
+    if (Object.keys(kept).length) transitions[style] = kept;
+  }
+  return { version: pack.version, clips, transitions };
+}
+
+/**
+ * The pack without AIST++ clips, not validated again. The demo songs are built from it
+ * (src/lib/demoBuild.ts), so their shipped choreographies stay as they were (Etappe 13i).
+ */
+export const withoutAistClips = (pack: MotionPack): MotionPack =>
+  restrictPack(pack, new Set(pack.clips.filter((c) => !isAistClip(c)).map((c) => c.id)));
+
+/** Clip count per (sourceBpm, difficulty) of the AIST++ clips, keys "bpm/difficulty", sorted. */
+export function aistBucketCounts(pack: MotionPack): [string, number][] {
+  const counts = new Map<string, number>();
+  for (const c of pack.clips.filter(isAistClip)) {
+    const key = `${c.sourceBpm ?? "–"}/${c.difficulty}`;
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  return [...counts].sort(([a], [b]) => a.localeCompare(b, "en", { numeric: true }));
 }
 
 // ---- Loading ----
