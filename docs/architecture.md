@@ -735,6 +735,33 @@ Coachs statt der Strichfigur.
   bleiben gültig) in den Einstellungen unter Anzeige und im Pausenmenü; dort nur, wenn der Song
   ein Video hat. Aus: Coach wie bisher.
 
+### Tanzvideo getrennt speichern (Etappe 8h-2b-1)
+
+Kommt die Musik nicht aus dem Tanzvideo (Tab Datei mit eigener Audiodatei, Tab URL oder
+Spotify), zeigt der Video-Import den Schalter „Video behalten“ (Standard an). Im Tab YouTube
+fehlt er, dort läuft schon das YouTube-Video.
+
+- Ist er an, bekommt der Song `videoBlobId` (neue UUID), und `songRepository.save(song, audio,
+video)` legt das Video in derselben Transaktion wie Song und Audio in den Store `blobs`. Ein
+  volles Kontingent bricht alles ab (`StorageFullError`), es bleibt kein halber Song.
+  `delete` entfernt Audio- und Video-Blob, auch bei ungültigen Einträgen.
+- Grenze 250 MB (`VIDEO_BEAT_MAX_BYTES`) wie in 8h-1: Ein größeres Video sperrt „Hinzufügen“
+  mit Hinweis, bis der Schalter aus ist. Der Hinweis nennt den belegten Speicher, das Feld
+  „Tanzvideo“ sagt dann nicht mehr, dass das Video verworfen wird.
+- Spiel: Videoquelle ist `song.videoBlobId` (gelesen über `getVideo`), sonst wie in 8h-2a der
+  lokale Musik-Blob mit Typ `video/*`. Zielzeit, Nachführen, Einstellung und Pausenmenü sind
+  unverändert ([Tanzvideo im Spiel](#tanzvideo-im-spiel-etappe-8h-2a)); das gilt, weil der
+  Import Videozeit = Musikzeit annimmt.
+- Bearbeiten, „Choreografie neu erzeugen“, Editor, Sync-Test und Ergebnis übernehmen das Feld
+  (Spread des Songs). Ein Video nachträglich anhängen oder entfernen geht noch nicht.
+- Das Spiel prüft beim eigenen Video den MIME-Typ nicht (manche Android-Auswahlen liefern bei
+  .mov einen leeren Typ); beim Musik-Blob bleibt `video/*` Bedingung.
+- Grenzen: `save` räumt einen ersetzten oder entfernten Video-Blob nicht auf, und ein Song mit
+  `videoBlobId` ohne Blob zeigt einfach den Coach. Wer später „Video entfernen“ oder einen
+  Quellwechsel baut, muss den alten Blob in derselben Transaktion löschen. Ein noch offener
+  alter Tab (vor dem Update) entfernt das unbekannte Feld beim nächsten Speichern; der Blob
+  bleibt dann verwaist, bis der Song gelöscht wird.
+
 ### Modellwahl Schnell / Genau (Etappe 8g-4b)
 
 Über der Schaltfläche „Video analysieren“ wählt man das Pose-Modell: „Schnell“ = MediaPipe

@@ -396,3 +396,160 @@ describe("Musik aus dem Tanzvideo im Dialog „Song hinzufügen“", () => {
     expect(screen.getByLabelText("Audiodatei")).toBeInTheDocument();
   });
 });
+
+describe("Video behalten im Dialog „Song hinzufügen“ (8h-2b-1)", () => {
+  const figureEstimator = () => fakeEstimator((t) => (t < 0 ? null : figureLandmarks(t)));
+
+  function openDialog() {
+    const onAdd = vi.fn<(s: Song, a?: Blob, v?: Blob) => Promise<void>>().mockResolvedValue();
+    render(<AddSongDialog onAdd={onAdd} createEstimator={() => figureEstimator()} />);
+    fireEvent.click(screen.getByRole("button", { name: "Song hinzufügen" }));
+    return { onAdd };
+  }
+
+  const keepSwitch = () => screen.queryByRole("switch", { name: "Video behalten" });
+  const musicSwitch = () => screen.getByRole("switch", { name: "Musik aus dem Tanzvideo" });
+  const submitButton = () => screen.getByRole("button", { name: "Hinzufügen" });
+  const videoFile = () => new File(["v"], "tanz.mp4", { type: "video/mp4" });
+
+  function openTab(name: string) {
+    const tab = screen.getByRole("tab", { name });
+    fireEvent.mouseDown(tab);
+    fireEvent.click(tab);
+  }
+
+  async function analyzeVideoToResult() {
+    fireEvent.click(screen.getByRole("button", { name: /analysieren$/ }));
+    await screen.findByText(/Moves, davon/, {}, { timeout: 4000 });
+  }
+
+  it("fehlt, solange die Musik aus dem Video kommt, und im YouTube-Tab", async () => {
+    openDialog();
+    fireEvent.click(await screen.findByRole("radio", { name: "Aus Video" }));
+    expect(musicSwitch()).toBeChecked();
+    expect(keepSwitch()).toBeNull();
+    fireEvent.click(musicSwitch());
+    expect(keepSwitch()).toBeChecked();
+    openTab("YouTube");
+    expect(keepSwitch()).toBeNull();
+    openTab("Spotify");
+    expect(keepSwitch()).toBeChecked();
+    openTab("URL");
+    expect(keepSwitch()).toBeChecked();
+  });
+
+  it("fehlt ohne Video-Choreografie", async () => {
+    openDialog();
+    openTab("URL");
+    expect(keepSwitch()).toBeNull();
+  });
+
+  it("speichert im URL-Tab das Video als eigenen Blob mit videoBlobId", async () => {
+    const { onAdd } = openDialog();
+    openTab("URL");
+    fireEvent.change(screen.getByLabelText("Adresse der Audiodatei"), {
+      target: { value: "https://example.com/song.mp3" },
+    });
+    fireEvent.change(screen.getByLabelText("Titel"), { target: { value: "Mein Tanz" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Aus Video" }));
+    const video = videoFile();
+    chooseVideo(video, 6000);
+    expect(screen.getByText(/stumm statt des Coachs/)).toHaveTextContent(
+      "belegt 0,1 MB in der Bibliothek",
+    );
+    await analyzeVideoToResult();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
+    const [song, audio, kept] = onAdd.mock.calls[0]!;
+    expect(audio).toBeUndefined();
+    expect(kept).toBe(video);
+    expect(song.source.type).toBe("url");
+    expect(song.videoBlobId).toEqual(expect.any(String));
+  });
+
+  it("speichert ausgeschaltet kein Video und keine videoBlobId", async () => {
+    const { onAdd } = openDialog();
+    openTab("URL");
+    fireEvent.change(screen.getByLabelText("Adresse der Audiodatei"), {
+      target: { value: "https://example.com/song.mp3" },
+    });
+    fireEvent.change(screen.getByLabelText("Titel"), { target: { value: "Mein Tanz" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Aus Video" }));
+    fireEvent.click(keepSwitch()!);
+    expect(keepSwitch()).not.toBeChecked();
+    chooseVideo(videoFile(), 6000);
+    await analyzeVideoToResult();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
+    const [song, , kept] = onAdd.mock.calls[0]!;
+    expect(kept).toBeUndefined();
+    expect("videoBlobId" in song).toBe(false);
+  });
+
+  it("speichert im Datei-Tab Audiodatei und Video getrennt", async () => {
+    analyze.mockResolvedValue(await analysisOf(120, 0, 6));
+    const { onAdd } = openDialog();
+    const music = new File(["a"], "song.mp3", { type: "audio/mpeg" });
+    fireEvent.change(await screen.findByLabelText("Audiodatei"), { target: { files: [music] } });
+    await waitFor(() => expect(analyze).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("radio", { name: "Aus Video" }));
+    expect(musicSwitch()).not.toBeChecked();
+    expect(keepSwitch()).toBeChecked();
+    const video = videoFile();
+    chooseVideo(video, 6000);
+    await analyzeVideoToResult();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
+    const [song, audio, kept] = onAdd.mock.calls[0]!;
+    expect(audio).toBe(music);
+    expect(kept).toBe(video);
+    expect(song.source.type).toBe("local");
+    expect(song.videoBlobId).toEqual(expect.any(String));
+    expect(song.videoBlobId).not.toBe(song.source.type === "local" && song.source.blobId);
+  });
+
+  it("speichert kein eigenes Video, wenn danach die Musik aus dem Video kommt", async () => {
+    analyze.mockResolvedValue(await analysisOf(120, 0, 6));
+    const { onAdd } = openDialog();
+    const music = new File(["a"], "song.mp3", { type: "audio/mpeg" });
+    fireEvent.change(await screen.findByLabelText("Audiodatei"), { target: { files: [music] } });
+    await waitFor(() => expect(analyze).toHaveBeenCalledTimes(1));
+    fireEvent.click(screen.getByRole("radio", { name: "Aus Video" }));
+    expect(keepSwitch()).toBeChecked();
+    const video = videoFile();
+    chooseVideo(video, 6000);
+    await analyzeVideoToResult();
+    fireEvent.click(musicSwitch());
+    expect(keepSwitch()).toBeNull();
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+    fireEvent.click(submitButton());
+    await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
+    const [song, audio, kept] = onAdd.mock.calls[0]!;
+    expect(audio).toBe(video);
+    expect(kept).toBeUndefined();
+    expect("videoBlobId" in song).toBe(false);
+  });
+
+  it("meldet ein zu großes Video und sperrt das Hinzufügen, bis der Schalter aus ist", async () => {
+    openDialog();
+    openTab("URL");
+    fireEvent.change(screen.getByLabelText("Adresse der Audiodatei"), {
+      target: { value: "https://example.com/song.mp3" },
+    });
+    fireEvent.change(screen.getByLabelText("Titel"), { target: { value: "Mein Tanz" } });
+    fireEvent.click(screen.getByRole("radio", { name: "Aus Video" }));
+    const big = videoFile();
+    Object.defineProperty(big, "size", { value: VIDEO_BEAT_MAX_BYTES + 1 });
+    chooseVideo(big, 6000);
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Das Video ist zu groß, um es zu behalten (höchstens 250 MB).",
+    );
+    await analyzeVideoToResult();
+    expect(submitButton()).toBeDisabled();
+    fireEvent.click(keepSwitch()!);
+    await waitFor(() => expect(submitButton()).toBeEnabled());
+  });
+});

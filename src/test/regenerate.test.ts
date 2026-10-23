@@ -128,6 +128,12 @@ describe("regenerateSong", () => {
     expect(out.choreo.frames.every((f) => f.pose3d !== undefined)).toBe(true);
   });
 
+  it("keeps the kept dance video (videoBlobId)", () => {
+    const song = { ...videoSong(), videoBlobId: "video-blob" };
+    expect(regenerateSong(song, PACK, opts, NOW).videoBlobId).toBe("video-blob");
+    expect("videoBlobId" in regenerateSong(videoSong(), PACK, opts, NOW)).toBe(false);
+  });
+
   it("applies the difficulty to the song and the move density", () => {
     const song = videoSong(videoChoreo(90_000));
     const easy = regenerateSong(song, PACK, { difficulty: 1, seed: "d" }, NOW);

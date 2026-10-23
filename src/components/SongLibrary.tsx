@@ -15,7 +15,7 @@ interface SongLibraryProps {
   onRemove: (song: Song) => Promise<void>;
   onRegenerate: (song: Song, difficulty: 1 | 2 | 3) => Promise<Song>;
   onExport: (song: Song) => Promise<string>;
-  onAdd: (song: Song, audio?: Blob) => Promise<void>;
+  onAdd: (song: Song, audio?: Blob, video?: Blob) => Promise<void>;
 }
 
 /** Song carousel with the selected-song banner. The tile list is the only scrolling area. */

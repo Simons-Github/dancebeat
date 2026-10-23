@@ -76,8 +76,8 @@ export function useSongLibrary() {
   }, [refresh]);
 
   const save = useCallback(
-    async (s: Song, audio?: Blob) => {
-      await songRepository.save(s, audio);
+    async (s: Song, audio?: Blob, video?: Blob) => {
+      await songRepository.save(s, audio, video);
       await refreshAfterWrite();
     },
     [refreshAfterWrite],

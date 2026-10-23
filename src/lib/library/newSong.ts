@@ -111,8 +111,12 @@ export type NewSongChoreo =
    */
   | { type: "auto"; pack: MotionPack; energy?: EnergyCurve; beatPhaseMs?: number }
   | { type: "import"; file: ChoreoFile }
-  /** From the video import (videoImport.ts); `startOffsetMs` = start of the video section. */
-  | { type: "video"; choreo: Choreography; startOffsetMs: number };
+  /**
+   * From the video import (videoImport.ts); `startOffsetMs` = start of the video section.
+   * `keepVideo`: the dance video is stored as its own blob (new `videoBlobId`), for music that
+   * does not come from the video itself.
+   */
+  | { type: "video"; choreo: Choreography; startOffsetMs: number; keepVideo?: boolean };
 
 export interface NewSongInput {
   source: NewSongSource;
@@ -143,7 +147,8 @@ function sourceSpec(source: NewSongSource): SourceSpec {
  * Builds a validated Song. Auto: generated moves from bpm, duration and difficulty (seed = song id). Import: the file's moves
  * and timing (its bpm, sync and start offsets) are kept, title/artist/difficulty come from the
  * form. Video: the choreography's bpm and offset are kept, the song starts its audio at
- * `startOffsetMs`; colors come from the form like for auto choreographies. IDs are always fresh.
+ * `startOffsetMs`; colors come from the form like for auto choreographies; a kept dance video
+ * gets a new `videoBlobId`. IDs are always fresh.
  * Local sources get a new blobId. Throws if the result is invalid.
  */
 export function buildNewSong(input: NewSongInput, now = Date.now()): Song {
@@ -162,9 +167,10 @@ export function buildNewSong(input: NewSongInput, now = Date.now()): Song {
       choreo: { ...imported.choreo, title },
     };
   } else if (input.choreo.type === "video") {
-    const { choreo, startOffsetMs } = input.choreo;
+    const { choreo, startOffsetMs, keepVideo } = input.choreo;
     const [accentColor, secondaryColor] = input.colors;
     song = {
+      ...(keepVideo && { videoBlobId: crypto.randomUUID() }),
       id: crypto.randomUUID(),
       title,
       artist,

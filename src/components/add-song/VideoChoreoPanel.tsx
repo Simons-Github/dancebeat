@@ -107,6 +107,8 @@ interface VideoChoreoPanelProps {
   onVideoFile?: (file: File | null) => void;
   /** `musicBeat` comes from this video's audio track (the song's music is the video). */
   musicFromVideo?: boolean;
+  /** The dialog keeps the video with the song ("Video behalten"); only changes the hint. */
+  keepVideo?: boolean;
   /** Injected in tests. Default: MediaPipe. */
   createEstimator?: (model: PoseModel) => PoseEstimator;
 }
@@ -138,6 +140,7 @@ export function VideoChoreoPanel({
   onBpmDetected,
   onVideoFile,
   musicFromVideo = false,
+  keepVideo = false,
   createEstimator,
 }: VideoChoreoPanelProps) {
   const id = useId();
@@ -546,7 +549,9 @@ export function VideoChoreoPanel({
         <p id={`${id}-video-hint`} className={HINT}>
           {musicFromVideo
             ? "MP4 oder MOV mit der Musik als Ton. Das Video bleibt auf diesem Gerät und wird als Musik des Songs gespeichert; die Erkennung läuft im Browser ohne externe Abrufe."
-            : "MP4 oder MOV, gleiche Aufnahme wie die Musik (ab Sekunde 0). Das Video bleibt auf diesem Gerät und wird nach dem Hinzufügen verworfen; die Erkennung läuft im Browser ohne externe Abrufe."}
+            : keepVideo
+              ? "MP4 oder MOV, gleiche Aufnahme wie die Musik (ab Sekunde 0). Das Video bleibt auf diesem Gerät und wird mit dem Song gespeichert; die Erkennung läuft im Browser ohne externe Abrufe."
+              : "MP4 oder MOV, gleiche Aufnahme wie die Musik (ab Sekunde 0). Das Video bleibt auf diesem Gerät und wird nach dem Hinzufügen verworfen; die Erkennung läuft im Browser ohne externe Abrufe."}
         </p>
       </div>
 

@@ -71,8 +71,11 @@ interface MusicChoice {
 }
 
 interface AddSongDialogProps {
-  /** Stores the song (and the audio for local files); rejects with StorageFullError when full. */
-  onAdd: (song: Song, audio?: Blob) => Promise<void>;
+  /**
+   * Stores the song (and the audio for local files, the dance video if kept); rejects with
+   * StorageFullError when full.
+   */
+  onAdd: (song: Song, audio?: Blob, video?: Blob) => Promise<void>;
   /** Called after a successful add and after the dialog closed, e.g. to select the new song. */
   onAdded?: (song: Song) => void;
   /** Pose estimator for the video import; injected in tests. Default: MediaPipe. */
@@ -114,6 +117,8 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   /** Video chosen in the video import; with `musicFromVideo` it is also the song's music. */
   const [videoFile, setVideoFile] = useState<File | null>(null);
   const [musicFromVideo, setMusicFromVideo] = useState(true);
+  /** Keep the dance video as its own blob when the music comes from elsewhere (8h-2b-1). */
+  const [keepVideo, setKeepVideo] = useState(true);
   const [titleTouched, setTitleTouched] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -167,6 +172,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     setVideoResult(null);
     setVideoFile(null);
     setMusicFromVideo(true);
+    setKeepVideo(true);
     setTitleTouched(false);
     setError(null);
   };
@@ -191,6 +197,14 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
   const videoMusic = useVideo && musicFromVideo;
   /** File analyzed and stored as the song's audio: the chosen audio file or the dance video. */
   const musicFile = videoMusic ? videoFile : file;
+  /**
+   * "Video behalten" is offered when the dance video is not the music: Datei tab with the switch
+   * off, URL and Spotify. YouTube shows its own video.
+   */
+  const canKeepVideo = useVideo && kind !== "youtube" && !(kind === "file" && musicFromVideo);
+  const keptVideo = canKeepVideo && keepVideo ? videoFile : null;
+  /** Same limit as for the video's music (8h-1): the stored blob is read whole when playing. */
+  const keptVideoTooBig = keptVideo !== null && keptVideo.size > VIDEO_BEAT_MAX_BYTES;
   // The field accepts any decimal (step "any", so the browser never blocks the submit with its own
   // message); the song keeps 0.1 BPM like the estimate.
   const bpmNum = bpm.trim() === "" ? NaN : Math.round(Number(bpm) * 10) / 10;
@@ -218,6 +232,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     !errors.title &&
     !errors.bpm &&
     !errors.duration &&
+    !keptVideoTooBig &&
     (kind !== "file" || analysis.status !== "error");
 
   /** Analyzes the file that becomes the song's music; a newer call wins over a slower older one. */
@@ -362,6 +377,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 type: "video",
                 choreo: videoResult.choreo,
                 startOffsetMs: videoResult.startOffsetMs,
+                keepVideo: keptVideo !== null,
               }
             : {
                 type: "auto",
@@ -385,7 +401,11 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
         choreo,
       });
       void requestPersistentStorage().catch(() => {});
-      await onAdd(song, kind === "file" ? (musicFile ?? undefined) : undefined);
+      await onAdd(
+        song,
+        kind === "file" ? (musicFile ?? undefined) : undefined,
+        keptVideo ?? undefined,
+      );
       setOpen(false);
       reset();
       onAdded?.(song);
@@ -697,8 +717,40 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 onBpmDetected={takeVideoBpm}
                 onVideoFile={chooseVideoFile}
                 musicFromVideo={kind === "file" && videoMusic}
+                keepVideo={canKeepVideo && keepVideo}
                 {...(createEstimator && { createEstimator })}
               />
+            )}
+            {canKeepVideo && (
+              <div className="flex flex-col gap-1">
+                <div className="flex min-h-11 items-center justify-between gap-3">
+                  <Label htmlFor={`${id}-keep-video`} className="text-base">
+                    Video behalten
+                  </Label>
+                  <Switch
+                    id={`${id}-keep-video`}
+                    checked={keepVideo}
+                    onCheckedChange={setKeepVideo}
+                    disabled={busy}
+                    aria-invalid={keptVideoTooBig ? true : undefined}
+                    aria-describedby={`${id}-keep-video-hint`}
+                  />
+                </div>
+                <div id={`${id}-keep-video-hint`} aria-live="polite">
+                  {keptVideoTooBig ? (
+                    <p role="alert" className={FIELD_ERROR}>
+                      Das Video ist zu groß, um es zu behalten (höchstens{" "}
+                      {formatMb(VIDEO_BEAT_MAX_BYTES)}). Bitte „Video behalten“ ausschalten.
+                    </p>
+                  ) : (
+                    <p className={HINT}>
+                      {keepVideo
+                        ? `Beim Spielen läuft das Video stumm statt des Coachs. Dafür wird es mit dem Song auf diesem Gerät gespeichert${videoFile ? ` und belegt ${formatMb(videoFile.size)} in der Bibliothek` : ""}.`
+                        : "Einschalten, um das Video beim Spielen stumm statt des Coachs zu zeigen. Es wird dafür mit dem Song auf diesem Gerät gespeichert."}
+                    </p>
+                  )}
+                </div>
+              </div>
             )}
             {useImport && (
               <div className="flex flex-col gap-2">

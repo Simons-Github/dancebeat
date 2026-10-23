@@ -11,12 +11,15 @@ export interface SongRepository {
   get(id: string): Promise<Song | undefined>;
   /**
    * Validates and stores a song (insert or update) and sets `updatedAt`. Audio, if given, is
-   * stored under the song's local blobId in the same transaction. Throws StorageFullError.
+   * stored under the song's local blobId, the dance video under its `videoBlobId`, all in the
+   * same transaction. Throws StorageFullError (nothing is stored then).
    */
-  save(song: Song, audio?: Blob): Promise<Song>;
-  /** Deletes the song and its audio in one transaction. */
+  save(song: Song, audio?: Blob, video?: Blob): Promise<Song>;
+  /** Deletes the song, its audio and its dance video in one transaction. */
   delete(id: string): Promise<void>;
   getAudio(blobId: string): Promise<Blob | undefined>;
+  /** The dance video stored under a song's `videoBlobId`. */
+  getVideo(blobId: string): Promise<Blob | undefined>;
   /** JSON export of the song's choreography (no audio). */
   export(id: string): Promise<string>;
   /** Validates an export file and stores it as a new song with the given audio source. */

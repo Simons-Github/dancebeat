@@ -202,6 +202,30 @@ describe("buildNewSong (video)", () => {
     expect(song.createdAt).toBe(42);
   });
 
+  it("keepVideo gives the song a fresh videoBlobId, otherwise the key is missing", () => {
+    const { choreo, startOffsetMs } = buildVideoChoreo(base());
+    const input = (keepVideo?: boolean) => ({
+      source: { kind: "url" as const, url: "https://example.com/a.mp3" },
+      title: "T",
+      artist: "",
+      bpm: 120,
+      difficulty: 2 as const,
+      durationMs: 0,
+      colors: ["#111111", "#222222"] as [string, string],
+      choreo: {
+        type: "video" as const,
+        choreo,
+        startOffsetMs,
+        ...(keepVideo !== undefined && { keepVideo }),
+      },
+    });
+    const kept = buildNewSong(input(true));
+    expect(kept.videoBlobId).toMatch(/^[0-9a-f-]{36}$/);
+    expect(buildNewSong(input(true)).videoBlobId).not.toBe(kept.videoBlobId);
+    expect("videoBlobId" in buildNewSong(input(false))).toBe(false);
+    expect("videoBlobId" in buildNewSong(input())).toBe(false);
+  });
+
   it("video mode needs bpm but no duration", () => {
     const fields = {
       kind: "youtube" as const,

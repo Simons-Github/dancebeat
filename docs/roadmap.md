@@ -7,22 +7,22 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 
 ## Übersicht
 
-| Etappe                                       | Status                              | Empfohlenes Modell                                                    |
-| -------------------------------------------- | ----------------------------------- | --------------------------------------------------------------------- |
-| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                                  | Sonnet                                                                |
-| 2. Aufstellhilfe                             | ✅                                  | Sonnet                                                                |
-| 3. Gameplay                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
-| 4. Ergebnis-Screen und Highscores            | ✅                                  | Sonnet                                                                |
-| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)               | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
-| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2–4d, 8h-1, 8h-2a ✅) | Opus                                                                  |
-| 9. Typen und Lint                            | ✅                                  | –                                                                     |
-| 10. Spotify                                  | ✅ (Gerätetest offen)               | Opus                                                                  |
-| 11. Nice-to-have                             | ⏳                                  | je nach Punkt                                                         |
-| 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)               | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen) | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
-| 14. Neue Demo-Songs                          | ✅ (Gerätetest offen)               | Opus für den Songaufbau, Sonnet für den Rest                          |
+| Etappe                                       | Status                                       | Empfohlenes Modell                                                    |
+| -------------------------------------------- | -------------------------------------------- | --------------------------------------------------------------------- |
+| 1. Navigation, Layout, Menü, Song-Bibliothek | ✅                                           | Sonnet                                                                |
+| 2. Aufstellhilfe                             | ✅                                           | Sonnet                                                                |
+| 3. Gameplay                                  | ✅ (Gerätetest offen)                        | Opus                                                                  |
+| 4. Ergebnis-Screen und Highscores            | ✅                                           | Sonnet                                                                |
+| 5. Einstellungen, Sync-Test, Song hinzufügen | ✅ (Gerätetest offen)                        | Sonnet für Formulare und Dialoge, Opus für Sync-Test und Kalibrierung |
+| 6. Bewegungsmodus                            | ✅ (Gerätetest offen)                        | Sonnet                                                                |
+| 7. PWA und Gerätefunktionen                  | ✅ (Gerätetest offen)                        | Sonnet                                                                |
+| 8. Tanz aus Video erstellen                  | ⏳ (8a–8f, 8g-2–4d, 8h-1, 8h-2a, 8h-2b-1 ✅) | Opus                                                                  |
+| 9. Typen und Lint                            | ✅                                           | –                                                                     |
+| 10. Spotify                                  | ✅ (Gerätetest offen)                        | Opus                                                                  |
+| 11. Nice-to-have                             | ⏳                                           | je nach Punkt                                                         |
+| 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)                        | Sonnet                                                                |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1 ✅, 13h-2 offen)          | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 14. Neue Demo-Songs                          | ✅ (Gerätetest offen)                        | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
 
@@ -491,7 +491,7 @@ Gerätetest 7b-2 (offen):
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1, 8h-2a umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1, 8h-2a, 8h-2b-1 umgesetzt)
 
 Aufteilung:
 
@@ -728,7 +728,7 @@ Aufteilung:
   - **8g-4 weitere Verbesserungen, nur nach Messung (offen):** Standard bleibt „lite“, bis die
     Messungen aus 8g-4b vorliegen; „heavy“ nur, wenn „full“ nicht reicht.
 
-- **8h „Video behalten“ – 8h-1 und 8h-2a umgesetzt.**
+- **8h „Video behalten“ – 8h-1, 8h-2a und 8h-2b-1 umgesetzt.**
   - **8h-1 Musik aus dem Tanzvideo – umgesetzt, Gerätetest offen.** Schalter „Musik aus dem
     Tanzvideo“ im Tab Datei, sobald „Aus Video“ gewählt ist (an, wenn noch keine Audiodatei
     gewählt war). Dann ist die Videodatei die Audiodatei des Songs (`local`-Blob, kein
@@ -766,9 +766,32 @@ Aufteilung:
       - [ ] Sichtbare Abweichung oder Sprünge (Seeks) zwischen Video, Coach-Timing und Musik,
             auch bei Tempo 0.75× / 1.25×; kein wiederholtes Ruckeln durch Nachspringen
       - [ ] Akku und Wärme bei einem ganzen Song mit Kamera und Video
-  - **8h-2b (offen):** Video getrennt speichern, wenn die Musik eine eigene Datei ist (braucht
-    ein Feld am Song, also Formatwechsel); Video in Editor-Vorschau und Sync-Test; Option für
-    ein größeres Video-Layout.
+  - **8h-2b-1 Tanzvideo getrennt speichern – umgesetzt, Gerätetest offen.** Kommt die Musik
+    nicht aus dem Tanzvideo (Datei mit eigener Audiodatei, URL, Spotify; nicht YouTube), wählt
+    „Video behalten“ (Standard an, höchstens 250 MB, Hinweis mit belegtem Speicher), ob das
+    Video als eigener Blob gespeichert wird. Neues optionales Song-Feld `videoBlobId`, ohne
+    neue Version und ohne Migration (wie `playbackRate`, Entscheidung des Nutzers am
+    2026-10-23), nicht im Export. `save(song, audio, video)` in einer Transaktion, `delete`
+    entfernt beide Blobs. Das Spiel zeigt das Video wie in 8h-2a, Zeitachse wie beim Import
+    (Videozeit = Musikzeit); ein Video ohne MIME-Typ läuft trotzdem. Details:
+    [architecture.md](architecture.md#tanzvideo-getrennt-speichern-etappe-8h-2b-1),
+    [choreography-format.md](choreography-format.md#song-bibliothekseintrag-nicht-teil-des-exports).
+    Tests `repository.test.ts`, `video-beat-detect.test.tsx`, `game-screen.test.tsx`,
+    `regenerate.test.ts`, `videoImport.test.ts`.
+    - Playwright (390×844 und 844×390): Schalter im URL- und Spotify-Tab vorgewählt, nennt
+      0,1 MB, ausgeschaltet heißt es wieder „verworfen“, fehlt im YouTube-Tab. Song mit
+      `videoBlobId` (per Test-Setup in IndexedDB angelegt, weil die Analyse eine echte Person
+      braucht) zeigt im Spiel mit `?sim=1` das Video stumm statt des Coachs (292×163 bzw.
+      249×140 px), Pausenmenü mit „Tanzvideo zeigen“; Konsole ohne Fehler und Warnungen.
+      Nicht geprüft: der ganze Weg mit echter Analyse und Speichern im Browser.
+    - **Gerätetest 8h-2b-1 (offen):**
+      - [ ] iPhone und Android: echtes Tanzvideo plus eigene MP3 (und URL-Quelle) analysieren,
+            behalten, spielen; Video und Musik synchron
+      - [ ] Großes Video (100–250 MB) neben einer Audiodatei speichern; volles Kontingent
+            meldet sich, kein halber Song
+  - **8h-2b-2 (offen):** Video in Editor-Vorschau und Sync-Test; Video nachträglich anhängen
+    oder entfernen (dann alten Blob in derselben Transaktion löschen).
+  - **8h-2b-3 (offen):** Option für ein größeres Video-Layout.
 
 Ursprüngliche Schritte:
 

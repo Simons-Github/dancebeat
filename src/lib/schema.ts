@@ -122,6 +122,11 @@ export const SongSchema = z.object({
   syncOffsetMs: z.number().finite(),
   startOffsetMs: time,
   playbackRate: z.number().min(0.5).max(2).optional(),
+  /**
+   * Blob id of the dance video kept from the video import when the music comes from elsewhere
+   * (8h-2b-1). Shown muted in the coach slot; its timeline equals the music's. Not exported.
+   */
+  videoBlobId: z.string().min(1).optional(),
   choreo: ChoreographySchema,
   highscore: z.number().nonnegative(),
   stars: z.number().int().min(0).max(5),

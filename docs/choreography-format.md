@@ -61,6 +61,13 @@ letzte Frame unverändert.
 `url`, `youtube` mit `videoId`, `spotify` mit `trackUri`), `syncOffsetMs`, `startOffsetMs`,
 optional `playbackRate` (0.5–2; wirkt bei Datei, URL und YouTube, Spotify spielt immer 1×), `choreo`, `highscore`, `stars` (0–5), `createdAt`, `updatedAt`.
 
+Optional `videoBlobId` (seit Etappe 8h-2b-1): Schlüssel eines eigenen Tanzvideo-Blobs im Store
+`blobs`, wenn beim Video-Import „Video behalten“ an war und die Musik nicht aus dem Video kommt.
+Es gilt dieselbe Zeitachsen-Annahme wie beim Import (Videozeit = Musikzeit). Das Feld gehört
+zum Bibliothekseintrag, nicht zur Choreografie, und wird nicht exportiert. Keine neue Version
+und keine Migration: Es ist optional, alte Einträge bleiben gültig (wie bei `playbackRate`).
+Löschen entfernt beide Blobs.
+
 ## Koordinaten
 
 - Landmarks sind auf 0..1 normiert und liegen in einem **quadratischen** Raum (gleicher Maßstab

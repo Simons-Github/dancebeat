@@ -153,17 +153,21 @@ export function GameScreen({
   // Dance video (Etappe 8h-2a): a local source whose blob is a video (8h-1, "Musik aus dem
   // Tanzvideo") is also shown, muted, in the coach slot. Its own element and object URL; the
   // music keeps playing through the shared audio element. State changes only on load and error.
-  const videoBlobId = song.source.type === "local" ? song.source.blobId : null;
+  // A dance video kept on its own (8h-2b-1, `videoBlobId`) takes precedence; its timeline equals
+  // the music's, so the same sync applies.
+  const keptVideoId = song.videoBlobId ?? null;
+  const videoBlobId = keptVideoId ?? (song.source.type === "local" ? song.source.blobId : null);
   const [video, setVideo] = useState<{ blobId: string; url: string } | null>(null);
   const [videoFailedUrl, setVideoFailedUrl] = useState<string | null>(null);
   useEffect(() => {
     if (!videoBlobId) return;
     let cancelled = false;
     let url: string | null = null;
-    void songRepository
-      .getAudio(videoBlobId)
+    void (keptVideoId ? songRepository.getVideo(keptVideoId) : songRepository.getAudio(videoBlobId))
       .then((blob) => {
-        if (cancelled || !blob?.type.startsWith("video/")) return;
+        // A kept video is a video by construction, even when the picker left its type empty
+        // (some Android pickers do for .mov); a music blob must say so.
+        if (cancelled || !blob || (!keptVideoId && !blob.type.startsWith("video/"))) return;
         url = URL.createObjectURL(blob);
         setVideo({ blobId: videoBlobId, url });
       })
@@ -174,7 +178,7 @@ export function GameScreen({
       cancelled = true;
       if (url) URL.revokeObjectURL(url);
     };
-  }, [videoBlobId]);
+  }, [videoBlobId, keptVideoId]);
   const videoUrl =
     video && video.blobId === videoBlobId && video.url !== videoFailedUrl ? video.url : null;
   const showVideo = videoUrl !== null && settings.danceVideo;

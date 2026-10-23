@@ -8,7 +8,7 @@ import { StorageFullError, isQuotaError } from "./storage";
 const DB_NAME = "dancebeat";
 /**
  * Schema history:
- * 1 – stores "songs" (keyPath id) and "blobs" (audio, out-of-line keys)
+ * 1 – stores "songs" (keyPath id) and "blobs" (audio and dance videos, out-of-line keys)
  * 2 – song records migrated to choreography format v1 (UUIDs, timestamps, signed angles)
  * 3 – song records migrated to choreography format v2 (optional `pose3d` per frame); the same
  *     cursor pass as for 2, `migrateSong` runs all format steps from the record's version on
@@ -111,13 +111,15 @@ export class IndexedDbSongRepository implements SongRepository {
     return raw === undefined ? undefined : validate(raw);
   }
 
-  async save(song: Song, audio?: Blob) {
+  async save(song: Song, audio?: Blob, video?: Blob) {
     const next = SongSchema.parse({ ...song, updatedAt: Date.now() });
     if (audio && next.source.type !== "local")
       throw new Error("Audiodaten gehören nur zu lokalen Songs.");
+    if (video && !next.videoBlobId) throw new Error("Das Tanzvideo braucht eine videoBlobId.");
     const blobId = next.source.type === "local" ? next.source.blobId : null;
     await run([SONGS, BLOBS], "readwrite", (tx) => {
       if (audio && blobId) tx.objectStore(BLOBS).put(audio, blobId);
+      if (video && next.videoBlobId) tx.objectStore(BLOBS).put(video, next.videoBlobId);
       tx.objectStore(SONGS).put(next);
     });
     return next;
@@ -129,9 +131,10 @@ export class IndexedDbSongRepository implements SongRepository {
       const songs = tx.objectStore(SONGS);
       const req = songs.get(id);
       req.onsuccess = () => {
-        const source: unknown = req.result?.source;
-        const blobId = (source as { type?: unknown; blobId?: unknown } | undefined)?.blobId;
+        const raw = req.result as { source?: unknown; videoBlobId?: unknown } | undefined;
+        const blobId = (raw?.source as { blobId?: unknown } | undefined)?.blobId;
         if (typeof blobId === "string") tx.objectStore(BLOBS).delete(blobId);
+        if (typeof raw?.videoBlobId === "string") tx.objectStore(BLOBS).delete(raw.videoBlobId);
         songs.delete(id);
       };
     });
@@ -139,6 +142,11 @@ export class IndexedDbSongRepository implements SongRepository {
 
   async getAudio(blobId: string) {
     return run<Blob | undefined>([BLOBS], "readonly", (tx) => tx.objectStore(BLOBS).get(blobId));
+  }
+
+  async getVideo(blobId: string) {
+    // Same store as the audio; the separate name keeps call sites readable.
+    return this.getAudio(blobId);
   }
 
   async export(id: string) {

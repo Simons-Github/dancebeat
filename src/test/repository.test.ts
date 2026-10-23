@@ -62,6 +62,73 @@ describe("IndexedDbSongRepository", () => {
     expect(await repo.getAudio("x")).toBeUndefined();
   });
 
+  it("speichert das Tanzvideo getrennt unter videoBlobId (8h-2b-1)", async () => {
+    const s = {
+      ...makeSong(),
+      source: { type: "local" as const, blobId: "a" },
+      videoBlobId: "v",
+    };
+    await repo.save(s, audio("A"), audio("V"));
+    expect(await repo.getAudio("a")).toBe("A");
+    expect(await repo.getVideo("v")).toBe("V");
+    expect((await repo.get(s.id))?.videoBlobId).toBe("v");
+    // Also with a non-local music source.
+    const u = {
+      ...makeSong(),
+      source: { type: "url" as const, url: "https://example.com/a.mp3" },
+      videoBlobId: "w",
+    };
+    await repo.save(u, undefined, audio("W"));
+    expect(await repo.getVideo("w")).toBe("W");
+  });
+
+  it("weist ein Tanzvideo ohne videoBlobId ab und speichert nichts", async () => {
+    const s = { ...makeSong(), source: { type: "local" as const, blobId: "a" } };
+    await expect(repo.save(s, audio("A"), audio("V"))).rejects.toThrow();
+    expect(await repo.list()).toEqual([]);
+    expect(await repo.getAudio("a")).toBeUndefined();
+  });
+
+  it("weist eine leere videoBlobId ab", async () => {
+    await expect(repo.save({ ...makeSong(), videoBlobId: "" })).rejects.toThrow();
+  });
+
+  it("Songs ohne videoBlobId bleiben gültig", async () => {
+    const s = await repo.save(makeSong());
+    expect("videoBlobId" in s).toBe(false);
+    expect(await repo.get(s.id)).toEqual(s);
+  });
+
+  it("löscht Song, Audio und Tanzvideo gemeinsam", async () => {
+    const s = {
+      ...makeSong(),
+      source: { type: "local" as const, blobId: "x" },
+      videoBlobId: "y",
+    };
+    await repo.save(s, audio("X"), audio("Y"));
+    await repo.delete(s.id);
+    expect(await repo.get(s.id)).toBeUndefined();
+    expect(await repo.getAudio("x")).toBeUndefined();
+    expect(await repo.getVideo("y")).toBeUndefined();
+  });
+
+  it("löscht das Tanzvideo auch bei ungültigem Datensatz", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await seed(3, {
+      songs: [{ id: "broken", source: { type: "url", url: "x" }, videoBlobId: "vb" }],
+      blobs: [["vb", "V"]],
+    });
+    expect(await repo.list()).toEqual([]);
+    await repo.delete("broken");
+    expect(await repo.getVideo("vb")).toBeUndefined();
+    warn.mockRestore();
+  });
+
+  it("Export enthält kein videoBlobId", async () => {
+    const s = await repo.save({ ...makeSong(), videoBlobId: "v" });
+    expect(await repo.export(s.id)).not.toContain("videoBlobId");
+  });
+
   it("exportiert und importiert als neuen Song", async () => {
     const s = await repo.save(makeSong());
     const imported = await repo.import(await repo.export(s.id), {

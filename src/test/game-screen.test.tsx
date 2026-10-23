@@ -23,6 +23,10 @@ const repo = vi.hoisted(() => ({
   missing: false,
   /** What `getAudio` returns for the song's blob (8h-2a: a video blob shows the dance video). */
   blob: undefined as Blob | undefined,
+  /** What `getVideo` returns, by blob id (8h-2b-1: a dance video kept on its own). */
+  videos: {} as Record<string, Blob>,
+  /** Blob ids asked for through `getAudio`. */
+  audioReads: [] as string[],
 }));
 vi.mock("@/lib/library/repository", () => ({
   songRepository: {
@@ -33,7 +37,11 @@ vi.mock("@/lib/library/repository", () => ({
       library.songs = library.songs.map((s) => (s.id === song.id ? song : s));
       return song;
     },
-    getAudio: async () => repo.blob,
+    getAudio: async (blobId: string) => {
+      repo.audioReads.push(blobId);
+      return repo.blob;
+    },
+    getVideo: async (blobId: string) => repo.videos[blobId],
   },
 }));
 
@@ -176,7 +184,14 @@ beforeEach(() => {
     opts: null,
   });
   scene.estimators = [];
-  Object.assign(repo, { failSave: false, hangSave: false, missing: false, blob: undefined });
+  Object.assign(repo, {
+    failSave: false,
+    hangSave: false,
+    missing: false,
+    blob: undefined,
+    videos: {},
+    audioReads: [],
+  });
 });
 
 afterEach(() => {
@@ -755,6 +770,53 @@ describe("Spielscreen mit Tanzvideo (8h-2a)", () => {
     expect(play).toHaveBeenCalled();
     cleanup();
     expect(revoked).toEqual(["blob:video-0"]);
+  });
+
+  it("eigenes Tanzvideo (videoBlobId) zu einer Audiodatei: Video wird gezeigt und ist im Pausenmenü schaltbar", async () => {
+    repo.blob = new Blob(["x"], { type: "audio/mpeg" });
+    repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+    library.songs = library.songs.map((s) => ({ ...s, videoBlobId: "video-1" }));
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    const v = videoEl() as HTMLVideoElement;
+    expect(v.tagName).toBe("VIDEO");
+    expect(v.muted).toBe(true);
+    expect(v.getAttribute("src")).toBe("blob:video-0");
+    expect(screen.queryByRole("img", { name: "Coach" })).toBeNull();
+    // The music blob is not read for the picture.
+    expect(repo.audioReads).toEqual([]);
+    await advance(5100);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(screen.getByRole("switch", { name: "Tanzvideo zeigen" })).toBeChecked();
+  });
+
+  it("eigenes Tanzvideo zu einer URL-Quelle wird gezeigt", async () => {
+    repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+    library.songs = library.songs.map((s) => ({
+      ...s,
+      source: { type: "url", url: "https://example.com/a.mp3" },
+      videoBlobId: "video-1",
+    }));
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    expect(videoEl()?.tagName).toBe("VIDEO");
+  });
+
+  it("videoBlobId ohne Video-Blob: Coach bleibt", async () => {
+    repo.videos = {};
+    library.songs = library.songs.map((s) => ({ ...s, videoBlobId: "video-1" }));
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    expect(videoEl()).toBeNull();
+    expect(screen.getByRole("img", { name: "Coach" })).toBeInTheDocument();
+  });
+
+  it("eigenes Tanzvideo ohne MIME-Typ (Android-.mov) wird trotzdem gezeigt", async () => {
+    repo.videos = { "video-1": new Blob(["v"]) };
+    library.songs = library.songs.map((s) => ({ ...s, videoBlobId: "video-1" }));
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    expect(videoEl()?.tagName).toBe("VIDEO");
   });
 
   it("Audiodatei als Musik: Coach bleibt, kein Video", async () => {
