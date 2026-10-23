@@ -20,6 +20,7 @@ import {
 import { CREDITS, type Credit } from "@/data/credits";
 import { mediaVolumeIgnored } from "@/lib/audio/unlock";
 import { getStorageUsage, type StorageUsage } from "@/lib/library/storage";
+import { loadLicenseTexts, type LicenseTexts as Texts } from "@/lib/licenses";
 import { DIFFICULTIES, type Difficulty } from "@/lib/scoring";
 import { LATENCY_MAX, LATENCY_MIN, LATENCY_STEP, useSettings, type Settings } from "@/lib/settings";
 import { formatOffsetMs } from "@/lib/sync";
@@ -231,6 +232,52 @@ export function CreditList({ credits }: { credits: readonly Credit[] }) {
         <p className={HINT}>Links öffnen sich erst beim Tippen in einem neuen Tab.</p>
       )}
     </>
+  );
+}
+
+const LICENSE_PRE = "whitespace-pre-wrap break-words rounded-lg bg-black/30 p-3 text-xs";
+
+/** Full license texts, loaded on first open (lazy chunks plus licenses.json from our origin). */
+export function LicenseTexts() {
+  const [texts, setTexts] = useState<Texts | null>(null);
+  const [started, setStarted] = useState(false);
+
+  const onToggle = (open: boolean) => {
+    if (!open || started) return;
+    setStarted(true);
+    void loadLicenseTexts(fetch).then(setTexts);
+  };
+
+  return (
+    <details onToggle={(e) => onToggle(e.currentTarget.open)} className="flex flex-col gap-2">
+      <summary className="min-h-12 cursor-pointer content-center text-base font-medium">
+        Lizenztexte
+      </summary>
+      {!texts ? (
+        <p className={HINT}>Wird geladen …</p>
+      ) : (
+        <div className="flex flex-col gap-3">
+          <h3 className="text-base font-medium">Apache License 2.0 (MediaPipe, Pose-Modelle)</h3>
+          <pre className={LICENSE_PRE}>{texts.apache}</pre>
+          <h3 className="text-base font-medium">SIL Open Font License 1.1 (Fredoka)</h3>
+          <pre className={LICENSE_PRE}>{texts.fredoka}</pre>
+          <h3 className="text-base font-medium">Mitgelieferte npm-Pakete</h3>
+          {texts.bundled === null ? (
+            <p className={HINT}>Die Paketliste entsteht erst beim Produktions-Build.</p>
+          ) : (
+            texts.bundled.map((p) => (
+              <div key={`${p.name}@${p.version}`} className="flex flex-col gap-1">
+                <h4 className="text-sm font-medium">
+                  {p.name} {p.version}
+                  {p.identifier ? ` – ${p.identifier}` : ""}
+                </h4>
+                {p.text && <pre className={LICENSE_PRE}>{p.text}</pre>}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </details>
   );
 }
 
@@ -454,6 +501,7 @@ export function SettingsScreen() {
 
         <Section title="Über und Credits">
           <CreditList credits={CREDITS} />
+          <LicenseTexts />
         </Section>
       </div>
     </main>

@@ -6,3 +6,5 @@ bun.lock
 routeTree.gen.ts
 src/data/motion-pack.json
 src/data/demos/*.choreo.json
+# License texts stay verbatim.
+LICENSE.md

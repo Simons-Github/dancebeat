@@ -14,6 +14,21 @@ export interface Credit {
  */
 export const SHIPS_AIST = false;
 
+// The app's own license (LICENSE.md); the Required Notice line must reach every recipient.
+const APP_CREDIT: Credit = {
+  title: "DanceBeat",
+  lines: [
+    "Required Notice: Copyright 2026 Simon Berger",
+    "Lizenziert unter der PolyForm Noncommercial License 1.0.0: Nutzung, Änderung und Weitergabe nur für nicht-kommerzielle Zwecke. Fremde Bestandteile behalten ihre eigenen Lizenzen (unten und unter „Lizenztexte“).",
+  ],
+  links: [
+    {
+      label: "PolyForm Noncommercial 1.0.0",
+      href: "https://polyformproject.org/licenses/noncommercial/1.0.0/",
+    },
+  ],
+};
+
 const MUSIC_CREDIT: Credit = {
   title: "Musik der Demo-Songs",
   lines: [
@@ -44,10 +59,55 @@ export const AIST_CREDITS: readonly Credit[] = [
     lines: [
       "Choreografien aus der AIST Dance Video Database; deren Musik wird nicht verwendet.",
       "We have used the AIST Dance Video Database (https://aistdancedb.ongaaccel.jp).",
+      "Verwendung mit Erlaubnis des AIST, nur für nicht-kommerzielle Zwecke.",
       "S. Tsuchida, S. Fukayama, M. Hamasaki, M. Goto: AIST Dance Video Database: Multi-genre, Multi-dancer, and Multi-camera Database for Dance Information Processing. ISMIR 2019, Delft, S. 501–510.",
     ],
     links: [{ label: "AIST Dance DB", href: "https://aistdancedb.ongaaccel.jp/" }],
   },
 ];
 
-export const CREDITS: readonly Credit[] = [MUSIC_CREDIT, ...(SHIPS_AIST ? AIST_CREDITS : [])];
+// Shipped unchanged from our own origin: the JS and WASM runtime of @mediapipe/tasks-vision
+// (package.json: Apache-2.0) and the pose models (model card: Apache License 2.0).
+const MEDIAPIPE_CREDIT: Credit = {
+  title: "MediaPipe Pose Landmarker",
+  lines: [
+    "Pose-Erkennung mit MediaPipe Tasks Vision (Laufzeit und WASM) und den Pose-Landmarker-Modellen „lite“ und „full“ (BlazePose GHUM 3D) von Google LLC, lizenziert unter der Apache License 2.0. Unverändert mitgeliefert.",
+  ],
+  links: [
+    { label: "MediaPipe", href: "https://github.com/google-ai-edge/mediapipe" },
+    {
+      label: "Model Card",
+      href: "https://storage.googleapis.com/mediapipe-assets/Model%20Card%20BlazePose%20GHUM%203D.pdf",
+    },
+    { label: "Apache 2.0", href: "https://www.apache.org/licenses/LICENSE-2.0" },
+  ],
+};
+
+// Copyright line as in node_modules/@fontsource/fredoka/LICENSE.
+const FONT_CREDIT: Credit = {
+  title: "Schrift Fredoka",
+  lines: [
+    "Copyright 2016 The Fredoka Project Authors (https://github.com/hafontia/Fredoka-One). Lizenziert unter der SIL Open Font License 1.1, eingebunden über @fontsource/fredoka.",
+  ],
+  links: [
+    { label: "Fredoka", href: "https://github.com/hafontia/Fredoka-One" },
+    { label: "OFL 1.1", href: "https://openfontlicense.org/" },
+  ],
+};
+
+const PACKAGES_CREDIT: Credit = {
+  title: "Open-Source-Pakete",
+  lines: [
+    "React, TanStack Router und Query, Radix UI, Framer Motion, zod, Tailwind CSS, Lucide und weitere npm-Pakete. Namen, Versionen und Lizenztexte aller mitgelieferten Pakete stehen unter „Lizenztexte“.",
+  ],
+  links: [],
+};
+
+export const CREDITS: readonly Credit[] = [
+  APP_CREDIT,
+  MUSIC_CREDIT,
+  ...(SHIPS_AIST ? AIST_CREDITS : []),
+  MEDIAPIPE_CREDIT,
+  FONT_CREDIT,
+  PACKAGES_CREDIT,
+];

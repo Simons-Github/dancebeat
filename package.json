@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "DanceBeat – a single-player, fully local dance game (PWA) with camera pose scoring.",
   "private": true,
+  "license": "PolyForm-Noncommercial-1.0.0",
   "sideEffects": false,
   "type": "module",
   "scripts": {

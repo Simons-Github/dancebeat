@@ -142,4 +142,13 @@ per `.gitignore` ausgeschlossen. Einzige Ausnahme sind die vier eigenen Demo-Son
 `public/demo-audio/` (KI-generiert mit Gemini). Die Credits stehen in der App unter
 Einstellungen → „Über und Credits“ (`src/data/credits.ts`). Sobald das Motion-Paket
 AIST++-Clips enthält, nennen sie zusätzlich AIST++ (CC BY 4.0, Google LLC) und die AIST Dance
-Video Database. Eigene Songs bleiben lokal im Browser.
+Video Database (Nutzung von AIST nur nicht-kommerziell erlaubt). Eigene Songs bleiben lokal im
+Browser.
+
+## Lizenz
+
+DanceBeat steht unter der [PolyForm Noncommercial License 1.0.0](LICENSE.md): Nutzung, Änderung
+und Weitergabe sind nur für nicht-kommerzielle Zwecke erlaubt. Mitgelieferte Fremdbestandteile
+behalten ihre eigenen Lizenzen: MediaPipe und die Pose-Modelle stehen unter Apache 2.0, die Schrift
+Fredoka unter der SIL OFL 1.1, die npm-Pakete unter ihren jeweiligen Lizenzen. Die vollständigen
+Texte stehen in der App unter Einstellungen → „Über und Credits“ → „Lizenztexte“.

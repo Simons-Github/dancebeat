@@ -32,11 +32,23 @@ describe("Credits", () => {
     expect(aist).toContain("ISMIR 2019");
   });
 
+  it("nennen die Lizenzen von DanceBeat, MediaPipe, Fredoka und den npm-Paketen", () => {
+    const text = CREDITS.flatMap((c) => [...c.lines, ...c.links.map((l) => l.href)]).join("\n");
+    expect(text).toContain("Required Notice: Copyright 2026 Simon Berger");
+    expect(text).toContain("polyformproject.org/licenses/noncommercial/1.0.0");
+    expect(text).toContain("MediaPipe");
+    expect(text).toContain("Apache License 2.0");
+    expect(text).toContain("Copyright 2016 The Fredoka Project Authors");
+    expect(text).toContain("SIL Open Font License 1.1");
+    expect(text).toContain("„Lizenztexte“");
+  });
+
   it("nennen die AIST Dance DB mit dem Satz aus deren Terms of Use", () => {
     const text = AIST_CREDITS.flatMap((c) => c.lines).join("\n");
     expect(text).toContain(
       "We have used the AIST Dance Video Database (https://aistdancedb.ongaaccel.jp).",
     );
+    expect(text).toContain("nur für nicht-kommerzielle Zwecke");
     expect(text).not.toContain("©");
   });
 });

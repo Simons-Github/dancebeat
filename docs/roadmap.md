@@ -1152,7 +1152,8 @@ Objekt-Arrays). Abweichung vom Plan: Die Clip-Liste erzeugt der Konverter aus de
 statt sie von Hand neben das Skript zu legen. Die Beat-Phase fehlt weiter.
 Die AIST Dance DB erlaubt laut Nutzungsbedingungen nur akademische Forschung und verbietet die
 Weitergabe. Der Nutzer hat am 2026-10-22 zugestimmt. Die Daten liegen außerhalb des Repos.
-Ausgelieferte Clips: Lizenz mit 14-0.1 geklärt (2026-10-22, Nutzer hat die Terms gelesen).
+Ausgelieferte Clips: Lizenz geklärt am 2026-10-23 (AIST erlaubt die Nutzung, solange sie nicht
+kommerziell ist; siehe 13h-2, „Offen“, und 14-0.1).
 
 **Messung mit echten Daten (`keypoints3d.zip` v1.0, 1408 Clips):**
 
@@ -1222,20 +1223,22 @@ Ausgelieferte Clips: Lizenz mit 14-0.1 geklärt (2026-10-22, Nutzer hat die Term
 
 - Beat-Phase mit den AIST-Musikdateien messen (Download nötig, siehe unten zur Lizenz).
 - Gerätetest: Stören die Ellbogen-Schnapper aus Mocap-Clips beim Nachmachen?
-- **Lizenz vor dem Ausliefern erneut prüfen.** Die Terms of Use der AIST Dance DB, gelesen
-  am 2026-10-22, sagen: „AIST Dance DB may not be used for any purpose other than academic
-  research.“ Kommerzielle Nutzung nur mit vorheriger schriftlicher Zustimmung von AIST, und
-  „Unauthorized redistribution of any content of the database is prohibited.“ Ob abgeleitete
-  Bewegungsdaten als „content“ gelten, sagen die Terms nicht. Die AIST++-Annotationen selbst
-  stehen unter CC BY 4.0 (Google LLC). Das widerspricht der Annahme in 14-0.1, nach der
-  abgeleitete Bewegungsdaten öffentlich ausgeliefert werden dürfen. `SHIPS_AIST` bleibt aus,
-  bis der Nutzer das geklärt hat, zum Beispiel per Anfrage an AIST. Keine Rechtsberatung.
+- ~~Lizenz vor dem Ausliefern erneut prüfen.~~ **Geklärt am 2026-10-23.** Die Terms of Use der
+  AIST Dance DB (gelesen am 2026-10-22) erlauben nur akademische Forschung („AIST Dance DB may
+  not be used for any purpose other than academic research.“); kommerzielle Nutzung nur mit
+  vorheriger schriftlicher Zustimmung. Der Nutzer hat bei AIST nachgefragt: Die Nutzung in
+  DanceBeat ist erlaubt, solange sie nicht kommerziell ist. Die Auskunft liegt beim Nutzer, nicht
+  im Repo. Folgen: DanceBeat steht unter der PolyForm Noncommercial License 1.0.0
+  (`LICENSE.md`), der AIST-Credit nennt die Bedingung. `SHIPS_AIST` ist kein Lizenzschalter mehr:
+  Er folgt nur noch dem Motion-Paket (Test in `credits.test.ts`) und springt um, sobald AIST-Clips
+  ausgeliefert werden. Keine Rechtsberatung.
 
 ### 14. Neue Demo-Songs ✅ (Gerätetest offen)
 
 Vier Demos mit eigener KI-Musik (Gemini, MP3 in `public/demo-audio/`); Songaufbau per Manifest über
 den Generator aus 13 (fester Plan, Refrain identisch, Gold Moves am Höhepunkt); Credits. Lizenzklärung 14-0 erledigt
-(2026-10-22: AIST++-Bewegung darf ausgeliefert werden; Musik mit Gemini erzeugt, Nachweis führt der
+(2026-10-22: AIST++-Bewegung darf ausgeliefert werden, laut AIST-Auskunft vom 2026-10-23 nur
+nicht-kommerziell; Musik mit Gemini erzeugt, Nachweis führt der
 Nutzer außerhalb des Repos; alte Demos werden ersetzt); wartet auf die
 MP3-Dateien und die Etappen 12 und 13. Plan: [plans/etappe-14.md](plans/etappe-14.md).
 
@@ -1358,7 +1361,8 @@ Zitate gegen die AIST-Seiten abgeglichen (2026-10-22, Abruf nur lesend: AIST++-S
   von Papers geben sie den Satz „We have used the AIST Dance Video Database
   (https://aistdancedb.ongaaccel.jp).“ vor. Er steht jetzt wörtlich in den Credits. Das
   ISMIR-Zitat hat jetzt Ort und Seiten (Delft, S. 501–510). Test in `credits.test.ts`.
-- Lizenzbefund zu den Terms: siehe 13h-2, „Offen“. `SHIPS_AIST` bleibt aus.
+- Lizenzbefund zu den Terms: siehe 13h-2, „Offen“ (geklärt 2026-10-23, nur nicht-kommerziell;
+  der AIST-Credit nennt das seitdem).
 
 **14c-2 Spielbarkeit und Schwierigkeit – umgesetzt.** `bun run eval-demos`
 (`scripts/eval-demos.ts`, Logik `scripts/evalDemos.ts`) baut jedes Demo-Manifest mit
@@ -1396,9 +1400,39 @@ Nur am Gerät prüfbar, nicht geprüft (Plan 14d): Klang am iPhone-Lautsprecher,
 auf dem Takt, Refrain wiedererkennbar, Erkennung der Clips durch die Kamera und passende
 Schwierigkeit, Wartezeit des ersten Starts über Mobilfunk.
 
-Offen: Neubau der Demos mit dem AIST-Paket, sobald die Beat-Phase aus 13h-2 gemessen und die
-Lizenzfrage (13h-2, „Offen“) geklärt ist; dann `SHIPS_AIST` umschalten. Die Zitate sind
-abgeglichen (14c-1).
+Offen: Neubau der Demos mit dem AIST-Paket, sobald die Beat-Phase aus 13h-2 gemessen ist; dann
+`SHIPS_AIST` umschalten. Die Lizenzfrage ist geklärt (2026-10-23, nur nicht-kommerziell), die
+Zitate sind abgeglichen (14c-1).
+
+**Lizenzhinweise – umgesetzt (2026-10-23).** Bisher nannten die Credits nur die Musik. Jetzt
+kommen hinzu (Inhalt in `src/data/credits.ts`, Anzeige in „Über und Credits“):
+
+- **DanceBeat selbst:** PolyForm Noncommercial License 1.0.0 (`LICENSE.md`, Text unverändert von
+  polyformproject.org, davor die Zeile `Required Notice: Copyright 2026 Simon Berger`;
+  `package.json` `license`). Grund: Die AIST-Freigabe gilt nur nicht-kommerziell. Die Lizenz
+  gilt für den eigenen Code; Fremdbestandteile behalten ihre Lizenzen.
+- **MediaPipe:** `@mediapipe/tasks-vision` (JS und WASM, `package.json`: Apache-2.0) und die
+  Pose-Modelle lite und full (Model Card „BlazePose GHUM 3D“: Apache License 2.0), beide von
+  Google LLC, unverändert ausgeliefert. Das npm-Paket bringt keine LICENSE-Datei mit, deshalb
+  liegt der Apache-2.0-Text in `src/data/licenses/Apache-2.0.txt` (von apache.org).
+- **Schrift Fredoka:** SIL OFL 1.1, Copyright 2016 The Fredoka Project Authors. Der Text kommt
+  aus `@fontsource/fredoka/LICENSE`.
+- **npm-Pakete im Bundle:** `build.license` von Vite schreibt `dist/licenses.json` (Name,
+  Version, SPDX-Kennung, Lizenztext je Paket). Keine neue Abhängigkeit. Die Liste erfasst nur
+  JS-Module; `tailwindcss` und `tw-animate-css` stecken nur im CSS und haben ihre MIT-Texte daher
+  als Kopie in `src/data/licenses/` (beim Paket-Update prüfen). Im Preview-Build per Playwright geprüft (390×844 und 844×390, kein Überlauf, Konsole leer,
+  `licenses.json` im Precache): 64 Pakete
+  plus die zwei CSS-Pakete. Zwei Pakete haben keine LICENSE-Datei, die Liste nennt dort nur die
+  Kennung: `@mediapipe/tasks-vision` (Apache-2.0, Text separat) und `react-remove-scroll-bar`
+  (MIT).
+
+„Lizenztexte“ (aufklappbar unter den Credits) lädt erst beim Öffnen die Texte zu Apache 2.0 und
+OFL (eigene Chunks) und `licenses.json` vom eigenen Origin (`src/lib/licenses.ts`). Der
+Dev-Server hat die Datei nicht, dann erscheint ein Hinweis. Tests: `licenses.test.ts`,
+`credits.test.ts`, `settings-screen.test.tsx`.
+
+Offen: Die WASM-Laufzeit von MediaPipe enthält Fremdbibliotheken (z. B. TensorFlow Lite). Google
+liefert dafür im npm-Paket keine eigene Lizenzliste mit; genannt ist nur Apache 2.0 für das Paket.
 
 ## Offene Befunde
 

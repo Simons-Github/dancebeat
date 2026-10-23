@@ -508,6 +508,15 @@ die Vorschau im Choreografie-Editor (`/edit/$songId`, Etappe 8d-2b).
 selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gibt keine Anfrage an
 Google Fonts oder ein anderes CDN.
 
+**Lizenzhinweise:** Die Credits in den Einstellungen (`src/data/credits.ts`) nennen DanceBeat
+(PolyForm Noncommercial 1.0.0, `LICENSE.md`), die Demo-Musik, AIST (sobald ausgeliefert),
+MediaPipe mit Pose-Modellen (Apache 2.0), Fredoka (OFL 1.1) und die npm-Pakete. Darunter lädt
+„Lizenztexte“ erst beim Aufklappen die vollständigen Texte (`src/lib/licenses.ts`): Apache 2.0
+aus `src/data/licenses/`, OFL aus `@fontsource/fredoka/LICENSE`, die Paketliste aus
+`licenses.json`. Diese Datei schreibt Vite beim Build (`build.license` in `vite.config.ts`). Alles
+kommt vom eigenen Origin, es gibt also keinen externen Abruf. Die Links in den Credits rufen erst
+beim Tippen etwas ab.
+
 ## Pose-Erkennung
 
 - `src/lib/poseEstimator.ts`: Schnittstelle `PoseEstimator` (`init`, `detect`, `close`). `init`

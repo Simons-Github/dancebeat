@@ -3,7 +3,7 @@ import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/rea
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it } from "vitest";
 
-import { CreditList } from "@/components/SettingsScreen";
+import { CreditList, LicenseTexts } from "@/components/SettingsScreen";
 import { AIST_CREDITS, CREDITS } from "@/data/credits";
 import { resetAudioUnlockForTests } from "@/lib/audio/unlock";
 import { routeTree } from "@/routeTree.gen";
@@ -57,6 +57,32 @@ describe("Einstellungen", () => {
     expect(link).toHaveAttribute("rel", "noopener noreferrer");
     expect(screen.getAllByRole("link")).toHaveLength(3);
     expect(screen.getByText(/erst beim Tippen/)).toBeInTheDocument();
+  });
+
+  it("lädt die Lizenztexte erst beim Aufklappen", async () => {
+    const urls: string[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = async (input) => {
+      urls.push(String(input));
+      return new Response("<!doctype html>", { headers: { "content-type": "text/html" } });
+    };
+    try {
+      render(<LicenseTexts />);
+      expect(urls).toEqual([]);
+      const details = screen.getByText("Lizenztexte").closest("details");
+      if (!details) throw new Error("details missing");
+      details.open = true;
+      fireEvent(details, new Event("toggle"));
+      expect(
+        await screen.findByRole("heading", {
+          name: "Apache License 2.0 (MediaPipe, Pose-Modelle)",
+        }),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/erst beim Produktions-Build/)).toBeInTheDocument();
+      expect(urls).toEqual(["/licenses.json"]);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
   });
 
   it("speichert Schalter und Schwierigkeit", async () => {

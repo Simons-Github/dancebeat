@@ -21,10 +21,12 @@ Gewählte Wege:
 1. **AIST++-Bewegungen werden ausgeliefert.**
    - Die Annotationen (3D-Keypoints, SMPL) stehen unter **CC BY 4.0** (Google LLC): Weitergabe
      und kommerzielle Nutzung erlaubt, Namensnennung Pflicht.
-   - Die Choreografien stammen aus der **AIST Dance Video Database**. Der Nutzer hat deren
-     Terms of Use gelesen: abgeleitete Bewegungsdaten dürfen in einer öffentlich gehosteten App
-     ausgeliefert werden. Claude hat die Terms nicht selbst geprüft; die Entscheidung beruht auf
-     der Aussage des Nutzers.
+   - Die Choreografien stammen aus der **AIST Dance Video Database**. Deren Terms of Use
+     erlauben nur akademische Forschung (13h-2). **Geklärt am 2026-10-23:** Der Nutzer hat bei
+     AIST nachgefragt; die Nutzung der abgeleiteten Bewegungsdaten in DanceBeat ist erlaubt,
+     **solange sie nicht kommerziell ist**. Die Auskunft liegt beim Nutzer, nicht im Repo; Claude
+     hat sie nicht selbst gesehen. Deshalb steht DanceBeat unter der PolyForm Noncommercial
+     License (`LICENSE.md`), und die Credits nennen die Bedingung.
    - Pflichten für die Credits (14c): CC-BY-Namensnennung (Google LLC) und Zitat des
      ISMIR-2019-Papers (verlangt die AIST-Startseite).
    - Die AIST-Musik wird **nicht** verwendet (nur Bewegung).
@@ -159,7 +161,8 @@ Ein Commit pro Teiletappe.
 - **Erkennung:** Schnelle oder gedrehte Bewegungen erkennt MediaPipe mit der Handykamera
   schlechter als das Mocap-System; die Wertung kann unfair wirken. Gegenmittel: Filter im
   Motion-Paket, Clips im Manifest ersetzen, Schwierigkeit ehrlich angeben.
-- **Lizenz:** AIST++ ist freigegeben (14-0.1). Offen bleibt der Nachweis zur Gemini-Musik, den
+- **Lizenz:** AIST++ ist freigegeben, nur nicht-kommerziell (14-0.1, AIST-Auskunft 2026-10-23).
+  Eine kommerzielle Nutzung braucht vorher die schriftliche Zustimmung von AIST. Offen bleibt der Nachweis zur Gemini-Musik, den
   der Nutzer außerhalb des Repos führt (14-0.2). Ändern sich die Bedingungen oder ist der
   Nachweis nicht möglich, werden die MP3-Dateien ersetzt; Manifeste und Code bleiben.
 - **Tempo:** KI-Generatoren halten die gewünschte BPM nicht immer exakt. Deshalb BPM nach dem
