@@ -7,6 +7,10 @@ export class StorageFullError extends Error {
   }
 }
 
+/** Size for storage hints, in MB with one German decimal; never shows 0. */
+export const formatMb = (bytes: number) =>
+  `${Math.max(0.1, bytes / 1024 / 1024).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MB`;
+
 export const isQuotaError = (e: unknown) =>
   e instanceof DOMException && (e.name === "QuotaExceededError" || e.code === 22);
 

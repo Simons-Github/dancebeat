@@ -34,7 +34,7 @@ import {
   type NewSongSource,
 } from "@/lib/library/newSong";
 import { spotifyStatus, type SpotifyStatus } from "@/lib/audio/spotifyAuth";
-import { StorageFullError, requestPersistentStorage } from "@/lib/library/storage";
+import { StorageFullError, formatMb, requestPersistentStorage } from "@/lib/library/storage";
 import type { VideoImportResult } from "@/lib/library/videoImport";
 import { loadMotionPack } from "@/lib/motionPack";
 import type { PoseModel } from "@/lib/mediapipe";
@@ -83,8 +83,6 @@ interface AddSongDialogProps {
 }
 
 const stripExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
-const formatMb = (bytes: number) =>
-  `${Math.max(0.1, bytes / 1024 / 1024).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MB`;
 
 /**
  * Add-song button plus dialog: audio file, direct URL, YouTube or Spotify; choreography generated,

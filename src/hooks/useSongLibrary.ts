@@ -129,6 +129,24 @@ export function useSongLibrary() {
     },
     [refreshAfterWrite],
   );
+  /**
+   * Attaches, replaces or (`undefined`) removes the song's own dance video and returns the saved
+   * song; the old video blob goes in the same write.
+   */
+  const setVideo = useCallback(
+    async (s: Song, video: Blob | undefined): Promise<Song> => {
+      const saved = await songRepository.setVideo(s.id, video);
+      await refreshAfterWrite();
+      return saved;
+    },
+    [refreshAfterWrite],
+  );
+  /** Whether the music itself is a video (local blob of type video/*, shown in the game, 8h-2a). */
+  const musicIsVideo = useCallback(async (s: Song): Promise<boolean> => {
+    if (s.source.type !== "local") return false;
+    const blob = await songRepository.getAudio(s.source.blobId);
+    return blob?.type.startsWith("video/") ?? false;
+  }, []);
   /** JSON text of the song's choreography export (no audio). */
   const exportChoreo = useCallback((s: Song) => songRepository.export(s.id), []);
   return {
@@ -138,6 +156,8 @@ export function useSongLibrary() {
     remove,
     updateDetails,
     regenerateChoreo,
+    setVideo,
+    musicIsVideo,
     exportChoreo,
     refresh,
   };

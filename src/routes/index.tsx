@@ -11,8 +11,17 @@ export const Route = createFileRoute("/")({
 });
 
 function Index() {
-  const { songs, loading, save, remove, updateDetails, regenerateChoreo, exportChoreo } =
-    useSongLibrary();
+  const {
+    songs,
+    loading,
+    save,
+    remove,
+    updateDetails,
+    regenerateChoreo,
+    setVideo,
+    musicIsVideo,
+    exportChoreo,
+  } = useSongLibrary();
   const search = useSearch({ strict: false }) as Record<string, unknown>;
   const navigate = useNavigate();
   const handled = useRef(false);
@@ -48,6 +57,8 @@ function Index() {
       onSaveDetails={updateDetails}
       onRemove={remove}
       onRegenerate={regenerateChoreo}
+      onSetVideo={setVideo}
+      onCheckMusicVideo={musicIsVideo}
       onExport={exportChoreo}
       onAdd={save}
     />

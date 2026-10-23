@@ -16,6 +16,22 @@ beforeEach(async () => {
   repo = (await import("@/lib/library/repository")).songRepository;
 });
 
+/** All keys in the blobs store, read over a second connection (proves no orphaned blob). */
+function blobKeys() {
+  return new Promise<IDBValidKey[]>((resolve, reject) => {
+    const r = indexedDB.open("dancebeat");
+    r.onerror = () => reject(r.error);
+    r.onsuccess = () => {
+      const db = r.result;
+      const req = db.transaction("blobs").objectStore("blobs").getAllKeys();
+      req.onsuccess = () => {
+        db.close();
+        resolve(req.result);
+      };
+    };
+  });
+}
+
 /** Creates the database at an old schema version (stores as of version 1) with raw records. */
 function seed(version: number, records: { songs: unknown[]; blobs: [string, unknown][] }) {
   return new Promise<void>((resolve, reject) => {
@@ -122,6 +138,95 @@ describe("IndexedDbSongRepository", () => {
     await repo.delete("broken");
     expect(await repo.getVideo("vb")).toBeUndefined();
     warn.mockRestore();
+  });
+
+  it("hängt ein Tanzvideo nachträglich an (8h-2b-2a)", async () => {
+    const s = await repo.save({ ...makeSong(), updatedAt: 1 });
+    const saved = await repo.setVideo(s.id, audio("V"));
+    expect(saved.videoBlobId).toEqual(expect.any(String));
+    expect(saved.updatedAt).toBeGreaterThan(1);
+    expect(await repo.get(s.id)).toEqual(saved);
+    expect(await repo.getVideo(saved.videoBlobId!)).toBe("V");
+  });
+
+  it("ersetzt das Tanzvideo und löscht den alten Blob", async () => {
+    const s = await repo.save(
+      { ...makeSong(), source: { type: "local", blobId: "a" }, videoBlobId: "old" },
+      audio("A"),
+      audio("OLD"),
+    );
+    const saved = await repo.setVideo(s.id, audio("NEW"));
+    expect(saved.videoBlobId).not.toBe("old");
+    expect(await repo.getVideo("old")).toBeUndefined();
+    expect(await repo.getVideo(saved.videoBlobId!)).toBe("NEW");
+    expect(await repo.getAudio("a")).toBe("A");
+    expect((await blobKeys()).sort()).toEqual(["a", saved.videoBlobId!].sort());
+  });
+
+  it("entfernt Tanzvideo und Feld, die Musik bleibt", async () => {
+    const s = await repo.save(
+      { ...makeSong(), source: { type: "local", blobId: "a" }, videoBlobId: "v" },
+      audio("A"),
+      audio("V"),
+    );
+    const saved = await repo.setVideo(s.id, undefined);
+    expect("videoBlobId" in saved).toBe(false);
+    expect(await repo.get(s.id)).toEqual(saved);
+    expect(await repo.getVideo("v")).toBeUndefined();
+    expect(await repo.getAudio("a")).toBe("A");
+    expect(await blobKeys()).toEqual(["a"]);
+    // Removing again is harmless.
+    expect("videoBlobId" in (await repo.setVideo(s.id, undefined))).toBe(false);
+  });
+
+  it("setVideo wirft bei unbekanntem oder ungültigem Song", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    await expect(repo.setVideo("missing", audio("V"))).rejects.toThrow("Song nicht gefunden.");
+    await seed(3, {
+      songs: [{ id: "broken", source: { type: "url", url: "x" }, videoBlobId: "vb" }],
+      blobs: [["vb", "V"]],
+    });
+    vi.resetModules(); // reconnect after seeding the old schema
+    repo = (await import("@/lib/library/repository")).songRepository;
+    await expect(repo.setVideo("broken", undefined)).rejects.toThrow(/beschädigt/);
+    expect(await repo.getVideo("vb")).toBe("V");
+    warn.mockRestore();
+  });
+
+  it("setVideo ändert bei vollem Speicher nichts (StorageFullError)", async () => {
+    const { StorageFullError } = await import("@/lib/library/storage");
+    const s = await repo.save(
+      { ...makeSong(), videoBlobId: "old", updatedAt: 1 },
+      undefined,
+      audio("OLD"),
+    );
+    const before = await repo.get(s.id);
+    // fake-indexeddb aborts the transaction with the operation's error name, like a browser does
+    // when the quota is exceeded. Only the video write fails. `_execRequestAsync` is internal
+    // to fake-indexeddb (6.2.6); if it changes, this test fails instead of passing silently.
+    const proto = (await import("fake-indexeddb")).IDBObjectStore.prototype;
+    const put = proto.put;
+    const spy = vi.spyOn(proto, "put").mockImplementation(function (
+      this: IDBObjectStore,
+      value: unknown,
+      key?: IDBValidKey,
+    ) {
+      if (value !== "NEW") return put.call(this, value, key);
+      const tx = this.transaction as unknown as {
+        _execRequestAsync(op: { operation: () => never; source: unknown }): IDBRequest;
+      };
+      return tx._execRequestAsync({
+        operation: () => {
+          throw new DOMException("full", "QuotaExceededError");
+        },
+        source: this,
+      });
+    });
+    await expect(repo.setVideo(s.id, audio("NEW"))).rejects.toBeInstanceOf(StorageFullError);
+    spy.mockRestore();
+    expect(await repo.get(s.id)).toEqual(before);
+    expect(await repo.getVideo("old")).toBe("OLD");
+    expect(await blobKeys()).toEqual(["old"]);
   });
 
   it("Export enthält kein videoBlobId", async () => {

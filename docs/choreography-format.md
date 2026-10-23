@@ -66,7 +66,9 @@ Optional `videoBlobId` (seit Etappe 8h-2b-1): Schlüssel eines eigenen Tanzvideo
 Es gilt dieselbe Zeitachsen-Annahme wie beim Import (Videozeit = Musikzeit). Das Feld gehört
 zum Bibliothekseintrag, nicht zur Choreografie, und wird nicht exportiert. Keine neue Version
 und keine Migration: Es ist optional, alte Einträge bleiben gültig (wie bei `playbackRate`).
-Löschen entfernt beide Blobs.
+Löschen entfernt beide Blobs. Nachträglich anhängen, ersetzen oder entfernen (seit 8h-2b-2a)
+geht nur über `SongRepository.setVideo`, das den alten Blob in derselben Transaktion löscht und
+jedes neue Video unter einer neuen `videoBlobId` ablegt.
 
 ## Koordinaten
 

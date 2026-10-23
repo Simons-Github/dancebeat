@@ -45,6 +45,8 @@ vi.mock("@/hooks/useSongLibrary", async () => {
       remove: library.remove,
       updateDetails: library.updateDetails,
       exportChoreo: library.exportChoreo,
+      setVideo: vi.fn(),
+      musicIsVideo: () => Promise.resolve(false),
       refresh: vi.fn(),
     }),
   };

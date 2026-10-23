@@ -15,6 +15,13 @@ export interface SongRepository {
    * same transaction. Throws StorageFullError (nothing is stored then).
    */
   save(song: Song, audio?: Blob, video?: Blob): Promise<Song>;
+  /**
+   * Attaches, replaces (`video` given) or removes (`undefined`) the song's own dance video and
+   * returns the saved song. One transaction: the old `videoBlobId` blob is deleted, a new video
+   * goes under a fresh `videoBlobId`, `updatedAt` is set. Throws if the song is unknown or
+   * invalid, StorageFullError when the quota is exceeded (nothing changes then).
+   */
+  setVideo(id: string, video: Blob | undefined): Promise<Song>;
   /** Deletes the song, its audio and its dance video in one transaction. */
   delete(id: string): Promise<void>;
   getAudio(blobId: string): Promise<Blob | undefined>;

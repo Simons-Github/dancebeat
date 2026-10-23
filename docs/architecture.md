@@ -762,14 +762,45 @@ video)` legt das Video in derselben Transaktion wie Song und Audio in den Store 
   unverändert ([Tanzvideo im Spiel](#tanzvideo-im-spiel-etappe-8h-2a)); das gilt, weil der
   Import Videozeit = Musikzeit annimmt.
 - Bearbeiten, „Choreografie neu erzeugen“, Editor, Sync-Test und Ergebnis übernehmen das Feld
-  (Spread des Songs). Ein Video nachträglich anhängen oder entfernen geht noch nicht.
+  (Spread des Songs). Nachträglich anhängen oder entfernen: siehe
+  [8h-2b-2a](#tanzvideo-nachträglich-anhängen-oder-entfernen-etappe-8h-2b-2a).
 - Das Spiel prüft beim eigenen Video den MIME-Typ nicht (manche Android-Auswahlen liefern bei
   .mov einen leeren Typ); beim Musik-Blob bleibt `video/*` Bedingung.
 - Grenzen: `save` räumt einen ersetzten oder entfernten Video-Blob nicht auf, und ein Song mit
-  `videoBlobId` ohne Blob zeigt einfach den Coach. Wer später „Video entfernen“ oder einen
-  Quellwechsel baut, muss den alten Blob in derselben Transaktion löschen. Ein noch offener
+  `videoBlobId` ohne Blob zeigt einfach den Coach. Video ändern deshalb nur über `setVideo`
+  (8h-2b-2a), das den alten Blob in derselben Transaktion löscht; ein späterer Quellwechsel
+  muss das ebenso tun. Ein noch offener
   alter Tab (vor dem Update) entfernt das unbekannte Feld beim nächsten Speichern; der Blob
   bleibt dann verwaist, bis der Song gelöscht wird.
+
+### Tanzvideo nachträglich anhängen oder entfernen (Etappe 8h-2b-2a)
+
+„Song bearbeiten“ hat einen Abschnitt „Tanzvideo“, außer bei YouTube-Songs (dort läuft schon
+das YouTube-Video).
+
+- **Repository:** `setVideo(id, video | undefined)` liest den Song in einer
+  Schreib-Transaktion über `songs` und `blobs`, löscht den Blob der alten `videoBlobId`, legt
+  ein neues Video unter einer neuen UUID ab (nie unter der alten, damit ein Abbruch nichts
+  vermischt) oder lässt das Feld weg, und setzt `updatedAt`. Unbekannte oder ungültige Songs
+  werfen einen Fehler, ohne etwas zu schreiben. Ein volles Kontingent bricht die ganze
+  Transaktion ab (`StorageFullError`), alter Blob und Song bleiben. `run` meldet dafür auch
+  den Fehler einer Anfrage, die erst in einem Callback entsteht.
+- **Dialog:** „Video anhängen“ bzw. „Video ersetzen“ öffnet eine Dateiauswahl (`video/*`, ohne
+  MIME-Prüfung wie im Spiel). Über 250 MB (`VIDEO_BEAT_MAX_BYTES`) gibt es eine Fehlermeldung,
+  gespeichert wird nichts. Nach dem Speichern nennt der Status den belegten Speicher
+  (`formatMb`, gemeinsam mit dem Hinzufügen-Dialog). „Video entfernen“ fragt nach (Muster wie
+  „Song löschen“); danach geht der Fokus auf „Video anhängen“. Während des Schreibens sind
+  alle Knöpfe gesperrt.
+- **Schnappschuss:** Der Dialog ersetzt nach dem Schreiben seinen Schnappschuss durch den
+  zurückgegebenen Song (wie beim Neu-Erzeugen). Ein späteres „Speichern“ schreibt also die
+  neue oder keine `videoBlobId` und bringt die alte nicht zurück.
+- **Musik als Video (8h-2a):** Ist die Musik ein lokaler Blob mit Typ `video/*` und kein
+  eigenes Video angehängt, sagt ein Hinweis, dass dieses Video schon statt des Coachs läuft.
+  Anhängen bleibt erlaubt; das eigene Video hat im Spiel Vorrang. Die Prüfung läuft beim
+  Öffnen über `useSongLibrary().musicIsVideo` (liest den Blob über das Repository).
+- **Zeitachse:** wie beim Import gilt Videozeit = Musikzeit. Der Hinweis im Dialog sagt, dass
+  das Video zur Musik passen und an derselben Stelle beginnen muss; einen Versatz gleicht
+  nichts aus. Editor-Vorschau und Sync-Test zeigen das Video noch nicht (8h-2b-2b).
 
 ### Modellwahl Schnell / Genau (Etappe 8g-4b)
 

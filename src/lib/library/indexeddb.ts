@@ -80,8 +80,11 @@ async function run<T>(
   return new Promise<T | undefined>((resolve, reject) => {
     const tx = db.transaction(stores, mode);
     const req = fn(tx);
-    const fail = () => {
-      const err = tx.error ?? req?.error;
+    const fail = (e: Event) => {
+      // A failing request (also one made inside a callback, without `req`) reports here before
+      // the transaction aborts, while `tx.error` is still null: take the request's error.
+      const source = e.type === "error" ? (e.target as IDBRequest | null)?.error : undefined;
+      const err = tx.error ?? source ?? req?.error;
       reject(isQuotaError(err) ? new StorageFullError() : err);
     };
     tx.oncomplete = () => resolve(req ? req.result : undefined);
@@ -123,6 +126,36 @@ export class IndexedDbSongRepository implements SongRepository {
       tx.objectStore(SONGS).put(next);
     });
     return next;
+  }
+
+  async setVideo(id: string, video: Blob | undefined) {
+    let found = false as boolean; // set inside the callback; keeps TS from narrowing
+    let saved: Song | undefined;
+    // Read, delete the old blob, store the new one and the song in one transaction.
+    await run([SONGS, BLOBS], "readwrite", (tx) => {
+      const songs = tx.objectStore(SONGS);
+      const req = songs.get(id);
+      req.onsuccess = () => {
+        if (req.result === undefined) return;
+        found = true;
+        const current = validate(req.result);
+        if (!current) return; // invalid records are never rewritten
+        const { videoBlobId: old, ...rest } = current;
+        const blobs = tx.objectStore(BLOBS);
+        if (old) blobs.delete(old);
+        const next: Song = {
+          ...rest,
+          ...(video ? { videoBlobId: crypto.randomUUID() } : {}),
+          updatedAt: Date.now(),
+        };
+        if (video && next.videoBlobId) blobs.put(video, next.videoBlobId);
+        songs.put(next);
+        saved = next;
+      };
+    });
+    if (!found) throw new Error("Song nicht gefunden.");
+    if (!saved) throw new Error("Der Song ist beschädigt und kann nicht geändert werden.");
+    return saved;
   }
 
   async delete(id: string) {
