@@ -1,15 +1,23 @@
 import { QueryClient } from "@tanstack/react-query";
 import { RouterProvider, createMemoryHistory, createRouter } from "@tanstack/react-router";
-import { act, cleanup, fireEvent, render, screen } from "@testing-library/react";
+import { act, cleanup, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
+import { saveSettings } from "@/lib/settings";
 import { SYNC_DISCARD_TAPS, SYNC_MIN_TAPS } from "@/lib/sync";
 import type { Song } from "@/lib/types";
 import { routeTree } from "@/routeTree.gen";
 import { makeSong } from "./fixtures";
 
 /** In-memory repository; the real useSongLibrary runs on top of it. */
-const repo = vi.hoisted(() => ({ songs: [] as Song[], saved: [] as Song[] }));
+const repo = vi.hoisted(() => ({
+  songs: [] as Song[],
+  saved: [] as Song[],
+  /** Music blob of local songs (a video blob is music from the dance video). */
+  blob: undefined as Blob | undefined,
+  /** Kept dance videos by id (8h-2b-1). */
+  videos: {} as Record<string, Blob>,
+}));
 vi.mock("@/lib/library/repository", () => ({
   songRepository: {
     list: async () => repo.songs,
@@ -21,7 +29,8 @@ vi.mock("@/lib/library/repository", () => ({
     },
     delete: async () => {},
     export: async () => "{}",
-    getAudio: async () => undefined,
+    getAudio: async () => repo.blob,
+    getVideo: async (id: string) => repo.videos[id],
   },
 }));
 vi.mock("@/data/demo", () => ({
@@ -118,6 +127,8 @@ beforeEach(() => {
   });
   repo.songs = [{ ...makeSong(), id: SONG_ID, title: "Pink Pulse", startOffsetMs: 1000 }];
   repo.saved = [];
+  repo.blob = undefined;
+  repo.videos = {};
   Object.assign(audio, {
     playing: false,
     base: 0,
@@ -404,5 +415,136 @@ describe("Sync-Test", () => {
     await renderAt(`/sync/${SONG_ID}`);
     expect(screen.getByRole("alert")).toHaveTextContent(/Die Musik konnte nicht geladen werden/);
     expect(settingsLink()).not.toBeInTheDocument();
+  });
+
+  describe("mit Tanzvideo (8h-2b-2b-2)", () => {
+    let created: string[];
+    let revoked: string[];
+    let frames: FrameRequestCallback[];
+    /** Fake media element state: play() starts it, currentTime records seeks (ms). */
+    const media = { paused: true, time: 0, seeks: [] as number[], rate: 1 };
+    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+
+    beforeEach(() => {
+      created = [];
+      revoked = [];
+      frames = [];
+      // jsdom has no object URLs.
+      URL.createObjectURL = () => {
+        const url = `blob:video-${created.length}`;
+        created.push(url);
+        return url;
+      };
+      URL.revokeObjectURL = (url: string) => void revoked.push(url);
+      Object.assign(media, { paused: true, time: 0, seeks: [], rate: 1 });
+      const proto = HTMLMediaElement.prototype;
+      vi.spyOn(proto, "paused", "get").mockImplementation(() => media.paused);
+      vi.spyOn(proto, "currentTime", "get").mockImplementation(() => media.time);
+      vi.spyOn(proto, "currentTime", "set").mockImplementation((v: number) => {
+        media.time = v;
+        media.seeks.push(Math.round(v * 1000));
+      });
+      vi.spyOn(proto, "playbackRate", "get").mockImplementation(() => media.rate);
+      vi.spyOn(proto, "playbackRate", "set").mockImplementation((r: number) => {
+        media.rate = r;
+      });
+      vi.spyOn(proto, "play").mockImplementation(() => {
+        media.paused = false;
+        return Promise.resolve();
+      });
+      vi.spyOn(proto, "pause").mockImplementation(() => {
+        media.paused = true;
+      });
+      vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => frames.push(cb));
+      vi.stubGlobal("cancelAnimationFrame", () => {});
+      onTestFinished(() => {
+        URL.createObjectURL = original.create;
+        URL.revokeObjectURL = original.revoke;
+        vi.unstubAllGlobals();
+        vi.restoreAllMocks();
+      });
+    });
+
+    const runFrame = () => {
+      const cb = frames.shift();
+      expect(cb).toBeDefined();
+      cb?.(performance.now());
+    };
+    const setSong = (patch: Partial<Song>) => {
+      repo.songs = repo.songs.map((s) => ({ ...s, ...patch }));
+    };
+    const songCard = () => screen.getByRole("heading", { name: "Pink Pulse" }).closest("section")!;
+    const videoEl = () => screen.queryByLabelText("Tanzvideo");
+
+    it("eigenes Tanzvideo folgt der Spielzeit mit dem Arbeitswert, Stopp pausiert", async () => {
+      saveSettings({ latencyMs: 40 });
+      repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+      const song = repo.songs[0]!;
+      setSong({
+        videoBlobId: "video-1",
+        syncOffsetMs: 30,
+        choreo: { ...song.choreo, offsetMs: 200 },
+      });
+      await renderAt(`/sync/${SONG_ID}`);
+      await advance(0);
+      const v = within(songCard()).getByLabelText("Tanzvideo") as HTMLVideoElement;
+      expect(v.tagName).toBe("VIDEO");
+      expect(v.muted).toBe(true);
+      expect(v.getAttribute("src")).toBe("blob:video-0");
+      // Stopped: no loop, the video stays paused.
+      expect(frames).toHaveLength(0);
+      expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+
+      fireEvent.click(screen.getByRole("button", { name: "Start" }));
+      await advance(0);
+      runFrame();
+      // Audio 1000 → game 1000 − 40 − 30 − 200 = 730 → video 730 + choreo offset 200.
+      expect(media.seeks).toEqual([930]);
+      expect(media.paused).toBe(false);
+      runFrame(); // seek settled at once (no lead for the next seek)
+
+      // +10 ms working value: the next correction lands 10 ms earlier in the video.
+      fireEvent.click(screen.getByRole("button", { name: "Offset um 10 ms erhöhen" }));
+      await advance(600);
+      runFrame();
+      // Audio 1600 → video 1600 − 40 − 40 = 1520 (1530 with the saved offset).
+      expect(media.seeks).toEqual([930, 1520]);
+
+      fireEvent.click(screen.getByRole("button", { name: "Stopp" }));
+      expect(media.paused).toBe(true);
+      cleanup();
+      expect(revoked).toEqual(["blob:video-0"]);
+    });
+
+    it("Musik aus dem Tanzvideo wird gezeigt", async () => {
+      repo.blob = new Blob(["v"], { type: "video/mp4" });
+      await renderAt(`/sync/${SONG_ID}`);
+      await advance(0);
+      expect(within(songCard()).getByLabelText("Tanzvideo")).toBeInTheDocument();
+    });
+
+    it("Musikdatei ohne Video: kein Video", async () => {
+      repo.blob = new Blob(["a"], { type: "audio/mpeg" });
+      await renderAt(`/sync/${SONG_ID}`);
+      await advance(0);
+      expect(videoEl()).toBeNull();
+    });
+
+    it("YouTube: kein Tanzvideo, auch mit videoBlobId", async () => {
+      repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+      setSong({ source: { type: "youtube", videoId: "dQw4w9WgXcQ" }, videoBlobId: "video-1" });
+      await renderAt(`/sync/${SONG_ID}`);
+      await advance(0);
+      expect(videoEl()).toBeNull();
+    });
+
+    it("Einstellung Tanzvideo aus: kein Video", async () => {
+      saveSettings({ danceVideo: false });
+      repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+      setSong({ videoBlobId: "video-1" });
+      await renderAt(`/sync/${SONG_ID}`);
+      await advance(0);
+      expect(videoEl()).toBeNull();
+    });
   });
 });

@@ -801,8 +801,8 @@ das YouTube-Video).
 - **Zeitachse:** wie beim Import gilt Videozeit = Musikzeit. Der Hinweis im Dialog sagt, dass
   das Video zur Musik passen und an derselben Stelle beginnen muss; einen Versatz gleicht
   nichts aus. Die Editor-Vorschau zeigt das Video seit
-  [8h-2b-2b-1](#tanzvideo-in-der-editor-vorschau-etappe-8h-2b-2b-1); der Sync-Test noch nicht
-  (8h-2b-2b-2).
+  [8h-2b-2b-1](#tanzvideo-in-der-editor-vorschau-etappe-8h-2b-2b-1), der Sync-Test seit
+  8h-2b-2b-2.
 
 ### Tanzvideo in der Editor-Vorschau (Etappe 8h-2b-2b-1)
 
@@ -828,6 +828,11 @@ onError }`). `createVideoFollower()` (`src/lib/game/videoFollower.ts`, ohne Reac
   Rate) und ruft `videoSyncStep`. Statt der Spielphase bekommt sie nur `playing`; ein Wechsel
   erlaubt wie bisher der Phasenwechsel sofort ein neues `play()`. Das Spiel verhält sich
   unverändert.
+- **Sync-Test (Etappe 8h-2b-2b-2):** zeigt das Video genauso (Quelle, Einstellung, nie bei
+  YouTube) in der Song-Karte. Nachgeführt in der rAF-Schleife des Beat-Lichts, mit derselben
+  Spielzeit wie das Licht, also mit dem Arbeitswert statt des gespeicherten `syncOffsetMs`
+  (Ref, kein Neustart der Schleife pro Nudge). Stopp, Songende und Verlassen pausieren es.
+  Details: [scoring.md](scoring.md#sync-test-pro-song).
 
 ### Modellwahl Schnell / Genau (Etappe 8g-4b)
 

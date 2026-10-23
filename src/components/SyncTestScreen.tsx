@@ -5,12 +5,15 @@ import { AlertTriangle, ArrowLeft, Check, Play, RotateCcw, Settings, Square } fr
 import { PrivacyNote } from "@/components/setup/PrivacyNote";
 import { Button } from "@/components/ui/button";
 import { useAudioClock } from "@/hooks/useAudioClock";
+import { useDanceVideo } from "@/hooks/useDanceVideo";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { gameTimeMs } from "@/lib/audio/clock";
 import { effectivePlaybackRate } from "@/lib/audio/rate";
 import { PlayRefusedError } from "@/lib/audio/errors";
 import { isLowPrecision } from "@/lib/audio/sources";
 import { claimSharedElement } from "@/lib/audio/unlock";
+import { createVideoFollower } from "@/lib/game/videoFollower";
+import { videoTargetMs } from "@/lib/game/videoSync";
 import { StorageFullError } from "@/lib/library/storage";
 import { useSettings } from "@/lib/settings";
 import {
@@ -66,7 +69,8 @@ function Card({ title, children }: { title: string; children: ReactNode }) {
  * the ±1/±10 ms buttons change it). While the music plays a beat light flashes on the game clock
  * computed with the candidate, so the player can compare it with the beat they hear; "Speichern"
  * writes the candidate. The light runs in its own rAF loop that writes `style` directly; React
- * renders once per tap or button press, never per frame.
+ * renders once per tap or button press, never per frame. The same loop moves the muted dance
+ * video (8h-2b-2b-2) on that clock.
  *
  * Playback starts with `play()` synchronously inside the "Start" tap, which is the gesture iOS
  * needs for the (shared) audio element and YouTube.
@@ -94,7 +98,11 @@ export function SyncTestScreen({
   const playingRef = useRef(false);
   const mountedRef = useRef(true);
   const ytHostRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const isYouTube = song.source.type === "youtube";
+  // Dance video (8h-2b-2b-2): muted, like the editor preview; YouTube shows its own picture.
+  const danceVideo = useDanceVideo(song);
+  const showVideo = danceVideo.url !== null && settings.danceVideo && !isYouTube;
   const lowPrecision = isLowPrecision(song);
 
   const isSpotify = song.source.type === "spotify";
@@ -200,10 +208,12 @@ export function SyncTestScreen({
 
   // Beat light: brightness from the game clock with the candidate offset, written straight to
   // the element once per frame (no React state). Reduced motion: opacity only, no scale.
+  // The same loop keeps the dance video (8h-2b-2b-2) on the game timeline with the candidate, so
+  // a nudge shifts picture and light against the music alike; each runs without the other.
   useEffect(() => {
     const el = lightRef.current;
-    if (!el) return;
     const idle = () => {
+      if (!el) return;
       el.style.opacity = "0";
       el.style.transform = "";
     };
@@ -214,29 +224,42 @@ export function SyncTestScreen({
     const still = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     // The limit is about real time: at playbackRate r the beats come r times as fast.
     const divisor = beatFlashDivisor(bpm * rate);
+    const follower = createVideoFollower();
+    /** Last video element the loop moved; paused when the loop ends. */
+    let video: HTMLVideoElement | null = null;
     let raf = 0;
-    const frame = () => {
+    const frame = (frameNow?: number) => {
       const s = source.current;
-      const level = s
-        ? beatFlashLevel(
-            gameTimeMs(s.getTimeMs(), {
-              latencyMs,
-              syncOffsetMs: candidateRef.current,
-              choreoOffsetMs,
-              rate,
-            }),
-            bpm,
-            divisor,
-            SYNC_PREVIEW.decayMs,
-          )
-        : 0;
-      el.style.opacity = String(level);
-      if (!still) el.style.transform = `scale(${1 + (SYNC_PREVIEW.scale - 1) * level})`;
+      const t = s
+        ? gameTimeMs(s.getTimeMs(), {
+            latencyMs,
+            syncOffsetMs: candidateRef.current,
+            choreoOffsetMs,
+            rate,
+          })
+        : null;
+      if (el) {
+        const level = t === null ? 0 : beatFlashLevel(t, bpm, divisor, SYNC_PREVIEW.decayMs);
+        el.style.opacity = String(level);
+        if (!still) el.style.transform = `scale(${1 + (SYNC_PREVIEW.scale - 1) * level})`;
+      }
+      const v = videoRef.current;
+      if (v && t !== null) {
+        video = v;
+        follower.step(v, {
+          nowMs: frameNow ?? 0,
+          targetMs: videoTargetMs(t, choreoOffsetMs),
+          playing: true,
+          rate,
+        });
+      }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
+      // Stop button, song end, unmount: the video stops with the music.
+      video?.pause();
       idle();
     };
   }, [playing, source, bpm, rate, latencyMs, choreoOffsetMs]);
@@ -371,6 +394,20 @@ export function SyncTestScreen({
               </Button>
             )}
             {phase === "ended" && <p className="text-base">Der Song ist zu Ende.</p>}
+            {/* Below the controls, so "Start" and the tap area stay in view in landscape. */}
+            {showVideo && (
+              <video
+                ref={videoRef}
+                src={danceVideo.url ?? undefined}
+                muted
+                playsInline
+                preload="auto"
+                aria-label="Tanzvideo"
+                // Broken or unplayable: hidden (one state change in useDanceVideo).
+                onError={danceVideo.onError}
+                className="aspect-video w-full max-w-80 rounded-2xl bg-black object-contain"
+              />
+            )}
           </Card>
 
           <div className="flex flex-col gap-4">

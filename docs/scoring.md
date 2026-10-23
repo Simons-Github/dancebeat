@@ -90,6 +90,17 @@ Beat-Puls im Spiel): bei schnellen Songs blinkt nur jeder n-te Beat (`beatFlashD
 Schleife läuft per `requestAnimationFrame` und schreibt `style` direkt, ohne React-Render pro
 Frame. Bei `prefers-reduced-motion` ändert sich nur die Deckkraft, ohne Skalierung.
 
+**Tanzvideo (Etappe 8h-2b-2b-2):** Hat der Song ein Tanzvideo (eigenes Video `videoBlobId` vor
+lokalem Musik-Blob mit Typ `video/*`, nie bei YouTube, Einstellung „Tanzvideo zeigen“ gilt),
+läuft es stumm in der Song-Karte unter den Knöpfen (im Querformat bleiben „Start“ und die
+Tipp-Fläche so im Blick), wie in der Editor-Vorschau (`useDanceVideo`). Dieselbe
+rAF-Schleife wie das Beat-Licht führt es mit `createVideoFollower` nach: Ziel
+`videoTargetMs(gameTimeMs(…), choreo.offsetMs)` mit dem **Arbeitswert**, Rate
+`effectivePlaybackRate`. Ein Nudge verschiebt Video und Licht also gleich gegen die Musik; das
+Video springt erst, wenn die Abweichung die Toleranz von 150 ms übersteigt
+(`VIDEO_SYNC_TOLERANCE_MS`), kleine Schritte summieren sich. Stopp, Songende und Verlassen
+pausieren es; gestoppt läuft keine Schleife.
+
 „Speichern“ schreibt den Arbeitswert über `useSongLibrary().save` (`SongRepository`) und kehrt zur
 Bibliothek zurück; ohne Änderung ist der Knopf gesperrt. „Auf 0 zurücksetzen“ setzt den
 Arbeitswert auf 0 und speichert sofort. Bei YouTube und Spotify (`isLowPrecision`) warnt der
