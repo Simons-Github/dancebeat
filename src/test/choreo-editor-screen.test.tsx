@@ -9,6 +9,7 @@ import { act, cleanup, fireEvent, render, screen, waitFor, within } from "@testi
 import { afterEach, beforeEach, describe, expect, it, onTestFinished, vi } from "vitest";
 
 import { StorageFullError } from "@/lib/library/storage";
+import { saveSettings } from "@/lib/settings";
 import type { Song } from "@/lib/types";
 import { routeTree } from "@/routeTree.gen";
 import { makeChoreo, makeSong } from "./fixtures";
@@ -18,6 +19,10 @@ const repo = vi.hoisted(() => ({
   songs: [] as Song[],
   saved: [] as Song[],
   fail: null as Error | null,
+  /** Blob behind every music blobId (local source). */
+  blob: undefined as Blob | undefined,
+  /** Kept dance videos by id (`videoBlobId`). */
+  videos: {} as Record<string, Blob>,
 }));
 vi.mock("@/lib/library/repository", () => ({
   songRepository: {
@@ -31,7 +36,8 @@ vi.mock("@/lib/library/repository", () => ({
     },
     delete: async () => {},
     export: async () => "{}",
-    getAudio: async () => undefined,
+    getAudio: async () => repo.blob,
+    getVideo: async (id: string) => repo.videos[id],
   },
 }));
 vi.mock("@/data/demo", () => ({
@@ -157,6 +163,8 @@ beforeEach(() => {
   setSong(3);
   repo.saved = [];
   repo.fail = null;
+  repo.blob = undefined;
+  repo.videos = {};
   Object.assign(audio, {
     playing: false,
     base: 0,
@@ -700,6 +708,130 @@ describe("Vorschau im Editor", () => {
     await flush();
     cleanup();
     expect(audio.calls).toContain("destroy");
+  });
+
+  describe("mit Tanzvideo (8h-2b-2b-1)", () => {
+    let created: string[];
+    let revoked: string[];
+    /** Fake media element state: play() starts it, currentTime records seeks (ms). */
+    const media = { paused: true, time: 0, seeks: [] as number[], rate: 1 };
+    const original = { create: URL.createObjectURL, revoke: URL.revokeObjectURL };
+
+    beforeEach(() => {
+      created = [];
+      revoked = [];
+      // jsdom has no object URLs.
+      URL.createObjectURL = () => {
+        const url = `blob:video-${created.length}`;
+        created.push(url);
+        return url;
+      };
+      URL.revokeObjectURL = (url: string) => void revoked.push(url);
+      Object.assign(media, { paused: true, time: 0, seeks: [], rate: 1 });
+      const proto = HTMLMediaElement.prototype;
+      vi.spyOn(proto, "paused", "get").mockImplementation(() => media.paused);
+      vi.spyOn(proto, "currentTime", "get").mockImplementation(() => media.time);
+      vi.spyOn(proto, "currentTime", "set").mockImplementation((v: number) => {
+        media.time = v;
+        media.seeks.push(Math.round(v * 1000));
+      });
+      vi.spyOn(proto, "playbackRate", "get").mockImplementation(() => media.rate);
+      vi.spyOn(proto, "playbackRate", "set").mockImplementation((r: number) => {
+        media.rate = r;
+      });
+      vi.spyOn(proto, "play").mockImplementation(() => {
+        media.paused = false;
+        return Promise.resolve();
+      });
+      vi.spyOn(proto, "pause").mockImplementation(() => {
+        media.paused = true;
+      });
+      onTestFinished(() => {
+        URL.createObjectURL = original.create;
+        URL.revokeObjectURL = original.revoke;
+        vi.restoreAllMocks();
+      });
+    });
+
+    const videoEl = () => within(preview()).queryByLabelText("Tanzvideo");
+
+    it("eigenes Tanzvideo läuft mit der Spielzeit samt Offset, Stopp pausiert", async () => {
+      repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+      setSong(3, { videoBlobId: "video-1", startOffsetMs: 3000 });
+      await loaded();
+      const v = (await within(preview()).findByLabelText("Tanzvideo")) as HTMLVideoElement;
+      expect(v.tagName).toBe("VIDEO");
+      expect(v.muted).toBe(true);
+      expect(v.getAttribute("src")).toBe("blob:video-0");
+      // Stopped: no loop, the video stays paused.
+      expect(HTMLMediaElement.prototype.play).not.toHaveBeenCalled();
+      fireEvent.click(btn("Abspielen"));
+      await flush();
+      runFrame();
+      // Audio 3000 → game 2000 → video 2000 + offset 1000.
+      expect(media.seeks).toEqual([3000]);
+      expect(media.paused).toBe(false);
+      fireEvent.click(btn("Stopp"));
+      expect(media.paused).toBe(true);
+      cleanup();
+      expect(revoked).toEqual(["blob:video-0"]);
+    });
+
+    it("Musik aus dem Tanzvideo wird gezeigt; Tempo setzt playbackRate, URL bleibt", async () => {
+      repo.blob = new Blob(["v"], { type: "video/mp4" });
+      setSong(3, { playbackRate: 0.75 });
+      await loaded();
+      expect(await within(preview()).findByLabelText("Tanzvideo")).toBeInTheDocument();
+      fireEvent.click(btn("Abspielen"));
+      await flush();
+      runFrame();
+      expect(media.rate).toBe(0.75);
+      fireEvent.click(screen.getByRole("button", { name: "1,25×" }));
+      expect(media.paused).toBe(true);
+      await waitFor(() => expect(btn("Abspielen")).toBeEnabled());
+      // cancelAnimationFrame is a no-op here: drop the old loop's pending frame.
+      frames.length = 0;
+      fireEvent.click(btn("Abspielen"));
+      await flush();
+      runFrame();
+      expect(media.rate).toBe(1.25);
+      // The tempo remount keeps the object URL.
+      expect(created).toEqual(["blob:video-0"]);
+      expect(videoEl()?.getAttribute("src")).toBe("blob:video-0");
+    });
+
+    it("Musikdatei ohne Video: kein Video", async () => {
+      repo.blob = new Blob(["a"], { type: "audio/mpeg" });
+      await loaded();
+      await flush();
+      expect(videoEl()).toBeNull();
+    });
+
+    it("YouTube: kein Tanzvideo, auch mit videoBlobId", async () => {
+      repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+      setSong(3, { source: { type: "youtube", videoId: "dQw4w9WgXcQ" }, videoBlobId: "video-1" });
+      await loaded();
+      await flush();
+      expect(videoEl()).toBeNull();
+    });
+
+    it("Einstellung Tanzvideo aus: kein Video", async () => {
+      saveSettings({ danceVideo: false });
+      repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+      setSong(3, { videoBlobId: "video-1" });
+      await loaded();
+      await flush();
+      expect(videoEl()).toBeNull();
+    });
+
+    it("Ladefehler des Videos blendet es aus", async () => {
+      repo.videos = { "video-1": new Blob(["v"], { type: "video/mp4" }) };
+      setSong(3, { videoBlobId: "video-1" });
+      await loaded();
+      const v = await within(preview()).findByLabelText("Tanzvideo");
+      await act(async () => void v.dispatchEvent(new Event("error")));
+      expect(videoEl()).toBeNull();
+    });
   });
 
   it("YouTube: blockierter Start zeigt den Hinweis, Abruf wird genannt", async () => {

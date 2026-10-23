@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { useAudioClock } from "@/hooks/useAudioClock";
 import { useWakeLock } from "@/hooks/useWakeLock";
 import { PlayRefusedError } from "@/lib/audio/errors";
+import { effectivePlaybackRate } from "@/lib/audio/rate";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { formatMoveTime } from "@/lib/choreoEditor";
 import {
@@ -17,6 +18,8 @@ import {
   previewStartAudioMs,
   tickTimeMs,
 } from "@/lib/editorPreview";
+import { createVideoFollower } from "@/lib/game/videoFollower";
+import { videoTargetMs } from "@/lib/game/videoSync";
 import { useSettings } from "@/lib/settings";
 import { resumeSfx, setSfxVolume, sfx } from "@/lib/sfx";
 import type { Song } from "@/lib/types";
@@ -39,6 +42,10 @@ const NO_TIME = "--:--,-";
  * The source's `playbackRate` is fixed when it is created: the parent keys this component by the
  * tempo, so a tempo change stops playback and builds a new source. Playback stops when the page is
  * hidden, when the song ends and on unmount (the hook destroys the source).
+ *
+ * A dance video (8h-2b-2b-1, `videoUrl` from the parent so the tempo remount keeps it) runs muted
+ * on the game's time axis, like in the game: game time plus the live `choreo.offsetMs`, so offset
+ * edits show while it plays. The same loop keeps it in step; stopped, it stays paused.
  */
 export function EditorPreview({
   song,
@@ -46,6 +53,8 @@ export function EditorPreview({
   onNow,
   click,
   onClickChange,
+  videoUrl,
+  onVideoError,
 }: {
   song: Song;
   /** Index of the selected move ("Ab Move N abspielen"). */
@@ -55,6 +64,10 @@ export function EditorPreview({
   /** "Klick bei jedem Move"; kept by the parent so it survives the tempo remount. */
   click: boolean;
   onClickChange: (on: boolean) => void;
+  /** Object URL of the dance video (`useDanceVideo`), null when there is none. */
+  videoUrl: string | null;
+  /** The video failed to load or play; the parent drops the URL. */
+  onVideoError: () => void;
 }) {
   const id = useId();
   const [settings] = useSettings();
@@ -63,6 +76,7 @@ export function EditorPreview({
   const [ended, setEnded] = useState(false);
   const timeRef = useRef<HTMLSpanElement>(null);
   const ytHostRef = useRef<HTMLDivElement>(null);
+  const videoRef = useRef<HTMLVideoElement>(null);
   const mountedRef = useRef(true);
   /** Bumped by every stop, so a late `play()` resolution of an older start is ignored. */
   const runRef = useRef(0);
@@ -73,6 +87,8 @@ export function EditorPreview({
   const seekRef = useRef<number | null>(null);
   const isYouTube = song.source.type === "youtube";
   const isSpotify = song.source.type === "spotify";
+  const rate = effectivePlaybackRate(song);
+  const showVideo = videoUrl !== null && settings.danceVideo && !isYouTube;
 
   const audio = useAudioClock(song, {
     latencyMs: settings.latencyMs,
@@ -134,7 +150,10 @@ export function EditorPreview({
     let prevTick: number | null = null;
     let lastOffset = live.current.choreoOffsetMs;
     let last: number | null | undefined;
-    const frame = () => {
+    const follower = createVideoFollower();
+    /** Last video element the loop moved; paused when the loop ends. */
+    let video: HTMLVideoElement | null = null;
+    const frame = (frameNow?: number) => {
       const s = source.current;
       if (s) {
         const { moves, choreoOffsetMs, click: tick } = live.current;
@@ -162,15 +181,27 @@ export function EditorPreview({
           onNow(now);
         }
         if (timeRef.current) timeRef.current.textContent = formatMoveTime(t + choreoOffsetMs);
+        const v = videoRef.current;
+        if (v) {
+          video = v;
+          follower.step(v, {
+            nowMs: frameNow ?? 0,
+            targetMs: videoTargetMs(t, choreoOffsetMs),
+            playing: true,
+            rate,
+          });
+        }
       }
       raf = requestAnimationFrame(frame);
     };
     raf = requestAnimationFrame(frame);
     return () => {
       cancelAnimationFrame(raf);
+      // Stop button, song end, hidden page, unmount: the video stops with the music.
+      video?.pause();
       onNow(null);
     };
-  }, [playing, source, timeMs, onNow]);
+  }, [playing, source, timeMs, onNow, rate]);
 
   const start = (index?: number) => {
     const s = source.current;
@@ -227,6 +258,19 @@ export function EditorPreview({
           ref={ytHostRef}
           aria-label="YouTube-Video"
           className="aspect-video min-h-50 w-full min-w-50 max-w-90 overflow-hidden rounded-2xl bg-black"
+        />
+      )}
+      {showVideo && (
+        <video
+          ref={videoRef}
+          src={videoUrl}
+          muted
+          playsInline
+          preload="auto"
+          aria-label="Tanzvideo"
+          // Broken or unplayable: hidden (one state change in the parent).
+          onError={onVideoError}
+          className="aspect-video min-h-50 w-full min-w-50 max-w-90 rounded-2xl bg-black object-contain"
         />
       )}
       <PrivacyNote source={song.source} camera={false} />

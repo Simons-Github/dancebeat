@@ -1,5 +1,3 @@
-import type { GamePhase } from "./controller";
-
 /**
  * Drift between the dance video and its target position that is tolerated before seeking.
  * Seeking a media element costs a decode (a visible stutter on phones), so small drift is left
@@ -12,7 +10,7 @@ export const VIDEO_SYNC_TOLERANCE_MS = 150;
  */
 export const VIDEO_SEEK_COOLDOWN_MS = 500;
 /**
- * After `play()` was refused, the next attempt waits this long (wall time) unless the phase
+ * After `play()` was refused, the next attempt waits this long (wall time) unless `playing`
  * changes; retrying every frame would only pile up rejected promises.
  */
 export const VIDEO_PLAY_RETRY_MS = 2000;
@@ -36,8 +34,8 @@ export interface VideoSyncInput {
   currentMs: number;
   /** Target position from `videoTargetMs`. */
   targetMs: number;
-  /** Game phase; only "playing" lets the video run. */
-  phase: GamePhase;
+  /** The clock runs (game phase "playing", editor preview playing); only then the video runs. */
+  playing: boolean;
   /** The element is paused (`video.paused`). */
   paused: boolean;
   /** A seek is still in progress (`video.seeking`); no new one is issued meanwhile. */
@@ -50,7 +48,7 @@ export interface VideoSyncInput {
   ended: boolean;
   /** A play() promise has not settled yet; no second call meanwhile. */
   playPending: boolean;
-  /** Wall time since play() was last refused (Infinity if not, or the phase changed since). */
+  /** Wall time since play() was last refused (Infinity if not, or `playing` changed since). */
   msSinceRefusal: number;
   /** Added to the target when seeking (`seekLeadMs`): the video lands where the game will be. */
   seekLeadMs: number;
@@ -68,18 +66,18 @@ export interface VideoSyncAction {
 /**
  * One step of keeping the video on its target, called once per animation frame. While playing
  * the video runs by itself (same rate as the music) and is only corrected when it drifts beyond
- * the tolerance. In every other phase it is paused and parked at the target, again seeking only
+ * the tolerance. Otherwise it is paused and parked at the target, again seeking only
  * beyond the tolerance, so a still clock does not seek every frame. Seeks are throttled: none
  * while one is pending and none within the cooldown. play() is never called while a call is
  * pending, on an ended video, or within the retry wait after a refusal.
  */
 export function videoSyncStep(input: VideoSyncInput): VideoSyncAction {
-  const { currentMs, phase, paused, seeking, msSinceSeek, durationMs, ended } = input;
+  const { currentMs, playing, paused, seeking, msSinceSeek, durationMs, ended } = input;
   const known = durationMs !== undefined && Number.isFinite(durationMs) && durationMs > 0;
   const targetMs = known ? Math.min(input.targetMs, durationMs) : input.targetMs;
   const atEnd = known && targetMs >= durationMs - END_MARGIN_MS;
   // Target 0 means "before the video starts" (clamped lead-in): wait on the first frame.
-  const run = phase === "playing" && targetMs > 0 && !atEnd && !ended;
+  const run = playing && targetMs > 0 && !atEnd && !ended;
   const canPlay = !input.playPending && input.msSinceRefusal >= VIDEO_PLAY_RETRY_MS;
   const canSeek = !seeking && msSinceSeek >= VIDEO_SEEK_COOLDOWN_MS;
   const drifted = Math.abs(currentMs - targetMs) > VIDEO_SYNC_TOLERANCE_MS;

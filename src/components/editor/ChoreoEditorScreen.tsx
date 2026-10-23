@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
+import { useDanceVideo } from "@/hooks/useDanceVideo";
 import {
   MIN_MOVES,
   TEMPO_OPTIONS,
@@ -116,6 +117,8 @@ export function ChoreoEditorScreen({
   const [nowIndex, setNowIndex] = useState<number | null>(null);
   /** "Klick bei jedem Move" (not persisted); here so it survives the preview's tempo remount. */
   const [click, setClick] = useState(true);
+  /** Dance video for the preview; loaded here so the preview's tempo remount keeps the URL. */
+  const danceVideo = useDanceVideo(working);
   const timelineRef = useRef<HTMLOListElement>(null);
   // Set right before the navigation after a successful save, which must not be blocked.
   const leavingRef = useRef(false);
@@ -316,6 +319,8 @@ export function ChoreoEditorScreen({
           onNow={setNowIndex}
           click={click}
           onClickChange={setClick}
+          videoUrl={danceVideo.url}
+          onVideoError={danceVideo.onError}
         />
 
         <div className="grid gap-4 landscape:grid-cols-2">

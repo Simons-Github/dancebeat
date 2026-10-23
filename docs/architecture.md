@@ -800,7 +800,34 @@ das YouTube-Video).
   Öffnen über `useSongLibrary().musicIsVideo` (liest den Blob über das Repository).
 - **Zeitachse:** wie beim Import gilt Videozeit = Musikzeit. Der Hinweis im Dialog sagt, dass
   das Video zur Musik passen und an derselben Stelle beginnen muss; einen Versatz gleicht
-  nichts aus. Editor-Vorschau und Sync-Test zeigen das Video noch nicht (8h-2b-2b).
+  nichts aus. Die Editor-Vorschau zeigt das Video seit
+  [8h-2b-2b-1](#tanzvideo-in-der-editor-vorschau-etappe-8h-2b-2b-1); der Sync-Test noch nicht
+  (8h-2b-2b-2).
+
+### Tanzvideo in der Editor-Vorschau (Etappe 8h-2b-2b-1)
+
+Die Vorschau im Choreografie-Editor zeigt das Tanzvideo stumm über den Knöpfen, im selben
+Kasten wie der YouTube-Player (`aspect-video`, `object-contain`, schwarzer Grund).
+
+- **Quelle und Einstellung** wie im Spiel: eigenes Video (`videoBlobId`) vor lokalem
+  Musik-Blob mit Typ `video/*`, nie bei YouTube. Die Einstellung „Tanzvideo zeigen“
+  (`danceVideo`) gilt auch hier; aus heißt kein Video. Ein Fehler-Ereignis blendet es aus.
+- **Zeitachse** wie im Spiel: `videoTargetMs(Spielzeit, choreo.offsetMs)` mit dem Offset der
+  Arbeitskopie aus der Schleife. Eine Offset-Änderung während der Wiedergabe verschiebt das Video
+  sofort gegen die Musik, so sieht man, ob Bewegung und Markierung zusammenpassen. Rate ist
+  `effectivePlaybackRate` der Arbeitskopie, also das gewählte Tempo.
+- **Nachführen** in der vorhandenen rAF-Schleife der Vorschau, nur während sie spielt. Stopp,
+  Songende, verborgene Seite und Verlassen pausieren das Video; gestoppt bleibt es stehen, ohne
+  eigene Schleife.
+- **Objekt-URL:** lädt der Editor (Elternkomponente), nicht die Vorschau. Die Vorschau wird beim
+  Tempo-Wechsel neu aufgebaut (`key`), die URL bleibt dabei bestehen.
+- **Gemeinsamer Code mit dem Spiel:** `useDanceVideo(song)` (`src/hooks/useDanceVideo.ts`) löst
+  den Blob über das Repository auf und verwaltet Objekt-URL und Fehler-Rückfall (`{ url,
+onError }`). `createVideoFollower()` (`src/lib/game/videoFollower.ts`, ohne React) hält die
+  Buchführung je Schleife (Seek-Drosselung und -Vorlauf, offenes oder abgelehntes `play()`,
+  Rate) und ruft `videoSyncStep`. Statt der Spielphase bekommt sie nur `playing`; ein Wechsel
+  erlaubt wie bisher der Phasenwechsel sofort ein neues `play()`. Das Spiel verhält sich
+  unverändert.
 
 ### Modellwahl Schnell / Genau (Etappe 8g-4b)
 
@@ -1014,6 +1041,8 @@ Browser (`beforeunload`).
     zerstört die Quelle). Wake Lock während der Wiedergabe.
   - Externe Abrufe: Die Quelle lädt beim Öffnen des Editors; die Karte nennt sie per
     `PrivacyNote camera={false}` (Host der Audio-URL bzw. YouTube/youtube-nocookie.com).
+  - Tanzvideo (8h-2b-2b-1): stumm über den Knöpfen, auf der Zeitachse des Spiels, siehe
+    [Tanzvideo in der Editor-Vorschau](#tanzvideo-in-der-editor-vorschau-etappe-8h-2b-2b-1).
 
 ## Messwerte
 

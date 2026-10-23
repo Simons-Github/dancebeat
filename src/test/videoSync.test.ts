@@ -14,7 +14,7 @@ import {
 const base: VideoSyncInput = {
   currentMs: 5000,
   targetMs: 5000,
-  phase: "playing",
+  playing: true,
   paused: false,
   seeking: false,
   msSinceSeek: Infinity,
@@ -56,12 +56,14 @@ describe("videoSyncStep", () => {
     expect(step({ paused: true })).toEqual({ play: true, pause: false, seekMs: null });
   });
 
-  it("pauses and parks the video in every other phase", () => {
-    for (const phase of ["preparing", "countdown", "paused", "blocked", "ended"] as const) {
-      expect(step({ phase })).toEqual({ play: false, pause: true, seekMs: null });
-      expect(step({ phase, paused: true })).toEqual({ play: false, pause: false, seekMs: null });
-      expect(step({ phase, paused: true, currentMs: 9000 }).seekMs).toBe(5000);
-    }
+  it("pauses and parks the video while the clock stands still", () => {
+    expect(step({ playing: false })).toEqual({ play: false, pause: true, seekMs: null });
+    expect(step({ playing: false, paused: true })).toEqual({
+      play: false,
+      pause: false,
+      seekMs: null,
+    });
+    expect(step({ playing: false, paused: true, currentMs: 9000 }).seekMs).toBe(5000);
   });
 
   it("does not seek again while a seek is pending or within the cooldown", () => {
@@ -113,9 +115,7 @@ describe("videoSyncStep", () => {
   it("aims a seek ahead by the lead while playing, clamped to the duration", () => {
     expect(step({ currentMs: 0, seekLeadMs: 300 }).seekMs).toBe(5300);
     expect(step({ currentMs: 0, seekLeadMs: 300, durationMs: 5200 }).seekMs).toBe(5200);
-    expect(step({ phase: "paused", paused: true, currentMs: 0, seekLeadMs: 300 }).seekMs).toBe(
-      5000,
-    );
+    expect(step({ playing: false, paused: true, currentMs: 0, seekLeadMs: 300 }).seekMs).toBe(5000);
   });
 });
 

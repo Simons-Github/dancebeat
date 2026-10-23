@@ -18,6 +18,7 @@ import { RatingPopup } from "@/components/play/RatingPopup";
 import { CameraErrorPanel } from "@/components/setup/CameraErrorPanel";
 import { Button } from "@/components/ui/button";
 import { useAudioClock } from "@/hooks/useAudioClock";
+import { useDanceVideo } from "@/hooks/useDanceVideo";
 import { useDeviceMotion } from "@/hooks/useDeviceMotion";
 import { usePoseTracking, type FrameInfo } from "@/hooks/usePoseTracking";
 import { useScoring } from "@/hooks/useScoring";
@@ -34,7 +35,8 @@ import { coachPose, coachView, flashSchedule, moveFigures, piktoLayout } from "@
 import { recordResultSafely } from "@/lib/game/results";
 import { disarmAutoStart, setLastResult } from "@/lib/game/session";
 import { simulatedAngles, type SimOptions } from "@/lib/game/simulatedPlayer";
-import { seekLeadMs, videoSyncStep, videoTargetMs } from "@/lib/game/videoSync";
+import { createVideoFollower } from "@/lib/game/videoFollower";
+import { videoTargetMs } from "@/lib/game/videoSync";
 import { songRepository } from "@/lib/library/repository";
 import {
   MotionMeter,
@@ -150,37 +152,9 @@ export function GameScreen({
 
   useEffect(() => setSfxVolume(settings.volume), [settings.volume]);
 
-  // Dance video (Etappe 8h-2a): a local source whose blob is a video (8h-1, "Musik aus dem
-  // Tanzvideo") is also shown, muted, in the coach slot. Its own element and object URL; the
-  // music keeps playing through the shared audio element. State changes only on load and error.
-  // A dance video kept on its own (8h-2b-1, `videoBlobId`) takes precedence; its timeline equals
-  // the music's, so the same sync applies.
-  const keptVideoId = song.videoBlobId ?? null;
-  const videoBlobId = keptVideoId ?? (song.source.type === "local" ? song.source.blobId : null);
-  const [video, setVideo] = useState<{ blobId: string; url: string } | null>(null);
-  const [videoFailedUrl, setVideoFailedUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!videoBlobId) return;
-    let cancelled = false;
-    let url: string | null = null;
-    void (keptVideoId ? songRepository.getVideo(keptVideoId) : songRepository.getAudio(videoBlobId))
-      .then((blob) => {
-        // A kept video is a video by construction, even when the picker left its type empty
-        // (some Android pickers do for .mov); a music blob must say so.
-        if (cancelled || !blob || (!keptVideoId && !blob.type.startsWith("video/"))) return;
-        url = URL.createObjectURL(blob);
-        setVideo({ blobId: videoBlobId, url });
-      })
-      .catch(() => {
-        // No picture then; the coach stays. The music reports its own load errors.
-      });
-    return () => {
-      cancelled = true;
-      if (url) URL.revokeObjectURL(url);
-    };
-  }, [videoBlobId, keptVideoId]);
-  const videoUrl =
-    video && video.blobId === videoBlobId && video.url !== videoFailedUrl ? video.url : null;
+  // Dance video (Etappe 8h-2a): shown, muted, in the coach slot. Its own element and object URL;
+  // the music keeps playing through the shared audio element.
+  const { url: videoUrl, onError: onVideoError } = useDanceVideo(song);
   const showVideo = videoUrl !== null && settings.danceVideo;
   // Leaving the video (setting off, song change, unmount): stop decoding right away.
   useEffect(() => {
@@ -359,81 +333,22 @@ export function GameScreen({
     let lastSim = -Infinity;
     let gold = false;
     // Video sync bookkeeping (wall time from the rAF timestamp, never game time).
-    let videoEl: HTMLVideoElement | null = null;
-    let lastSeekAt = -Infinity;
-    let seekIssuedAt: number | null = null;
-    let seekLag = 0;
-    let playPending = false;
-    let refusedAt = -Infinity;
-    let lastPhase: string | null = null;
-    /** rAF timestamp of the latest frame (a refusal settles between frames). */
-    let lastFrameAt = 0;
+    const follower = createVideoFollower();
     const colors = { accent: choreo.accentColor, secondary: choreo.secondaryColor };
     const loop = (frameNow?: number) => {
       raf = requestAnimationFrame(loop);
       const ctl = controllerRef.current;
       const t = timeMs();
       const v = videoRef.current;
-      if (v) {
+      if (v)
         // The rAF timestamp only throttles seeks and play retries and measures the seek lag;
         // the video position always comes from `t`.
-        const now = typeof frameNow === "number" && Number.isFinite(frameNow) ? frameNow : 0;
-        if (v !== videoEl) {
-          // New element (setting toggled back on): its own bookkeeping.
-          videoEl = v;
-          lastSeekAt = refusedAt = -Infinity;
-          seekIssuedAt = null;
-          seekLag = 0;
-          playPending = false;
-        }
-        const phase = ctl?.state.phase ?? "preparing";
-        if (phase !== lastPhase) {
-          // A new phase (e.g. "Weiter" after a refusal) may try play() right away.
-          lastPhase = phase;
-          refusedAt = -Infinity;
-        }
-        if (seekIssuedAt !== null && !v.seeking) {
-          seekLag = now - seekIssuedAt;
-          seekIssuedAt = null;
-        }
-        if (v.playbackRate !== rate) v.playbackRate = rate;
-        if (v.defaultPlaybackRate !== rate) v.defaultPlaybackRate = rate;
-        const step = videoSyncStep({
-          currentMs: v.currentTime * 1000,
+        follower.step(v, {
+          nowMs: frameNow ?? 0,
           targetMs: videoTargetMs(t, choreo.offsetMs),
-          phase,
-          paused: v.paused,
-          seeking: v.seeking,
-          msSinceSeek: now - lastSeekAt,
-          ...(Number.isFinite(v.duration) ? { durationMs: v.duration * 1000 } : {}),
-          ended: v.ended,
-          playPending,
-          msSinceRefusal: now - refusedAt,
-          seekLeadMs: seekLeadMs(seekLag, phase === "playing"),
+          playing: ctl?.state.phase === "playing",
+          rate,
         });
-        if (step.seekMs !== null) {
-          lastSeekAt = now;
-          seekIssuedAt = now;
-          v.currentTime = step.seekMs / 1000;
-        }
-        if (step.pause) v.pause();
-        if (step.play) {
-          // Muted inline video may autoplay; a refusal leaves the still picture until the retry.
-          playPending = true;
-          const el = v;
-          void Promise.resolve(v.play()).then(
-            () => {
-              if (el === videoEl) playPending = false;
-            },
-            () => {
-              if (el !== videoEl) return;
-              playPending = false;
-              refusedAt = lastFrameAt;
-            },
-          );
-        }
-        lastFrameAt = now;
-      }
       if (
         import.meta.env.DEV &&
         sim &&
@@ -691,7 +606,7 @@ export function GameScreen({
               preload="auto"
               aria-label="Tanzvideo"
               // Broken or unplayable: back to the coach (one state change).
-              onError={() => setVideoFailedUrl(videoUrl)}
+              onError={onVideoError}
               className="pointer-events-none absolute bottom-0 left-0 h-[min(36vw,28dvh)] w-[min(64vw,50dvh)] max-w-full rounded-2xl bg-black/70 object-contain landscape:h-[min(23vw,42dvh)] landscape:w-[min(40vw,75dvh)]"
             />
           ) : (
