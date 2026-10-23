@@ -5,8 +5,10 @@ import { createHandlers, type SwManifest } from "@/sw/handlers";
 import {
   classifyRequest,
   isCacheable,
+  isSkipWaitingMessage,
   mediapipeCacheName,
   precacheName,
+  SKIP_WAITING_MESSAGE,
   staleCaches,
   type RequestInfo,
 } from "@/sw/strategy";
@@ -297,5 +299,13 @@ describe("Service-Worker-Handler", () => {
     expect(handle(`${ORIGIN}/assets/index-abc.js`, { method: "POST", body: "x" })).toBeNull();
     expect(handle(`${ORIGIN}/assets/index-abc.js`, { headers: { Range: "bytes=0-" } })).toBeNull();
     expect(handle(`${ORIGIN}/assets/unknown.js`)).toBeNull();
+  });
+});
+
+describe("isSkipWaitingMessage", () => {
+  it("erkennt nur die eigene Nachricht", () => {
+    expect(isSkipWaitingMessage(SKIP_WAITING_MESSAGE)).toBe(true);
+    expect(isSkipWaitingMessage("SKIP_WAITING")).toBe(false);
+    expect(isSkipWaitingMessage({ type: SKIP_WAITING_MESSAGE })).toBe(false);
   });
 });

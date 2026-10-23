@@ -81,3 +81,12 @@ export function isCacheable(res: Pick<Response, "ok" | "status" | "type">): bool
 export function staleCaches(names: readonly string[], keep: readonly string[]): string[] {
   return names.filter((n) => n.startsWith(CACHE_PREFIX) && !keep.includes(n));
 }
+
+/**
+ * Message a page posts to a waiting worker when the user taps "Neu laden" (Etappe 7b-3): only
+ * then does the new build skip waiting. The page reloads on the following `controllerchange`.
+ */
+export const SKIP_WAITING_MESSAGE = "dancebeat-skip-waiting";
+
+/** Whether a `message` event's data asks the worker to skip waiting. */
+export const isSkipWaitingMessage = (data: unknown): boolean => data === SKIP_WAITING_MESSAGE;

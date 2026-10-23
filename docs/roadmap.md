@@ -479,7 +479,7 @@ Abhängigkeit (Entscheidung gegen `vite-plugin-pwa`). Details:
   Laufzeit-Cache; offline starten Bibliothek, Deep Link `/setup/…` und `/settings`, die
   Erkennung läuft, alle Antworten aus dem Service Worker, keine fehlgeschlagenen Abrufe,
   Konsole ohne Fehler (nur MediaPipe-interne Warnungen).
-- Kein Hinweis „Update verfügbar“ in der Oberfläche (bei Bedarf später).
+- Den Hinweis „Update verfügbar“ bringt 7b-3.
 
 Gerätetest 7b-2 (offen):
 
@@ -490,6 +490,28 @@ Gerätetest 7b-2 (offen):
       (installierte PWA).
 - [ ] Update: neuen Build ausliefern, alle Tabs schließen, neu öffnen → neue Version, alte
       Caches weg (DevTools → Application → Cache Storage).
+
+**7b-3 Hinweis „Update verfügbar“ – umgesetzt, Gerätetest offen.** Liegt ein neuer Build
+installiert bereit, während ein alter die Seite steuert, zeigen Bibliothek und Einstellungen
+„Neue Version verfügbar“ mit „Später“ und „Neu laden“. Spiel, Editor, Sync-Test und
+Aufstellhilfe zeigen den Hinweis nie. Erst ein Tipp schickt dem wartenden Service Worker
+`skipWaiting`, danach lädt die Seite genau einmal neu. Ohne Tipp bleibt alles wie in 7b-2. Wird
+die App wieder sichtbar, sucht sie höchstens einmal pro Stunde nach Updates, weil die installierte
+PWA auf iOS sonst kaum prüft. Keine neue Abhängigkeit, kein fremder Abruf. Details:
+[architecture.md](architecture.md#service-worker-und-offline-betrieb). Tests:
+`registerServiceWorker.test.ts` (Erstinstallation ohne Hinweis, wartender und neu installierter
+Build, Build schon beim Registrieren in Installation, verworfener Build, neuerer Build nach
+„Neu laden“, „Später“ bis zum nächsten Build, eine Nachricht und ein Neuladen, schon
+aktivierter Build, Prüfintervall), `update-banner.test.tsx` (nur auf `/` und `/settings`),
+`serviceWorker.test.ts` (Nachrichtenkennung). Playwright (`bun run preview`, 390×844 und
+844×390): Erstinstallation ohne Hinweis, nach geänderter `sw.js` erscheint der Hinweis, „Neu
+laden“ lädt neu, der neue Worker steuert, nur noch der neue Precache, Konsole leer.
+
+Gerätetest 7b-3 (offen):
+
+- [ ] iOS-Home-Bildschirm-App und Android: App offen lassen, neuen Build ausliefern, App in den
+      Hintergrund und nach über einer Stunde zurück → Hinweis erscheint, „Neu laden“ zeigt den
+      neuen Build.
 
 ### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1, 8h-2a, 8h-2b-1, 8h-2b-2a, 8h-2b-2b-1, 8h-2b-2b-2, 8h-2b-3 umgesetzt)
 
@@ -1356,7 +1378,13 @@ mit dem `anchorBeat` des ersten Clips.
 - Gerätetest: Stören die Ellbogen-Schnapper beim Nachmachen, und sind die AIST++-Moves mit der
   Kamera erkennbar?
 - Übergänge: Zwischen behaltenen AIST++-Clips bleiben nur 8 Übergänge. Der Generator verbindet
-  die übrigen Clips mit dem Grundgewicht.
+  die übrigen Clips mit dem Grundgewicht. Zwei Abhilfen gemessen (2026-10-23), beide verworfen:
+  (1) Verworfene Clips auf den nächsten behaltenen gleichen Tempos abbilden (größter Abstand von
+  Start- und Ankerpose): Median 74°, p10 54°. Bis 45° entstehen nur 19 Paare, ohne Schwelle
+  1350 Paare über Abstände, die keine echten Übergänge mehr sind. (2) Übergänge aus der
+  Posennähe (Ende von A zum Anfang von B, ±24 % Tempo): Median 118°, 87 von 180 Clips haben
+  keinen Nachfolger innerhalb von 45°. Ein echter Gewinn bräuchte eine Auswahl, die ganze
+  Folgen aus den Quellen behält, statt Einzelclips per Farthest-Point zu wählen.
 - Neubau der Demos mit AIST++-Clips (siehe 14).
 
 ### 14. Neue Demo-Songs ✅ (Gerätetest offen)

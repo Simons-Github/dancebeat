@@ -1162,10 +1162,22 @@ Adresse ab, deshalb gibt es keinen neuen Eintrag unter [Externe Abrufe](#externe
   Navigationen ablehnen. Dateien, deren Pfadteil mit `.` beginnt, kommen nicht in den Precache. Am Service Worker
   vorbei: Nicht-GET, Range-Anfragen (Audio), fremde Adressen (YouTube, Audio-URLs), `blob:`,
   `data:`, URLs mit Query, nicht vorgecachte eigene Dateien.
-- **Updates:** kein `skipWaiting`, damit nie mitten im Spiel Dateien wechseln. Ein neuer Service
-  Worker übernimmt, sobald kein Tab der alten Version mehr offen ist. `clients.claim()` wirkt
-  nur bei der Erstinstallation, damit schon die erste Sitzung WASM und Modell cacht. Einen Hinweis
-  „Update verfügbar“ gibt es noch nicht.
+- **Updates:** kein automatisches `skipWaiting`, damit nie mitten im Spiel Dateien wechseln. Ein
+  neuer Service Worker übernimmt, sobald kein Tab der alten Version mehr offen ist.
+  `clients.claim()` sorgt dafür, dass schon die erste Sitzung WASM und Modell cacht.
+- **Hinweis „Update verfügbar“ (7b-3):** `src/lib/serviceWorker.ts` meldet einen wartenden
+  Service Worker, aber nur, wenn die Seite schon von einem alten Build gesteuert wird (bei der
+  Erstinstallation nicht). `UpdateBanner` (über `useAppUpdate`) zeigt ihn nur in der Bibliothek
+  und in den Einstellungen: Dort geht beim Neuladen nichts verloren. Spiel, Editor, Sync-Test und
+  Aufstellhilfe zeigen ihn nie. „Neu laden“ schickt `SKIP_WAITING_MESSAGE` an den wartenden
+  Worker, und die Seite lädt beim folgenden `controllerchange` genau einmal neu. Das Neuladen ist
+  Pflicht, weil die Routen-Chunks des alten Builds nicht im neuen Precache liegen. „Später“
+  blendet den Hinweis bis zum nächsten neuen Build aus. Wird die App wieder sichtbar, ruft die
+  Seite höchstens einmal pro Stunde `registration.update()` auf (`UPDATE_CHECK_INTERVAL_MS`). Das
+  ist nötig, weil eine installierte PWA auf iOS oft ohne Navigation weiterläuft. Der Abruf geht
+  nur an die eigene `sw.js`. Bekannte Grenze: Weitere offene Tabs des alten Builds bekommen über
+  `clients.claim()` den neuen Worker und laden nicht neu. Ein später nachgeladener Chunk kann
+  dort fehlschlagen, dann erscheint der Fehlerbildschirm mit „Zur Startseite“.
 - Die CSP (`connect-src`) bleibt unverändert: Der Service Worker ruft nur die eigene Adresse ab.
 
 ## Build und Werkzeuge

@@ -5,6 +5,7 @@ import { MotionConfig } from "framer-motion";
 
 import { PartyBackground } from "@/components/PartyBackground";
 import { Button } from "@/components/ui/button";
+import { UpdateBanner } from "@/components/UpdateBanner";
 import { SongThemeContext, useSongTheme, type SongTheme } from "@/hooks/useSongTheme";
 import { scrimCss } from "@/lib/contrast";
 import { DEFAULT_SONG_THEME, SCRIM, THEME_FADE_MS } from "@/theme";
@@ -47,6 +48,7 @@ function Frame({ children }: { children: ReactNode }) {
             className="scrim-edge pointer-events-none absolute inset-x-0 bottom-0 h-1/4"
           />
           <AppHeader />
+          <UpdateBanner />
         </>
       )}
       <div className="relative z-10 flex min-h-0 flex-1 flex-col">{children}</div>
