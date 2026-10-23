@@ -475,7 +475,13 @@ so halten Moves Abstand und Endmarge, gleich welche Anker die Clips haben. Jeder
 mit seinem ersten Keyframe; davor wird die vorige Pose gehalten und über `BLEND_BEATS`
 (1 Beat) mit Smoothstep hineingeblendet. Ein Clip behält seine Keyframes bis
 `BLEND_BEATS` vor dem Start des nächsten Clips (bei Anker 0: Slotlänge − 1 Beat), mindestens
-bis zum Anker; der letzte bis zum Songende. Frames liegen
+bis zum Anker; der letzte bis zum Songende. Beginnt der nächste Clip, bevor der vorige seinen
+letzten Key erreicht (bei AIST++-Clips mit `anchorBeat` 1–3 häufig) oder weniger als ½ Beat
+danach, steigt er später ein:
+`MIN_BLEND_BEATS` (½ Beat) nach diesem Key, höchstens auf seinem Anker, in seiner eigenen Pose an
+dieser Stelle (seine Keyframes davor entfallen). Auch diese kürzere Blende läuft mit Smoothstep, so
+wird der Einstieg nie eine gerade Linie, und bei streng steigenden Move-Beats (wie sie Generator
+und Demo-Folgen liefern) geht kein Anker verloren (14f). Frames liegen
 auf jedem Keyframe und Move und alle `FRAME_STEP_MS` (100 ms), solange sich die Pose ändert;
 gehaltene Posen brauchen keine Zwischenframes. Die Überblendung ist so schon geglättet
 abgetastet; `frameAt` interpoliert dazwischen linear (siehe Frame). Jeder Frame hat `pose3d` (gerundet wie beim

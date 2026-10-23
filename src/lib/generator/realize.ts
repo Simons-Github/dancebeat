@@ -18,6 +18,12 @@ import type { ClipRef, Plan } from "./types";
 /** Beats of the eased blend from one clip into the next. */
 export const BLEND_BEATS = 1;
 /**
+ * Shortest blend into a clip whose entry overlaps the previous clip (or follows its last key
+ * more closely): the entry is moved to this many beats after the previous clip's last key, at
+ * most up to its own anchor.
+ */
+export const MIN_BLEND_BEATS = 0.5;
+/**
  * Frame spacing while the pose changes. Below DENSE_FRAME_GAP_MS, so frameAt interpolates
  * linearly in between and the eased blend sampled here stays one smooth curve.
  */
@@ -68,7 +74,8 @@ function clipPoseAt(clip: MotionClip, beat: number): Skeleton3D {
   for (let i = 1; i < kfs.length; i++) {
     const a = kfs[i - 1]!,
       b = kfs[i]!;
-    if (beat <= b.beat) return interpolate(a.pose3d, b.pose3d, (beat - a.beat) / (b.beat - a.beat));
+    if (beat === b.beat) return b.pose3d;
+    if (beat < b.beat) return interpolate(a.pose3d, b.pose3d, (beat - a.beat) / (b.beat - a.beat));
   }
   return kfs[kfs.length - 1]!.pose3d;
 }
@@ -91,7 +98,10 @@ function restPose(pack: MotionPack, first: MotionClip | undefined): Skeleton3D |
  * Builds the key timeline: the rest pose (or the first clip's anchor pose) from 0; each clip
  * starts `anchorBeat` before its move and keeps its keyframes until BLEND_BEATS before the next
  * clip starts (at least up to its anchor; the closing clip until the end of the song); between
- * clips the pose is held, then blended. Without clips the rest pose stands for the whole song.
+ * clips the pose is held, then blended. If a clip's entry would start less than MIN_BLEND_BEATS
+ * after the previous clip's last key (or before it), it enters later (MIN_BLEND_BEATS after that
+ * key, at most at its anchor) in the pose it has there, so the blend stays eased; with strictly
+ * ascending move beats no anchor is lost. Without clips the rest pose stands for the whole song.
  */
 function buildTimeline(
   plan: Plan,
@@ -118,20 +128,28 @@ function buildTimeline(
   push(0, startPose, false);
 
   const startOf = (ref: ClipRef) => ref.beat - byId.get(ref.clipId)!.anchorBeat;
+  // Song beat of the last key placed so far (the start pose: -Infinity, nothing to overlap).
+  let lastBeat = -Infinity;
   clips.forEach((ref, i) => {
     const clip = byId.get(ref.clipId)!;
     const next = clips[i + 1];
     const start = startOf(ref);
-    // Hold the previous pose, then blend into this clip's first keyframe.
-    hold(timeOf(start + clip.keyframes[0]!.beat - BLEND_BEATS));
+    // Entry beat within the clip: its first keyframe, later if the previous clip runs past it.
+    const entry = Math.max(
+      clip.keyframes[0]!.beat,
+      Math.min(clip.anchorBeat, lastBeat - start + MIN_BLEND_BEATS),
+    );
+    // Hold the previous pose, then blend into the entry pose.
+    hold(timeOf(start + entry - BLEND_BEATS));
+    push(timeOf(start + entry), clipPoseAt(clip, entry), true);
     const end = next
       ? Math.max(clip.anchorBeat, Math.min(clip.beats, startOf(next) - start - BLEND_BEATS))
       : Math.min(clip.beats, clip.anchorBeat + ref.lengthBeats);
-    clip.keyframes.forEach((k, j) => {
-      if (k.beat <= end) push(timeOf(start + k.beat), k.pose3d, j === 0);
-    });
-    if (clip.keyframes.every((k) => k.beat !== end) && end > clip.keyframes[0]!.beat)
+    for (const k of clip.keyframes)
+      if (k.beat > entry && k.beat <= end) push(timeOf(start + k.beat), k.pose3d, false);
+    if (clip.keyframes.every((k) => k.beat !== end) && end > entry)
       push(timeOf(start + end), clipPoseAt(clip, end), false);
+    lastBeat = Math.max(lastBeat, start + Math.max(entry, end));
   });
   hold(plan.durationMs);
   return keys;

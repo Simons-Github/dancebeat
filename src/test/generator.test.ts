@@ -8,6 +8,7 @@ import {
   END_MARGIN_BEATS,
   GROUP_PATTERN,
   MAX_STEP_BEATS,
+  MIN_BLEND_BEATS,
   MIN_INTRO_MS,
   MIN_MOVE_ENERGY,
   MIN_STEP_MS,
@@ -27,6 +28,7 @@ import {
 import { isAistClip, loadMotionPack } from "@/lib/motionPack";
 import { computeAngles, figure3d, type FigureParams } from "@/lib/pose";
 import { roundSkeleton } from "@/lib/precision";
+import { interpolate } from "@/lib/skeleton/interpolate";
 import { randomFromString } from "@/lib/random";
 import { ChoreographySchema, MOTION_PACK_VERSION, MotionPackSchema } from "@/lib/schema";
 import { Scorer } from "@/lib/scorer";
@@ -651,6 +653,48 @@ describe("realizeFrames", () => {
     expect(at(2600).pose3d).toEqual(roundSkeleton(figure3d({ la: 170, ra: 170 })));
     expect(at(4100).pose3d).toEqual(roundSkeleton(figure3d({ la: 90, ra: 90 })));
     expect(frames.at(-1)!.timeMs).toBe(10_000);
+  });
+
+  it("cuts an entry that overlaps the previous anchor and keeps it eased", () => {
+    const poses = (start: number) =>
+      [0, 1, 2, 3, 4].map((beat) => ({
+        beat,
+        pose3d: figure3d({ la: start + 30 * beat, ra: start + 30 * beat }),
+      }));
+    const pack = makePack([
+      restClip(),
+      clip("a", { la: 20, ra: 20 }, { beats: 4, anchorBeat: 1, keyframes: poses(20) }),
+      clip("b", { la: 40, ra: 40 }, { beats: 4, anchorBeat: 3, keyframes: poses(40) }),
+    ]);
+    const plan: Plan = {
+      bpm: 120,
+      beatPhaseMs: 0,
+      durationMs: 8_000,
+      introBeats: 4,
+      phrases: [],
+      final: null,
+    };
+    // Both clips start on beat 4: b's entry lies a whole beat before a's anchor (beat 5).
+    const refs: ClipRef[] = [
+      { clipId: "a", beat: 5, lengthBeats: 2, gold: false },
+      { clipId: "b", beat: 7, lengthBeats: 4, gold: false },
+    ];
+    const { frames } = realizeFrames(plan, refs, pack);
+    const at = (t: number) => frames.find((f) => f.timeMs === t)?.pose3d;
+    const aAnchor = figure3d({ la: 50, ra: 50 });
+    // b enters MIN_BLEND_BEATS (250 ms) after a's anchor, in its own pose there (beat 1.5).
+    const bEntry = interpolate(figure3d({ la: 70, ra: 70 }), figure3d({ la: 100, ra: 100 }), 0.5);
+    expect(at(2500)).toEqual(roundSkeleton(aAnchor));
+    expect(at(2750)).toEqual(roundSkeleton(bEntry));
+    expect(frames.filter((f) => f.timeMs > 2500 && f.timeMs < 2750).map((f) => f.timeMs)).toEqual([
+      2600,
+    ]);
+    // Eased (smoothstep), not a straight line to a later keyframe.
+    const u = 100 / (MIN_BLEND_BEATS * 500);
+    expect(at(2600)).toEqual(roundSkeleton(interpolate(aAnchor, bEntry, u * u * (3 - 2 * u))));
+    // b keeps its later keyframes and its anchor pose on the move.
+    expect(at(3000)).toEqual(roundSkeleton(figure3d({ la: 100, ra: 100 })));
+    expect(at(3500)).toEqual(roundSkeleton(figure3d({ la: 130, ra: 130 })));
   });
 
   it("throws for unknown clip ids", () => {

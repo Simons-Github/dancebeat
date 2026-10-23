@@ -1623,13 +1623,42 @@ Offen:
 - Neue Demo-Choreografien auch an bestehende Installationen ausliefern, etwa mit einer
   `DEMO_CHOREO_VERSION`, die nur unbearbeitete Demos ersetzt und Highscore und Sterne behält.
   Dafür ist eine Entscheidung nötig.
-- Aus dem Review, schon seit 13i bei eigenen Songs mit AIST++-Clips so: Beginnt der Einstieg des
+- ~~Einstieg überlappt den vorigen Anker~~ Erledigt in 14f. Befund aus dem Review, schon seit 13i bei eigenen Songs mit AIST++-Clips so: Beginnt der Einstieg des
   nächsten Clips (`anchorBeat` plus `BLEND_BEATS` vor seinem Move) vor dem Anker des vorigen
   Clips, hält `buildTimeline` den vorigen Clip bis zu seinem Anker. Die frühen Keyframes des
   nächsten fallen dann weg, und der Einstieg wird eine gerade Linie statt der weichen Blende.
   Das betrifft 40–249 Clips je Demo (Rise Until The Morning 249 von 323). Kein Anker-Keyframe
   geht verloren, die Bewertung ist also nicht betroffen. Abhilfe in einem eigenen Schritt: den
   Einstieg gezielt kürzen und mit einer Mindestblende nach dem vorigen Anker weich halten.
+
+**14f Weicher Einstieg bei überlappenden Clips – umgesetzt (2026-10-23), Gerätetest offen.**
+Beginnt ein Clip, bevor der vorige seinen letzten Key erreicht, steigt er in `buildTimeline`
+(`src/lib/generator/realize.ts`) später ein: `MIN_BLEND_BEATS` (½ Beat) nach diesem Key,
+höchstens auf seinem Anker, in seiner eigenen Pose an dieser Stelle, mit Smoothstep. Vorher fielen
+seine frühen Keyframes still weg, und der Weg zum ersten verbliebenen Keyframe war eine gerade
+Linie. `clipPoseAt` liefert auf einem Keyframe jetzt genau dessen Pose. Ohne Überlappung bleibt
+alles wie bisher. Betroffen waren 40 (Gold on the Glass), 46 (Gold in My Pocket), 71 (Lemonade
+Skies) und 249 (Rise Until The Morning) Einstiege, jetzt alle mit mindestens ½ Beat Blende. Die
+vier Demo-Choreografien sind neu gebaut (Moves unverändert).
+
+Gemessen, vorher → nachher:
+
+- `eval-demos` (20 Seeds, 10° Rauschen, 10 % Ausfall): Quote 0,999–1,000 → 1,000, schlechtester
+  Lauf 0,997 wie vorher, überall 5 Sterne. p95 der Winkelgeschwindigkeit auf der Stufe des
+  Manifests: Lemonade Skies 669 → 566 °/s, Gold on the Glass 517 → 494, Gold in My Pocket
+  586 → 547, Rise Until The Morning 1162 → 763 (über alle Stufen 504–1162 → 494–763 °/s).
+- `eval-choreo` (eigene Songs): p95 sinkt überall, am stärksten auf Stufe 3 (128 BPM
+  1098 → 733 °/s, 110 BPM 970 → 684). Die höchste Einzelspitze steigt auf Stufe 3 von
+  1344–1624 auf 1797–1799 °/s, im Bereich der Ellbogen-Schnapper aus 13i (bis 2670 °/s); die
+  kürzere Blende bündelt den Weg auf ½ Beat. Quote 0,999–1,000, schlechtester Lauf 0,997 statt
+  0,985.
+- Größe: 1,09–1,60 → 1,17–1,60 MB, gzip je JSON 171–281 → 194–295 kB (die Einstiegsposen und ihre
+  Blende brauchen mehr Frames), weiter unter der Grenze von 2 MB.
+
+Wie in 14e behalten bestehende Installationen ihre alten Demo-Choreografien. Test:
+`generator.test.ts` (überlappender Einstieg: Pose ½ Beat nach dem vorigen Anker, Smoothstep,
+spätere Keyframes und Anker bleiben). Nur am Gerät prüfbar, nicht geprüft: ob die Übergänge des
+Coachs sichtbar runder wirken.
 
 **Lizenzhinweise – umgesetzt (2026-10-23).** Bisher nannten die Credits nur die Musik. Jetzt
 kommen hinzu (Inhalt in `src/data/credits.ts`, Anzeige in „Über und Credits“):
