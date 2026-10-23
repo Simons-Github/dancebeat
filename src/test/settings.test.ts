@@ -67,6 +67,16 @@ describe("settings", () => {
     expect(getSettings().danceVideo).toBe(false);
   });
 
+  it("shows the dance video small by default; a bad value falls back; true survives", () => {
+    expect(DEFAULT_SETTINGS.danceVideoLarge).toBe(false);
+    store({ danceVideo: true });
+    expect(getSettings().danceVideoLarge).toBe(false);
+    store({ danceVideoLarge: "groß" });
+    expect(getSettings().danceVideoLarge).toBe(false);
+    store({ danceVideoLarge: true });
+    expect(getSettings().danceVideoLarge).toBe(true);
+  });
+
   it("clamps volume and latency into their ranges", () => {
     store({ volume: 7, latencyMs: -9000 });
     expect(getSettings().volume).toBe(1);

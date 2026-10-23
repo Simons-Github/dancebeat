@@ -23,6 +23,7 @@ const D = {
   autoStart: true,
   haptics: true,
   danceVideo: true,
+  danceVideoLarge: false,
 };
 
 /**
@@ -55,6 +56,8 @@ export const SettingsSchema = z.object({
   haptics: z.boolean().catch(D.haptics),
   /** In play, show the stored dance video instead of the stick-figure coach (songs with one). */
   danceVideo: z.boolean().catch(D.danceVideo),
+  /** In play, show the dance video large (covers more of the camera image). */
+  danceVideoLarge: z.boolean().catch(D.danceVideoLarge),
 });
 
 export type Settings = z.output<typeof SettingsSchema>;

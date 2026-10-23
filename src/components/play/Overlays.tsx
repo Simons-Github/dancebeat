@@ -125,6 +125,7 @@ export function PauseMenu({
   skeleton,
   beatPulse,
   danceVideo = null,
+  danceVideoLarge = null,
   onResume,
   onRestart,
   onQuit,
@@ -132,6 +133,7 @@ export function PauseMenu({
   onSkeleton,
   onBeatPulse,
   onDanceVideo,
+  onDanceVideoLarge,
 }: {
   reason: PauseReason | null;
   canResume: boolean;
@@ -141,6 +143,8 @@ export function PauseMenu({
   beatPulse: boolean;
   /** null: the song has no dance video, the switch is hidden. */
   danceVideo?: boolean | null;
+  /** null: no dance video or it is switched off, the switch is hidden. */
+  danceVideoLarge?: boolean | null;
   onResume: () => void;
   onRestart: () => void;
   onQuit: () => void;
@@ -148,6 +152,7 @@ export function PauseMenu({
   onSkeleton: (v: boolean) => void;
   onBeatPulse: (v: boolean) => void;
   onDanceVideo?: (v: boolean) => void;
+  onDanceVideoLarge?: (v: boolean) => void;
 }) {
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => first.current?.focus(), []);
@@ -204,6 +209,18 @@ export function PauseMenu({
                 Tanzvideo zeigen
               </Label>
               <Switch id="toggle-dance-video" checked={danceVideo} onCheckedChange={onDanceVideo} />
+            </div>
+          )}
+          {danceVideoLarge !== null && onDanceVideoLarge && (
+            <div className="flex items-center justify-between gap-3">
+              <Label htmlFor="toggle-dance-video-large" className="text-base">
+                Tanzvideo groß
+              </Label>
+              <Switch
+                id="toggle-dance-video-large"
+                checked={danceVideoLarge}
+                onCheckedChange={onDanceVideoLarge}
+              />
             </div>
           )}
         </div>

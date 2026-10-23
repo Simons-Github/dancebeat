@@ -494,6 +494,8 @@ export function GameScreen({
         beatPulse={settings.beatPulse}
         danceVideo={videoUrl ? settings.danceVideo : null}
         onDanceVideo={(v) => saveSettings({ danceVideo: v })}
+        danceVideoLarge={videoUrl && settings.danceVideo ? settings.danceVideoLarge : null}
+        onDanceVideoLarge={(v) => saveSettings({ danceVideoLarge: v })}
         onResume={() => controllerRef.current?.resume()}
         onRestart={() => controllerRef.current?.restart()}
         onQuit={quit}
@@ -571,6 +573,35 @@ export function GameScreen({
         </div>
         <PiktoBar canvasRef={piktoRef} goldSoon={goldSoon} />
         <div className="relative min-h-0 flex-1">
+          {/* Coach or dance video first: the message and rating popup below paint above it (the
+              large video reaches the popup in landscape). */}
+          {showVideo ? (
+            <video
+              ref={videoRef}
+              src={videoUrl}
+              muted
+              playsInline
+              preload="auto"
+              aria-label="Tanzvideo"
+              // Broken or unplayable: back to the coach (one state change).
+              onError={onVideoError}
+              // Large (setting): full width in portrait, about the full area height in landscape.
+              className={cn(
+                "pointer-events-none absolute bottom-0 left-0 max-w-full rounded-2xl bg-black/70 object-contain",
+                settings.danceVideoLarge
+                  ? "h-[min(56vw,40dvh)] w-full landscape:h-full landscape:max-h-[min(34vw,75dvh)] landscape:w-[min(60vw,125dvh)]"
+                  : "h-[min(36vw,28dvh)] w-[min(64vw,50dvh)] landscape:h-[min(23vw,42dvh)] landscape:w-[min(40vw,75dvh)]",
+              )}
+            />
+          ) : (
+            <canvas
+              ref={coachRef}
+              aria-label="Coach"
+              role="img"
+              style={COACH_SIZE_VARS}
+              className="absolute bottom-0 left-0 size-(--coach-size) landscape:size-(--coach-size-landscape)"
+            />
+          )}
           {game.bodyMissing && phase === "playing" && (
             <p
               role="status"
@@ -595,27 +626,6 @@ export function GameScreen({
                   ? "pointer-events-auto fixed inset-0 z-40 m-auto size-[max(200px,min(80vw,48dvh))] ring-4 ring-gold landscape:size-[max(200px,min(45vw,60dvh))]"
                   : "pointer-events-none absolute bottom-0 right-0 z-20 size-[max(200px,min(38vw,28dvh))] landscape:size-[max(200px,min(26vw,42dvh))]",
               )}
-            />
-          )}
-          {showVideo ? (
-            <video
-              ref={videoRef}
-              src={videoUrl}
-              muted
-              playsInline
-              preload="auto"
-              aria-label="Tanzvideo"
-              // Broken or unplayable: back to the coach (one state change).
-              onError={onVideoError}
-              className="pointer-events-none absolute bottom-0 left-0 h-[min(36vw,28dvh)] w-[min(64vw,50dvh)] max-w-full rounded-2xl bg-black/70 object-contain landscape:h-[min(23vw,42dvh)] landscape:w-[min(40vw,75dvh)]"
-            />
-          ) : (
-            <canvas
-              ref={coachRef}
-              aria-label="Coach"
-              role="img"
-              style={COACH_SIZE_VARS}
-              className="absolute bottom-0 left-0 size-(--coach-size) landscape:size-(--coach-size-landscape)"
             />
           )}
         </div>

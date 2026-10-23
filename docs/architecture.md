@@ -737,7 +737,14 @@ Coachs statt der Strichfigur.
 - **Layout:** Kasten unten links für Querformat-Videos, `object-contain` auf dunklem Grund,
   `rounded-2xl`; Hochformat `w-[min(64vw,50dvh)] h-[min(36vw,28dvh)]`, Querformat
   `w-[min(40vw,75dvh)] h-[min(23vw,42dvh)]` (so hoch wie der Coach, breiter). Hochkant-Videos
-  erscheinen darin schmal.
+  erscheinen darin schmal. **Groß** (Einstellung „Tanzvideo groß“, `danceVideoLarge`, Standard
+  aus, 8h-2b-3; in den Einstellungen nur mit „Tanzvideo zeigen“ schaltbar, im Pausenmenü nur
+  bei Songs mit Video und eingeschaltetem Tanzvideo): Hochformat volle Breite der Spielfläche,
+  `w-full h-[min(56vw,40dvh)]`; Querformat
+  `w-[min(60vw,125dvh)] h-full max-h-[min(34vw,75dvh)]`, höchstens die Höhe der Fläche unter
+  HUD und Piktoleiste. Das große Video verdeckt mehr vom Kamerabild. Coach und Video stehen im
+  DOM vor Hinweis und Bewertungs-Popup, damit beide darüber liegen (im Querformat reicht das
+  große Video bis zum Popup).
 - **Fallback:** Fehler-Ereignis des Videos (Codec, defekte Datei) → wieder der Coach, einmalig.
   Lädt der Blob nicht, bleibt es beim Coach.
 - **Einstellung** „Tanzvideo zeigen“ (`danceVideo`, Standard an; alte gespeicherte Einstellungen

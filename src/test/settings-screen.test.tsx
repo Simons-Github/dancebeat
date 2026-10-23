@@ -98,6 +98,18 @@ describe("Einstellungen", () => {
     expect(screen.getByRole("button", { name: "Schwer" })).toHaveAttribute("aria-pressed", "true");
   });
 
+  it("Tanzvideo groß speichert und ist nur mit Tanzvideo schaltbar", async () => {
+    await renderSettings();
+    const large = screen.getByRole("switch", { name: "Tanzvideo groß" });
+    expect(large).not.toBeChecked();
+    expect(large).toBeEnabled();
+    fireEvent.click(large);
+    expect(stored().danceVideoLarge).toBe(true);
+    fireEvent.click(screen.getByRole("switch", { name: "Tanzvideo zeigen" }));
+    expect(stored().danceVideo).toBe(false);
+    expect(screen.getByRole("switch", { name: "Tanzvideo groß" })).toBeDisabled();
+  });
+
   it("setzt den Latenz-Ausgleich zurück", async () => {
     localStorage.setItem("dancebeat.settings", JSON.stringify({ latencyMs: 80 }));
     await renderSettings();

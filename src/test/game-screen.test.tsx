@@ -851,6 +851,59 @@ describe("Spielscreen mit Tanzvideo (8h-2a)", () => {
     expect(screen.queryByRole("switch", { name: "Tanzvideo zeigen" })).toBeNull();
   });
 
+  it("Einstellung Tanzvideo groß: großes Layout statt des kleinen (8h-2b-3)", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    localStorage.setItem("dancebeat.settings", JSON.stringify({ danceVideoLarge: true }));
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    const v = videoEl() as HTMLVideoElement;
+    expect(v).toHaveClass("w-full", "h-[min(56vw,40dvh)]", "landscape:w-[min(60vw,125dvh)]");
+    expect(v).not.toHaveClass("w-[min(64vw,50dvh)]");
+    // First in its area, so the body-missing message and the rating popup paint above it.
+    expect(v.parentElement?.firstElementChild).toBe(v);
+  });
+
+  it("ohne Einstellung bleibt das Video klein", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(10);
+    const v = videoEl() as HTMLVideoElement;
+    expect(v).toHaveClass("w-[min(64vw,50dvh)]");
+    expect(v).not.toHaveClass("w-full");
+  });
+
+  it("Schalter Tanzvideo groß im Pausenmenü vergrößert das Video und wird gespeichert", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    const toggle = screen.getByRole("switch", { name: "Tanzvideo groß" });
+    expect(toggle).not.toBeChecked();
+    fireEvent.click(toggle);
+    await advance(10);
+    expect(videoEl()).toHaveClass("w-full");
+    expect(JSON.parse(localStorage.getItem("dancebeat.settings")!)).toMatchObject({
+      danceVideoLarge: true,
+    });
+  });
+
+  it("ohne Video kein Schalter Tanzvideo groß im Pausenmenü", async () => {
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(screen.queryByRole("switch", { name: "Tanzvideo groß" })).toBeNull();
+  });
+
+  it("bei ausgeschaltetem Tanzvideo kein Schalter Tanzvideo groß", async () => {
+    repo.blob = new Blob(["x"], { type: "video/mp4" });
+    localStorage.setItem("dancebeat.settings", JSON.stringify({ danceVideo: false }));
+    await renderAt(`/play/${SONG_ID}?sim=1`);
+    await advance(5100);
+    fireEvent.click(screen.getByRole("button", { name: "Pause" }));
+    expect(screen.getByRole("switch", { name: "Tanzvideo zeigen" })).not.toBeChecked();
+    expect(screen.queryByRole("switch", { name: "Tanzvideo groß" })).toBeNull();
+  });
+
   it("Ladefehler des Videos: zurück zum Coach", async () => {
     repo.blob = new Blob(["x"], { type: "video/mp4" });
     await renderAt(`/play/${SONG_ID}?sim=1`);

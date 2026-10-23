@@ -56,22 +56,24 @@ function SwitchRow({
   hint,
   checked,
   onChange,
+  disabled = false,
 }: {
   id: string;
   label: string;
   hint: string;
   checked: boolean;
   onChange: (v: boolean) => void;
+  disabled?: boolean;
 }) {
   return (
     <div className="flex min-h-12 items-center justify-between gap-4">
-      <div className="flex flex-col gap-0.5">
+      <div className={cn("flex flex-col gap-0.5", disabled && "opacity-50")}>
         <Label htmlFor={id} className="text-base">
           {label}
         </Label>
         <p className={HINT}>{hint}</p>
       </div>
-      <Switch id={id} checked={checked} onCheckedChange={onChange} />
+      <Switch id={id} checked={checked} onCheckedChange={onChange} disabled={disabled} />
     </div>
   );
 }
@@ -460,6 +462,18 @@ export function SettingsScreen() {
             hint="Bei Songs mit Tanzvideo läuft das Video stumm statt der Strichfigur mit."
             checked={settings.danceVideo}
             onChange={(danceVideo) => save({ danceVideo })}
+          />
+          <SwitchRow
+            id="dance-video-large"
+            label="Tanzvideo groß"
+            hint={
+              settings.danceVideo
+                ? "Zeigt das Tanzvideo im Spiel größer; es verdeckt dann mehr vom Kamerabild."
+                : "Nur mit „Tanzvideo zeigen“."
+            }
+            checked={settings.danceVideoLarge}
+            onChange={(danceVideoLarge) => save({ danceVideoLarge })}
+            disabled={!settings.danceVideo}
           />
           <SwitchRow
             id="mirror"
