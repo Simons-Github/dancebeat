@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+
 import { IDBFactory } from "fake-indexeddb";
 import { createElement, type ReactNode } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
@@ -26,11 +28,16 @@ const FILES = DEMOS.map((d) => d.file).sort();
 const FIRST = DEMOS[0]!.id;
 const OTHERS = DEMOS.slice(1).map((d) => d.id);
 const without = (id: string) => ALL.filter((x) => x !== id);
+/** Per-demo choreography marker with the current version for `ids`. */
+const choreoMarker = (ids: readonly string[]) =>
+  Object.fromEntries(ids.map((id) => [id, demo.DEMO_CHOREO_VERSION]));
+const storedChoreoMarker = () => JSON.parse(localStorage.getItem(CHOREO_KEY) ?? "null") as unknown;
 
 const PINK = "d4e0c1a2-0001-4000-8000-000000000001";
 const SUNSET = "d4e0c1a2-0002-4000-8000-000000000002";
 const DELETED_KEY = "dancebeat.deletedDemos";
 const AUDIO_KEY = "dancebeat.demoAudioVersion";
+const CHOREO_KEY = "dancebeat.demoChoreoVersions";
 
 // jsdom's Blob does not survive fake-indexeddb's structured clone; the repository does not
 // inspect the stored audio, so a string stands in for the MP3.
@@ -82,13 +89,14 @@ describe("seedDemos", () => {
     }
   });
 
-  it("does not overwrite an existing demo, even without any marker", async () => {
+  it("does not overwrite an existing demo while both versions are current", async () => {
     await demo.seedDemos(repo, loadAudio);
     const first = await repo.get(FIRST);
     if (!first) throw new Error("demo missing");
     await repo.save({ ...first, highscore: 9000, stars: 4 });
     localStorage.clear();
-    localStorage.setItem(AUDIO_KEY, String(demo.DEMO_AUDIO_VERSION)); // audio is current: no upgrade run either
+    localStorage.setItem(AUDIO_KEY, String(demo.DEMO_AUDIO_VERSION));
+    localStorage.setItem(CHOREO_KEY, JSON.stringify(choreoMarker(ALL)));
 
     await demo.seedDemos(repo, loadAudio);
     expect(await repo.get(FIRST)).toMatchObject({ highscore: 9000, stars: 4 });
@@ -425,6 +433,187 @@ describe("demo audio upgrade", () => {
     expect(loadAudio).toHaveBeenCalledTimes(4); // the marker is global: all are fetched again
     expect(await repo.getAudio(FIRST)).toBe(`mp3:${DEMOS[0]!.file}`);
     expect(localStorage.getItem(AUDIO_KEY)).toBe(String(demo.DEMO_AUDIO_VERSION));
+  });
+});
+
+describe("demo choreography upgrade", () => {
+  /** Library seeded before the current choreo version: demos present, no choreo marker. */
+  async function seedOldChoreos() {
+    await demo.seedDemos(repo, loadAudio);
+    localStorage.removeItem(CHOREO_KEY);
+    loadAudio.mockClear();
+  }
+
+  /** A demo the player played and edited. */
+  async function playAndEdit(id: string) {
+    const song = await repo.get(id);
+    if (!song) throw new Error("demo missing");
+    await repo.save({
+      ...song,
+      title: "Mein Demo",
+      syncOffsetMs: 80,
+      highscore: 9000,
+      stars: 4,
+      choreo: { ...song.choreo, title: "Eigene", updatedAt: song.choreo.createdAt + 1 },
+    });
+    return song;
+  }
+
+  const expectFresh = async (id: string, title: string) => {
+    const song = await repo.get(id);
+    expect(song).toMatchObject({
+      title,
+      syncOffsetMs: 0,
+      highscore: 0,
+      stars: 0,
+      source: { type: "local", blobId: id },
+    });
+    expect(song?.choreo.title).toBe(title);
+    expect(song?.choreo.updatedAt).toBe(song?.choreo.createdAt);
+  };
+
+  it("sets the marker on a fresh install without extra downloads", async () => {
+    await demo.seedDemos(repo, loadAudio);
+    expect(loadAudio).toHaveBeenCalledTimes(4);
+    expect(storedChoreoMarker()).toEqual(choreoMarker(ALL));
+  });
+
+  it("replaces existing demos completely once, reusing the current audio", async () => {
+    await seedOldChoreos();
+    await playAndEdit(FIRST);
+
+    await demo.seedDemos(repo, loadAudio);
+    expect(loadAudio).not.toHaveBeenCalled();
+    for (const d of DEMOS) {
+      await expectFresh(d.id, d.title);
+      expect(await repo.getAudio(d.id)).toBe(`mp3:${d.file}`);
+    }
+    expect(storedChoreoMarker()).toEqual(choreoMarker(ALL));
+
+    await playAndEdit(FIRST);
+    await demo.seedDemos(repo, loadAudio);
+    expect(await repo.get(FIRST)).toMatchObject({ title: "Mein Demo", highscore: 9000 });
+  });
+
+  it("downloads the audio once when audio and choreography are both outdated", async () => {
+    loadAudio.mockImplementation(() => Promise.resolve(audio("old")));
+    await demo.seedDemos(repo, loadAudio);
+    localStorage.clear();
+    restoreLoadAudio();
+    loadAudio.mockClear();
+
+    await demo.seedDemos(repo, loadAudio);
+    expect(calledFiles()).toEqual(FILES);
+    for (const d of DEMOS) expect(await repo.getAudio(d.id)).toBe(`mp3:${d.file}`);
+    expect(localStorage.getItem(AUDIO_KEY)).toBe(String(demo.DEMO_AUDIO_VERSION));
+    expect(storedChoreoMarker()).toEqual(choreoMarker(ALL));
+  });
+
+  it.each(["{kaputt", "2", "[2]", '{"x":0}'])(
+    "treats an invalid marker (%s) as version 1 for every demo",
+    async (raw) => {
+      await seedOldChoreos();
+      await playAndEdit(FIRST);
+      localStorage.setItem(CHOREO_KEY, raw);
+      await demo.seedDemos(repo, loadAudio);
+      await expectFresh(FIRST, DEMOS[0]!.title);
+    },
+  );
+
+  it("restores the demo audio of a demo whose source the player replaced", async () => {
+    await seedOldChoreos();
+    const first = await repo.get(FIRST);
+    if (!first) throw new Error("demo missing");
+    await repo.save({ ...first, source: { type: "url", url: "https://example.com/a.mp3" } });
+
+    await demo.seedDemos(repo, loadAudio);
+    expect(calledFiles()).toEqual([DEMOS[0]!.file]);
+    await expectFresh(FIRST, DEMOS[0]!.title);
+    expect(await repo.getAudio(FIRST)).toBe(`mp3:${DEMOS[0]!.file}`);
+  });
+
+  it("drops an attached dance video", async () => {
+    await seedOldChoreos();
+    const withVideo = await repo.setVideo(FIRST, audio("video"));
+    const videoId = withVideo.videoBlobId;
+    if (!videoId) throw new Error("video missing");
+
+    await demo.seedDemos(repo, loadAudio);
+    expect((await repo.get(FIRST))?.videoBlobId).toBeUndefined();
+    expect(await repo.getVideo(videoId)).toBeUndefined();
+  });
+
+  it("neither re-adds nor replaces a deleted demo", async () => {
+    await seedOldChoreos();
+    await repo.delete(FIRST);
+    demo.markDemoDeleted(FIRST);
+    await demo.seedDemos(repo, loadAudio);
+    expect(await ids()).toEqual(without(FIRST));
+  });
+
+  it("logs a failed replacement, keeps the old demo and retries only that one", async () => {
+    await seedOldChoreos();
+    const first = await repo.get(FIRST);
+    if (!first) throw new Error("demo missing");
+    await repo.save({ ...first, source: { type: "url", url: "https://example.com/a.mp3" } });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    loadAudio.mockImplementation(() => Promise.reject(new Error("offline")));
+
+    await demo.seedDemos(repo, loadAudio);
+    expect(warn).toHaveBeenCalledOnce();
+    warn.mockRestore();
+    expect(await repo.get(FIRST)).toMatchObject({ source: { type: "url" } });
+    expect(storedChoreoMarker()).toEqual(choreoMarker(OTHERS));
+
+    // The seed runs again after every library write: replaced demos keep new progress.
+    await playAndEdit(OTHERS[0]!);
+    restoreLoadAudio();
+    await demo.seedDemos(repo, loadAudio);
+    await expectFresh(FIRST, DEMOS[0]!.title);
+    expect(await repo.get(OTHERS[0]!)).toMatchObject({ title: "Mein Demo", highscore: 9000 });
+    expect(storedChoreoMarker()).toEqual(choreoMarker(ALL));
+  });
+
+  it("does not replace a demo deleted while its audio was downloading", async () => {
+    await seedOldChoreos();
+    localStorage.removeItem(AUDIO_KEY); // forces a download per demo
+    let release = () => {};
+    loadAudio.mockImplementation((file: string) =>
+      file === DEMOS[0]!.file
+        ? new Promise<Blob>((resolve) => {
+            release = () => resolve(audio("late"));
+          })
+        : Promise.resolve(audio(`mp3:${file}`)),
+    );
+    const run = demo.seedDemos(repo, loadAudio);
+    await vi.waitFor(() => expect(loadAudio).toHaveBeenCalledTimes(4));
+    demo.markDemoDeleted(FIRST);
+    await repo.delete(FIRST);
+    release();
+    await run;
+    expect(await ids()).toEqual(without(FIRST));
+  });
+});
+
+describe("DEMO_CHOREO_VERSION", () => {
+  // Fingerprint of the shipped choreographies at the current DEMO_CHOREO_VERSION. When the test
+  // fails, the demos were rebuilt: raise DEMO_CHOREO_VERSION (src/data/demo.ts) so existing
+  // libraries get them, then update both values here.
+  const FINGERPRINT = {
+    version: 2,
+    sha256: "deace6ca696382c144a2b92f13585fa9c4ddfdc13b23fd0b0382bf1f58fb9a9c",
+  };
+
+  it("is raised whenever a shipped choreography changes", async () => {
+    const files = await Promise.all([
+      import("@/data/demos/gold-in-my-pocket.choreo.json"),
+      import("@/data/demos/gold-on-the-glass.choreo.json"),
+      import("@/data/demos/lemonade-skies.choreo.json"),
+      import("@/data/demos/rise-until-the-morning.choreo.json"),
+    ]);
+    const hash = createHash("sha256");
+    for (const f of files) hash.update(JSON.stringify(f.default));
+    expect({ version: demo.DEMO_CHOREO_VERSION, sha256: hash.digest("hex") }).toEqual(FINGERPRINT);
   });
 });
 

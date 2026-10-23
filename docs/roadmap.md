@@ -1613,16 +1613,21 @@ Abweichungen und Folgen:
   ([choreography-format.md](choreography-format.md#demo-pipeline)).
 - Wer die Demos schon hat, behält die alten Choreografien. Der Seed überschreibt vorhandene Demos
   nie (Highscore), und eine Inhaltsversion für Choreografien gibt es nicht. Nur neue
-  Installationen bekommen die neuen Demos.
+  Installationen bekommen die neuen Demos. Seit 14g überschreibt die `DEMO_CHOREO_VERSION` alte Demos
+  komplett.
 
 Offen:
 
 - Gerätetest: Sind die AIST++-Moves in den Demos mit der Kamera erkennbar und nachtanzbar? Stören
   die Ellbogen-Schnapper, vor allem in Lemonade Skies (Stufe 1)? Wenn ja, im Manifest feste Clips
   setzen oder einen Filter auf Gelenkwinkel einführen (13h-2).
-- Neue Demo-Choreografien auch an bestehende Installationen ausliefern, etwa mit einer
-  `DEMO_CHOREO_VERSION`, die nur unbearbeitete Demos ersetzt und Highscore und Sterne behält.
-  Dafür ist eine Entscheidung nötig.
+- ~~Neue Demo-Choreografien auch an bestehende Installationen ausliefern~~ Erledigt in 14g. Mit einer
+  `DEMO_CHOREO_VERSION` nach dem Muster von `DEMO_AUDIO_VERSION`. Entschieden (2026-10-23): Die
+  alten Demos dürfen komplett überschrieben werden, auch mit Highscore, Sternen und eigenen
+  Änderungen. Die App nutzt zurzeit nur der Entwickler zu Testzwecken, es gibt keine Spielstände,
+  die geschützt werden müssten. Vor einer Veröffentlichung an andere
+  Nutzer muss das neu bewertet werden (dann nur unbearbeitete Demos ersetzen, Highscore und
+  Sterne behalten).
 - ~~Einstieg überlappt den vorigen Anker~~ Erledigt in 14f. Befund aus dem Review, schon seit 13i bei eigenen Songs mit AIST++-Clips so: Beginnt der Einstieg des
   nächsten Clips (`anchorBeat` plus `BLEND_BEATS` vor seinem Move) vor dem Anker des vorigen
   Clips, hält `buildTimeline` den vorigen Clip bis zu seinem Anker. Die frühen Keyframes des
@@ -1655,10 +1660,40 @@ Gemessen, vorher → nachher:
 - Größe: 1,09–1,60 → 1,17–1,60 MB, gzip je JSON 171–281 → 194–295 kB (die Einstiegsposen und ihre
   Blende brauchen mehr Frames), weiter unter der Grenze von 2 MB.
 
-Wie in 14e behalten bestehende Installationen ihre alten Demo-Choreografien. Test:
+Bis 14g behielten bestehende Installationen ihre alten Demo-Choreografien. Test:
 `generator.test.ts` (überlappender Einstieg: Pose ½ Beat nach dem vorigen Anker, Smoothstep,
 spätere Keyframes und Anker bleiben). Nur am Gerät prüfbar, nicht geprüft: ob die Übergänge des
 Coachs sichtbar runder wirken.
+
+**14g Demo-Choreografien für bestehende Installationen – umgesetzt (2026-10-23), Gerätetest offen.**
+`DEMO_CHOREO_VERSION` in `src/data/demo.ts` steht auf 2, dem Stand von 14f. Der Marker
+`dancebeat.demoChoreoVersions` hält die Version pro Demo-ID; bei bisherigen Installationen fehlt
+er, das zählt als 1. Ist die Version einer vorhandenen, nicht gelöschten Demo kleiner, ersetzt
+`seedDemos` sie einmalig komplett durch einen frischen Song aus Manifest und Choreografie
+(`replaceDemo`). Highscore, Sterne, Umbenennung, Offsets, eigene Choreografie und ein angehängtes
+Tanzvideo gehen dabei verloren, wie am 2026-10-23 entschieden.
+
+- Erst entfernt `setVideo` ein Tanzvideo, dann überschreibt `save` den Song in einer Transaktion.
+  Die Demo fehlt also zu keinem Zeitpunkt.
+- Das gespeicherte Audio bleibt, solange es das aktuelle Demo-Audio ist. Nur bei älterem Audio,
+  fehlender Datei oder einer vom Spieler gewählten anderen Quelle wird die MP3 neu geladen.
+- Gelöschte Demos bleiben weg, auch wenn sie während des Downloads gelöscht werden.
+- Warum pro Demo: Der Seed läuft nach jedem Schreiben in die Bibliothek erneut (`loadSongs` beim
+  Nachladen). Mit einem globalen Marker hätte eine gescheiterte Ersetzung bei jedem gespeicherten
+  Highscore alle Demos erneut zurückgesetzt (Befund aus dem Review). Jetzt bleibt nach einem
+  Fehler nur diese Demo alt und wird beim nächsten Lauf erneut versucht.
+- Ein Fingerprint-Test (SHA-256 der vier `*.choreo.json`) schlägt fehl, sobald die Demos neu
+  gebaut sind und die Version nicht erhöht ist.
+
+Tests: `demoSeed.test.ts` (frische Installation, einmaliges Ersetzen ohne Download, Audio und
+Choreografie zugleich veraltet, ungültiger Marker, fremde Quelle, Tanzvideo, gelöschte Demo, Löschen
+während des Downloads, Fehler mit erneutem Versuch nur für die betroffene Demo, Fingerprint). Doku:
+[architecture.md](architecture.md#speicher).
+
+Nur am Gerät prüfbar, nicht geprüft: ob eine bestehende Installation nach dem Update die neuen
+Demos zeigt (erst nach dem Neuladen durch den Service Worker) und ob Safari das behaltene Audio
+nach dem Überschreiben weiter abspielt. Vor einer Veröffentlichung an andere Nutzer neu bewerten:
+dann nur unbearbeitete Demos ersetzen und Highscore und Sterne behalten.
 
 **Lizenzhinweise – umgesetzt (2026-10-23).** Bisher nannten die Credits nur die Musik. Jetzt
 kommen hinzu (Inhalt in `src/data/credits.ts`, Anzeige in „Über und Credits“):

@@ -295,15 +295,16 @@ Abbrechen im Countdown ──▶ /setup/$songId
 
 ## Speicher
 
-| Was                              | Wo                                          | Zugriff                        |
-| -------------------------------- | ------------------------------------------- | ------------------------------ |
-| Songs inkl. Choreografie         | IndexedDB `dancebeat`, Store `songs`        | `SongRepository`               |
-| Audiodateien (auch Tanzvideos)   | IndexedDB, Store `blobs`                    | `SongRepository.getAudio`      |
-| Einstellungen                    | `localStorage` `dancebeat.settings`         | `useSettings`                  |
-| Gelöschte Demo-Songs (IDs)       | `localStorage` `dancebeat.deletedDemos`     | `seedDemos`, `markDemoDeleted` |
-| Version der Demo-Audiodaten      | `localStorage` `dancebeat.demoAudioVersion` | `seedDemos`                    |
-| Spotify-Token und PKCE-Verifier  | `sessionStorage`                            | `lib/audio/spotifyAuth.ts`     |
-| App-Hülle, MediaPipe-WASM/Modell | Cache Storage `dancebeat-*`                 | Service Worker (`src/sw/`)     |
+| Was                              | Wo                                            | Zugriff                        |
+| -------------------------------- | --------------------------------------------- | ------------------------------ |
+| Songs inkl. Choreografie         | IndexedDB `dancebeat`, Store `songs`          | `SongRepository`               |
+| Audiodateien (auch Tanzvideos)   | IndexedDB, Store `blobs`                      | `SongRepository.getAudio`      |
+| Einstellungen                    | `localStorage` `dancebeat.settings`           | `useSettings`                  |
+| Gelöschte Demo-Songs (IDs)       | `localStorage` `dancebeat.deletedDemos`       | `seedDemos`, `markDemoDeleted` |
+| Version der Demo-Audiodaten      | `localStorage` `dancebeat.demoAudioVersion`   | `seedDemos`                    |
+| Version der Demo-Choreografien   | `localStorage` `dancebeat.demoChoreoVersions` | `seedDemos`                    |
+| Spotify-Token und PKCE-Verifier  | `sessionStorage`                              | `lib/audio/spotifyAuth.ts`     |
+| App-Hülle, MediaPipe-WASM/Modell | Cache Storage `dancebeat-*`                   | Service Worker (`src/sw/`)     |
 
 **SongRepository** (`src/lib/library/repository.ts`) ist die einzige Schnittstelle zur
 Bibliothek: `list`, `get`, `save`, `delete`, `getAudio`, `export`, `import`. Vorerst gibt es nur
@@ -338,7 +339,7 @@ erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle
   Vorliebe ist und keine Bibliotheksdaten.
 - Demo-Songs (`src/data/demo.ts`): `seedDemos` legt jede Demo nur an, wenn sie in der Bibliothek
   fehlt und ihre ID nicht in `dancebeat.deletedDemos` steht. Vorhandene Einträge (Highscore,
-  Umbenennung) werden nie überschrieben. Die Liste liegt bewusst in `localStorage` statt in
+  Umbenennung) werden nur bei einer neuen `DEMO_CHOREO_VERSION` überschrieben (unten). Die Liste liegt bewusst in `localStorage` statt in
   einem eigenen IndexedDB-Store (keine neue DB-Version); geht sie verloren, kehren gelöschte
   Demos zurück. Die vier Demos (Etappe 14) bestehen aus Manifest, vorgebauter Choreografie
   (eigener Chunk, per `import()` geladen) und MP3, das `seedDemos` per `fetch` von der eigenen
@@ -348,7 +349,19 @@ erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle
   übersprungen und beim nächsten Start erneut versucht. Ändert sich das Demo-Audio hörbar, wird `DEMO_AUDIO_VERSION` erhöht (aktuell
   5, MP3 statt Synthese): der nächste Seed ersetzt bei vorhandenen Demos einmalig nur das Audio
   (`save` mit dem unveränderten gespeicherten Song), danach steht die Version in `localStorage`
-  `dancebeat.demoAudioVersion`. Die alten synthetischen Demos (Pink Pulse, Sunset Kick) entfernt
+  `dancebeat.demoAudioVersion`. Ändert sich eine vorgebaute Choreografie, wird
+  `DEMO_CHOREO_VERSION` erhöht (aktuell 2; ein Fingerprint-Test in `demoSeed.test.ts` erzwingt
+  das): Der nächste Seed ersetzt dann jede vorhandene, nicht gelöschte Demo einmalig komplett mit
+  einem frischen Song. Highscore, Sterne, Umbenennung, Offsets, eigene Choreografie und ein
+  angehängtes Tanzvideo gehen verloren. Erst entfernt `setVideo` das Video, dann überschreibt
+  `save` den Song in einer Transaktion, die Demo fehlt also nie. Das gespeicherte Audio bleibt,
+  solange es das aktuelle Demo-Audio ist; sonst wird die MP3 neu geladen. Entschieden am
+  2026-10-23, weil die App nur zum Testen genutzt wird; vor einer Veröffentlichung neu bewerten.
+  Die Choreo-Version steht pro Demo in `dancebeat.demoChoreoVersions` (ID → Version), weil der
+  Seed nach jedem Schreiben in die Bibliothek erneut läuft (`loadSongs` beim Nachladen): Scheitert
+  eine Ersetzung, versucht der nächste Lauf nur diese Demo erneut, schon ersetzte behalten ihren
+  neuen Spielstand. Der Audio-Marker gilt für alle Demos und wird erst gesetzt, wenn jede
+  vorhandene Demo das neue Audio hat. Die alten synthetischen Demos (Pink Pulse, Sunset Kick) entfernt
   der Seed nur, solange sie exakt dem alten Seed entsprechen: Originaltitel, Interpret
   „DanceBeat Demo“, Demo-Audio, Sync- und Start-Offset 0, keine Wiedergaberate und eine nie
   bearbeitete Choreografie (`choreo.updatedAt` = `createdAt`). Sonst bleiben sie als normale Songs.

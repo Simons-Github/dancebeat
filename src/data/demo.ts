@@ -196,25 +196,67 @@ export function markDemoDeleted(id: string) {
  */
 export const DEMO_AUDIO_VERSION = 5;
 const AUDIO_VERSION_KEY = "dancebeat.demoAudioVersion";
-const AudioVersionSchema = z.number().int().positive();
 
-/** Audio version of the stored demos. Missing, unreadable or invalid storage counts as 1. */
-function getDemoAudioVersion(): number {
+/**
+ * Version of the demo choreographies. Raise it whenever a prebuilt `*.choreo.json` changes
+ * (a test compares their fingerprint): the next seed replaces every demo already in the library
+ * once, completely (highscore, stars and the player's edits are lost; decided 2026-10-23 while
+ * only the developer uses the app, to be revisited before a public release).
+ * 1 – no marker yet (seeded before Etappe 14g) · 2 – AIST pack with smooth entries (14f)
+ */
+export const DEMO_CHOREO_VERSION = 2;
+/**
+ * Choreography version per demo id. Per demo, not global like the audio marker: the seed runs
+ * again after every library write, and a retry must not wipe demos that were already replaced.
+ */
+const CHOREO_VERSIONS_KEY = "dancebeat.demoChoreoVersions";
+
+const VersionSchema = z.number().int().positive();
+const ChoreoVersionsSchema = z.record(z.string(), VersionSchema);
+
+/** Stored choreography version of a demo. Missing, unreadable or invalid storage counts as 1. */
+function getChoreoVersions(): Record<string, number> {
   try {
-    const raw = localStorage.getItem(AUDIO_VERSION_KEY);
+    const raw = localStorage.getItem(CHOREO_VERSIONS_KEY);
+    if (raw === null) return {};
+    const parsed = ChoreoVersionsSchema.safeParse(JSON.parse(raw));
+    return parsed.success ? parsed.data : {};
+  } catch {
+    return {};
+  }
+}
+
+const choreoOutdated = (id: string) => (getChoreoVersions()[id] ?? 1) < DEMO_CHOREO_VERSION;
+
+/** Records that a demo carries the current choreography (synchronous read-modify-write). */
+function markChoreoCurrent(id: string) {
+  try {
+    localStorage.setItem(
+      CHOREO_VERSIONS_KEY,
+      JSON.stringify({ ...getChoreoVersions(), [id]: DEMO_CHOREO_VERSION }),
+    );
+  } catch (e) {
+    console.warn("Version der Demo-Choreografien konnte nicht gespeichert werden:", e);
+  }
+}
+
+/** A stored version marker. Missing, unreadable or invalid storage counts as 1. */
+function getVersion(key: string): number {
+  try {
+    const raw = localStorage.getItem(key);
     if (raw === null) return 1;
-    const parsed = AudioVersionSchema.safeParse(JSON.parse(raw));
+    const parsed = VersionSchema.safeParse(JSON.parse(raw));
     return parsed.success ? parsed.data : 1;
   } catch {
     return 1;
   }
 }
 
-function setDemoAudioVersion(version: number) {
+function setVersion(key: string, version: number) {
   try {
-    localStorage.setItem(AUDIO_VERSION_KEY, JSON.stringify(version));
+    localStorage.setItem(key, JSON.stringify(version));
   } catch (e) {
-    console.warn("Version der Demo-Audiodaten konnte nicht gespeichert werden:", e);
+    console.warn(`Versionsmarker ${key} konnte nicht gespeichert werden:`, e);
   }
 }
 
@@ -305,60 +347,110 @@ async function upgradeDemoAudio(repo: SongRepository, loadAudio: LoadDemoAudio, 
   }
 }
 
+/** The demo as a fresh library entry: shipped metadata and choreography, no score. */
+function freshDemoSong(d: DemoEntry, rawChoreo: unknown): Song {
+  const choreo = ChoreographySchema.parse(rawChoreo);
+  const now = Date.now();
+  const m = d.manifest;
+  return {
+    id: d.id,
+    title: m.title,
+    artist: m.artist,
+    bpm: m.bpm,
+    difficulty: m.difficulty,
+    source: { type: "local", blobId: d.id },
+    syncOffsetMs: 0,
+    startOffsetMs: 0,
+    // The prebuilt file carries 0 as times; equal times also mark the choreo as unedited.
+    choreo: { ...choreo, createdAt: now, updatedAt: now },
+    highscore: 0,
+    stars: 0,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 /** Adds one missing demo. Failures are logged, not thrown; the next seed tries again. */
 async function addDemo(repo: SongRepository, loadAudio: LoadDemoAudio, d: DemoEntry) {
   try {
     const [rawChoreo, blob] = await Promise.all([d.loadChoreo(), loadAudio(d.manifest.audio)]);
-    const choreo = ChoreographySchema.parse(rawChoreo);
+    const song = freshDemoSong(d, rawChoreo);
     // The download is slow: the demo may have been deleted or saved meanwhile (e.g. other tab).
     if (getDeletedDemos().includes(d.id) || (await repo.get(d.id))) return;
-    const now = Date.now();
-    const m = d.manifest;
-    const song: Song = {
-      id: d.id,
-      title: m.title,
-      artist: m.artist,
-      bpm: m.bpm,
-      difficulty: m.difficulty,
-      source: { type: "local", blobId: d.id },
-      syncOffsetMs: 0,
-      startOffsetMs: 0,
-      // The prebuilt file carries 0 as times; equal times also mark the choreo as unedited.
-      choreo: { ...choreo, createdAt: now, updatedAt: now },
-      highscore: 0,
-      stars: 0,
-      createdAt: now,
-      updatedAt: now,
-    };
     await repo.save(song, blob);
+    markChoreoCurrent(d.id);
   } catch (e) {
     console.warn(`Demo „${d.manifest.title}“ konnte nicht angelegt werden:`, e);
   }
 }
 
 /**
- * Seeds or upgrades one demo. Returns false only if the audio upgrade of an existing demo
- * failed (the version marker then stays for a retry).
+ * Replaces a demo already in the library with the shipped one (new DEMO_CHOREO_VERSION). The
+ * stored audio stays while it is the current demo audio; otherwise (older audio, or the player
+ * chose another source) the MP3 is downloaded. An attached dance video is removed first, then
+ * `save` overwrites the song (and the audio, if downloaded) in one transaction, so the demo is
+ * never missing in between. Returns false if the replacement failed (logged).
+ */
+async function replaceDemo(
+  repo: SongRepository,
+  loadAudio: LoadDemoAudio,
+  d: DemoEntry,
+  existing: Song,
+  audioOutdated: boolean,
+) {
+  try {
+    const keepAudio =
+      !audioOutdated && usesDemoAudio(existing) && (await repo.getAudio(d.id)) !== undefined;
+    const [rawChoreo, blob] = await Promise.all([
+      d.loadChoreo(),
+      keepAudio ? undefined : loadAudio(d.manifest.audio),
+    ]);
+    const song = freshDemoSong(d, rawChoreo);
+    // The download may be slow: re-read, a demo deleted meanwhile stays deleted.
+    const current = await repo.get(d.id);
+    if (!current || getDeletedDemos().includes(d.id)) return true;
+    if (current.videoBlobId) await repo.setVideo(d.id, undefined);
+    if (getDeletedDemos().includes(d.id)) return true;
+    await repo.save(song, blob);
+    markChoreoCurrent(d.id);
+    return true;
+  } catch (e) {
+    console.warn(`Demo „${d.manifest.title}“ konnte nicht ersetzt werden:`, e);
+    return false;
+  }
+}
+
+/**
+ * Seeds, replaces or upgrades one demo. Returns false only if an existing demo could not be
+ * read, or its audio could not be renewed while the audio was outdated (the audio marker then
+ * stays for a retry; a failed replacement stays outdated through its own marker).
  */
 async function seedDemo(
   repo: SongRepository,
   loadAudio: LoadDemoAudio,
   d: DemoEntry,
-  outdated: boolean,
+  audioOutdated: boolean,
 ): Promise<boolean> {
   if (getDeletedDemos().includes(d.id)) return true;
-  // Never overwrite an existing demo: it carries the player's highscore and stars. Only its
-  // audio is replaced, once, when the demo audio changed.
   let existing: Song | undefined;
   try {
     existing = await repo.get(d.id);
   } catch (e) {
     console.warn(`Demo „${d.manifest.title}“ konnte nicht gelesen werden:`, e);
-    return !outdated;
+    return !audioOutdated;
   }
-  if (existing)
-    return outdated && usesDemoAudio(existing) ? upgradeDemoAudio(repo, loadAudio, d) : true;
-  await addDemo(repo, loadAudio, d);
+  if (!existing) {
+    await addDemo(repo, loadAudio, d);
+    return true;
+  }
+  // New choreographies replace the whole demo, once per DEMO_CHOREO_VERSION.
+  if (choreoOutdated(d.id)) {
+    const ok = await replaceDemo(repo, loadAudio, d, existing, audioOutdated);
+    return ok || !audioOutdated;
+  }
+  // Otherwise an existing demo is never overwritten (highscore, stars); only its audio is
+  // replaced, once, when the demo audio changed.
+  if (audioOutdated && usesDemoAudio(existing)) return upgradeDemoAudio(repo, loadAudio, d);
   return true;
 }
 
@@ -369,11 +461,11 @@ async function seedMissingDemos(repo: SongRepository, loadAudio: LoadDemoAudio) 
     // storage unavailable: nothing to clean up
   }
   await removeLegacyDemos(repo);
-  const outdated = getDemoAudioVersion() < DEMO_AUDIO_VERSION;
+  const audioOutdated = getVersion(AUDIO_VERSION_KEY) < DEMO_AUDIO_VERSION;
   // In parallel: the first start downloads every demo (about 15 MB).
-  const results = await Promise.all(DEMOS.map((d) => seedDemo(repo, loadAudio, d, outdated)));
+  const results = await Promise.all(DEMOS.map((d) => seedDemo(repo, loadAudio, d, audioOutdated)));
   // Only after every upgrade succeeded; otherwise the next seed tries again.
-  if (outdated && results.every(Boolean)) setDemoAudioVersion(DEMO_AUDIO_VERSION);
+  if (audioOutdated && results.every(Boolean)) setVersion(AUDIO_VERSION_KEY, DEMO_AUDIO_VERSION);
 }
 
 // One run for all callers; there is only one repository in the app, so no per-repo keying.
@@ -381,7 +473,8 @@ let seeding: Promise<void> | null = null;
 
 /**
  * Adds every demo that is neither in the library nor deleted by the player, removes untouched
- * former demos and, once per DEMO_AUDIO_VERSION, replaces the audio of demos already there.
+ * former demos, once per DEMO_CHOREO_VERSION replaces demos already there completely and, once
+ * per DEMO_AUDIO_VERSION, replaces only their audio.
  * A demo that fails to load is skipped and retried on the next call. Concurrent calls
  * (StrictMode runs effects twice) share one run, so no demo is downloaded twice.
  * `loadAudio` is replaceable for tests (default: fetch from public/demo-audio/).
