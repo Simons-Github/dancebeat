@@ -16,7 +16,7 @@ import {
   sectionStarts,
 } from "@/lib/demoBuild";
 import { DemoManifestSchema, type DemoManifest, type SectionKind } from "@/lib/demoManifest";
-import { GROUP_PATTERN, TEMPO_TOLERANCE, stepBeats, type Plan } from "@/lib/generator";
+import { BLEND_BEATS, GROUP_PATTERN, TEMPO_TOLERANCE, stepBeats, type Plan } from "@/lib/generator";
 import { simulateScore } from "@/lib/generator/metrics";
 import { frameAt } from "@/lib/pose";
 import { CHOREO_VERSION, ChoreographySchema, MotionPackSchema } from "@/lib/schema";
@@ -321,6 +321,16 @@ describe("buildDemoChoreo", () => {
       const c = choreoOf(m);
       const starts = startsOf(m);
       const beatMs = beatMsOf(m);
+      const clips = buildDemoClips(m, PACK);
+      const anchorOf = new Map(PACK.clips.map((cl) => [cl.id, cl.anchorBeat]));
+      // The clip after a section starts its anchorBeat before its move and is blended into over
+      // BLEND_BEATS before that, so the last beats depend on what follows (AIST++ clips have
+      // anchors of 1-3 beats). Poses must match up to there, moves up to the section end.
+      const leadInRel = (start: number, common: number) => {
+        const next = clips.find((r) => r.beat >= start + common);
+        if (!next) return Infinity;
+        return (next.beat - (anchorOf.get(next.clipId) ?? 0) - BLEND_BEATS - start) * beatMs;
+      };
       const kinds = new Set(m.sections.map((s) => s.kind));
       let compared = 0;
       for (const kind of kinds) {
@@ -349,9 +359,14 @@ describe("buildDemoChoreo", () => {
             expect(y.iconId, `${what} move ${i}`).toBe(x.iconId);
           });
 
-          // Frames from the first move to one beat before the shorter section's end.
+          // Frames from the first move to one beat before the shorter section's end or the lead-in
+          // of the following clip, whichever comes first.
           const fromRel = a[0]!.rel;
-          const toRel = endRel - beatMs;
+          const toRel = Math.min(
+            endRel - beatMs,
+            leadInRel(starts[first]!, common),
+            leadInRel(starts[other]!, common),
+          );
           const window = c.frames.filter((f) => f.timeMs - t0 >= fromRel && f.timeMs - t0 <= toRel);
           expect(window.length, what).toBeGreaterThan(0);
           for (const f of window) {
@@ -487,9 +502,9 @@ describe("shipped demo choreographies", () => {
     "%s.choreo.json is valid, small and up to date",
     (slug, m) => {
       const file = path.join(DEMO_DIR, `${slug}.choreo.json`);
-      // Difficulty 3 moves on every beat in dense sections, so its file is larger by design.
-      const maxBytes = (m.difficulty === 3 ? 2 : 1) * 1024 * 1024;
-      expect(statSync(file).size).toBeLessThan(maxBytes);
+      // Since the demos use AIST++ clips (Etappe 14e) the size depends on the clips more than on the
+      // difficulty, so one limit applies to all songs (build-demo warns at the same mark).
+      expect(statSync(file).size).toBeLessThan(2_000_000);
       const parsed: unknown = JSON.parse(readFileSync(file, "utf8"));
       const res = ChoreographySchema.safeParse(parsed);
       expect(res.success, `${slug}: schema`).toBe(true);

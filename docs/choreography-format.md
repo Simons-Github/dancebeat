@@ -402,8 +402,9 @@ Clipzahl, Clips je Eimer und Dateigröße.
   deterministisch, Ergebnis gegen `MotionPackSchema` geprüft.
 
 Stand 13i: 192 Clips (12 Demo, 180 AIST++ aus 15 Eimern zu je 12), 0,76 MB, im Build ein eigener
-Chunk von 648 kB (149 kB gzip). Die Demo-Songs bauen nur aus den Clips ohne AIST++
-(`withoutAistClips` in `buildDemoClips` und `buildDemoChoreo`), ihre Choreografien bleiben gleich.
+Chunk von 648 kB (149 kB gzip). Seit Etappe 14e bauen auch die Demo-Songs aus dem ganzen Paket
+(siehe [Demo-Pipeline](#demo-pipeline)); `withoutAistClips` nutzt nur noch der Aktualitätstest des
+Pakets.
 
 ## Generator
 
@@ -579,7 +580,8 @@ Seit Etappe 14b baut `bun run build-demo src/data/demos/*.manifest.json` (`scrip
 Logik rein in `src/lib/demoBuild.ts`) aus jedem Manifest die Choreografie
 `src/data/demos/<slug>.choreo.json`. Das JSON ist kompakt, wird mit `ChoreographySchema` geprüft
 und ist von Prettier ausgenommen. Option `--pack=path` (Standard `src/data/motion-pack.json`);
-genutzt werden nur dessen Clips ohne AIST++ (Etappe 13i).
+genutzt wird das ganze Paket, AIST++-Clips eingeschlossen (seit Etappe 14e, vorher nur die
+Demo-Clips).
 Deterministisch: Seed ist die Song-ID; ein Test vergleicht die eingecheckten Dateien mit einem
 frischen Build. Nach jeder Änderung an Manifest, Paket oder Generator neu bauen.
 
@@ -592,7 +594,10 @@ buildDemoChoreo(manifest, pack) → Choreography    // realizeFrames, ohne Moves
 - **Phrasen:** Jeder Abschnitt außer dem Outro wird ab seinem Anfang in Phrasen zu 8 Beats
   geteilt (die letzte darf 4 Beats haben). Schlüssel `<kind>-<A|B>` nach dem Muster A A B A
   (Index der Phrase im Abschnitt). Jedes Vorkommen eines Typs wiederholt also dieselben Phrasen,
-  längere Refrains führen das Muster weiter.
+  längere Refrains führen das Muster weiter. Moves sind bis zum Abschnittsende gleich, Posen bis
+  zum Einstieg des folgenden Clips: Er beginnt `anchorBeat` (bei AIST++ 1–3 Beats) vor seinem
+  Move, davor liegt die Überblendung von `BLEND_BEATS`. Die letzten bis zu 4 Beats eines
+  Abschnitts hängen also davon ab, was danach kommt.
 - **Dichte:** `stepBeats` mit Schwierigkeit und fester Energie je Typ (`MANIFEST_ENERGY`): Intro
   0,2, Strophe 0,3, Pre-Chorus 0,5, Refrain 0,6, Bridge 0,4. Der Refrain bleibt unter ⅔, wird
   bei Schwierigkeit 2 also nicht verdichtet (alle 2 Beats). Bei Schwierigkeit 3 haben Pre-Chorus,
@@ -622,14 +627,17 @@ buildDemoChoreo(manifest, pack) → Choreography    // realizeFrames, ohne Moves
 
 | Song                   | Schwierigkeit | Moves | Gold | Größe   |
 | ---------------------- | ------------- | ----- | ---- | ------- |
-| Gold in My Pocket      | 2             | 140   | 2    | 0,87 MB |
-| Gold on the Glass      | 2             | 111   | 2    | 0,71 MB |
-| Lemonade Skies         | 1             | 102   | 2    | 0,64 MB |
-| Rise Until The Morning | 3             | 319   | 2    | 1,65 MB |
+| Gold in My Pocket      | 2             | 140   | 2    | 1,40 MB |
+| Gold on the Glass      | 2             | 111   | 2    | 1,21 MB |
+| Lemonade Skies         | 1             | 102   | 2    | 1,09 MB |
+| Rise Until The Morning | 3             | 319   | 2    | 1,60 MB |
 
-Rise Until The Morning liegt über dem Ziel von 1 MB, weil Schwierigkeit 3 in Pre-Chorus, Refrain und
-Bridge jeden Beat einen Move setzt. Die Schwierigkeit ist seit 14c-2 festgelegt (siehe unten). Das Skript warnt
-über 1 MB.
+Stand 14e (mit AIST++-Clips). Vorher, nur mit Demo-Clips, waren es 0,64–0,87 MB und 1,65 MB für
+Rise Until The Morning. AIST++-Clips haben mehr Keyframes und wiederholen sich kaum, deshalb
+wächst gzip stärker als die Rohgröße: 171–281 kB je JSON statt 24–119 kB (im Build 136–228 kB
+gzip je Chunk). Das Skript
+warnt über 2 MB, der Test hält jede Datei unter 2 MB. Die Schwierigkeit ist seit 14c-2 festgelegt
+(siehe unten).
 
 **Spielbarkeit (14c-2):** `bun run eval-demos` (`scripts/eval-demos.ts`, Logik
 `scripts/evalDemos.ts`) baut jedes Manifest mit Schwierigkeit 1, 2 und 3 (Überschreibung, das

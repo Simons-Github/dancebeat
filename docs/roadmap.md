@@ -1415,7 +1415,7 @@ mit dem `anchorBeat` des ersten Clips.
   Posennähe (Ende von A zum Anfang von B, ±24 % Tempo): Median 118°, 87 von 180 Clips haben
   keinen Nachfolger innerhalb von 45°. Ein echter Gewinn bräuchte eine Auswahl, die ganze
   Folgen aus den Quellen behält, statt Einzelclips per Farthest-Point zu wählen.
-- Neubau der Demos mit AIST++-Clips (siehe 14).
+- ~~Neubau der Demos mit AIST++-Clips (siehe 14).~~ Erledigt in 14e.
 
 ### 14. Neue Demo-Songs ✅ (Gerätetest offen)
 
@@ -1584,9 +1584,52 @@ Nur am Gerät prüfbar, nicht geprüft (Plan 14d): Klang am iPhone-Lautsprecher,
 auf dem Takt, Refrain wiedererkennbar, Erkennung der Clips durch die Kamera und passende
 Schwierigkeit, Wartezeit des ersten Starts über Mobilfunk.
 
-Offen: Neubau der Demos mit dem AIST-Paket. Die Beat-Phase ist geklärt (13h-3, Phase 0), der
-Neubau ist damit frei. Die Demos nutzen bis dahin nur die Demo-Clips (13i), `SHIPS_AIST` steht schon auf `true`. Die Lizenzfrage ist geklärt (2026-10-23, nur nicht-kommerziell), die
-Zitate sind abgeglichen (14c-1).
+**14e Demos mit dem AIST-Paket – umgesetzt, Gerätetest offen.** `buildDemoClips` und
+`buildDemoChoreo` nutzen das ganze ausgelieferte Motion-Paket statt nur der Demo-Clips
+(`withoutAistClips` entfällt dort). Voraussetzungen waren die Beat-Phase (13h-3, Phase 0), die
+Lizenz (nur nicht-kommerziell) und die Zitate (14c-1). Die vier Choreografien sind neu gebaut, die
+Manifeste bleiben unverändert (alle Phrasen `"auto"`, Seed = Song-ID). Die Moves sind jetzt
+überwiegend AIST++-Clips, Anzahl, Dichte und Gold bleiben gleich (140, 111, 102, 319 Moves, je
+2 Gold).
+
+Gemessen mit `bun run eval-demos` (20 Seeds, 10° Rauschen, 10 % Ausfall), vorher → nachher:
+
+- simulierte Quote 1,000 → 0,999–1,000, schlechtester Lauf 0,997; überall 5 Sterne
+- p95 der Winkelgeschwindigkeit auf der Stufe des Manifests: Lemonade Skies 273 → 669 °/s,
+  Gold on the Glass 348 → 517, Gold in My Pocket 301 → 586, Rise Until The Morning 438 → 1162
+  (über alle Stufen 273–438 → 504–1162 °/s). Das sind die Ellbogen-Schnapper aus 13h-2 und 13i.
+- Größe 0,64–0,87 MB → 1,09–1,40 MB, Rise Until The Morning 1,65 → 1,60 MB; gzip je JSON
+  24–119 kB → 171–281 kB, im Build 136–228 kB je Chunk (unter `chunkSizeWarningLimit` 1500 kB).
+  Die vier Demos laden damit zusammen etwa 0,7 MB mehr, neben gut 15 MB MP3s.
+
+Abweichungen und Folgen:
+
+- Die Größengrenze im Test gilt jetzt einheitlich: unter 2 MB statt 1 MiB (2 MiB bei Stufe 3).
+  Die Größe folgt nun stärker den Clips als der Stufe. `build-demo` warnt ab 2 MB statt 1 MB.
+- „Wiederholte Abschnitte tanzen gleich“ gilt für Moves bis zum Abschnittsende, für Posen nur bis
+  zum Einstieg des folgenden Clips. AIST++-Clips beginnen `anchorBeat` (1–3 Beats) vor ihrem
+  Move, die Demo-Clips hatten Anker 0. Die letzten bis zu 4 Beats eines Abschnitts hängen also vom
+  Folgeabschnitt ab. Der Test prüft die Posen deshalb nur bis dorthin
+  ([choreography-format.md](choreography-format.md#demo-pipeline)).
+- Wer die Demos schon hat, behält die alten Choreografien. Der Seed überschreibt vorhandene Demos
+  nie (Highscore), und eine Inhaltsversion für Choreografien gibt es nicht. Nur neue
+  Installationen bekommen die neuen Demos.
+
+Offen:
+
+- Gerätetest: Sind die AIST++-Moves in den Demos mit der Kamera erkennbar und nachtanzbar? Stören
+  die Ellbogen-Schnapper, vor allem in Lemonade Skies (Stufe 1)? Wenn ja, im Manifest feste Clips
+  setzen oder einen Filter auf Gelenkwinkel einführen (13h-2).
+- Neue Demo-Choreografien auch an bestehende Installationen ausliefern, etwa mit einer
+  `DEMO_CHOREO_VERSION`, die nur unbearbeitete Demos ersetzt und Highscore und Sterne behält.
+  Dafür ist eine Entscheidung nötig.
+- Aus dem Review, schon seit 13i bei eigenen Songs mit AIST++-Clips so: Beginnt der Einstieg des
+  nächsten Clips (`anchorBeat` plus `BLEND_BEATS` vor seinem Move) vor dem Anker des vorigen
+  Clips, hält `buildTimeline` den vorigen Clip bis zu seinem Anker. Die frühen Keyframes des
+  nächsten fallen dann weg, und der Einstieg wird eine gerade Linie statt der weichen Blende.
+  Das betrifft 40–249 Clips je Demo (Rise Until The Morning 249 von 323). Kein Anker-Keyframe
+  geht verloren, die Bewertung ist also nicht betroffen. Abhilfe in einem eigenen Schritt: den
+  Einstieg gezielt kürzen und mit einer Mindestblende nach dem vorigen Anker weich halten.
 
 **Lizenzhinweise – umgesetzt (2026-10-23).** Bisher nannten die Credits nur die Musik. Jetzt
 kommen hinzu (Inhalt in `src/data/credits.ts`, Anzeige in „Über und Credits“):

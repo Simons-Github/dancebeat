@@ -17,8 +17,8 @@ export default defineConfig({
   // Reachable from the phone only for `dev:https`; plain dev stays on localhost.
   server: useHttps ? { host: true } : {},
   preview: { host: true },
-  // The demo choreographies (src/data/demos/*.choreo.json, lazy chunks, up to 1.4 MB raw but
-  // ~120 kB gzip) exceed Vite's 500 kB default; code chunks stay far below this limit.
+  // The demo choreographies (src/data/demos/*.choreo.json, lazy chunks, up to 1.4 MB as JS but
+  // ~230 kB gzip) exceed Vite's 500 kB default; code chunks stay far below this limit.
   // license: names, versions and license texts of all bundled npm packages as
   // dist/licenses.json, shown under "Lizenztexte" in Settings (src/lib/licenses.ts).
   build: { chunkSizeWarningLimit: 1500, license: { fileName: "licenses.json" } },

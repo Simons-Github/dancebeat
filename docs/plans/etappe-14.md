@@ -104,7 +104,7 @@ Umgesetzt, Abweichungen siehe [roadmap.md](../roadmap.md) und
   gehetzt oder zäh).
 - Ergebnis: `src/data/demos/<slug>.choreo.json` (Format aus 13d, mit `pose3d`), geprüft mit
   `ChoreographySchema`, per dynamischem `import()` geladen, damit das Haupt-Bundle klein bleibt.
-  Ziel < 1 MB pro Song.
+  Ziel < 1 MB pro Song (in 14e auf < 2 MB angehoben, weil die AIST++-Clips mehr Keyframes haben).
 - **Kein eigener Formatwechsel.** Namensnennung steht nicht in der Choreo, sondern in einer
   festen Credits-Liste (14c).
 - Tests (`src/test/demoBuild.test.ts`): Plan aus Manifest, Refrain-Wiederholungen mit identischen

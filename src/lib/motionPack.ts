@@ -603,8 +603,8 @@ function restrictPack(pack: MotionPack, keep: ReadonlySet<string>): MotionPack {
 }
 
 /**
- * The pack without AIST++ clips, not validated again. The demo songs are built from it
- * (src/lib/demoBuild.ts), so their shipped choreographies stay as they were (Etappe 13i).
+ * The pack without AIST++ clips, not validated again. Used by the pack freshness test; the demo
+ * songs were built from it until Etappe 14e and now use the whole pack.
  */
 export const withoutAistClips = (pack: MotionPack): MotionPack =>
   restrictPack(pack, new Set(pack.clips.filter((c) => !isAistClip(c)).map((c) => c.id)));

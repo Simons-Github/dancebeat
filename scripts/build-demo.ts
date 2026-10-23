@@ -11,8 +11,11 @@ import { buildDemoChoreo } from "../src/lib/demoBuild.ts";
 import { DemoManifestSchema } from "../src/lib/demoManifest.ts";
 import { ChoreographySchema, MotionPackSchema } from "../src/lib/schema.ts";
 
-/** Target size of one shipped choreography (Etappe 14b). */
-const MAX_BYTES = 1_000_000;
+/**
+ * Target size of one shipped choreography. Raised from 1 MB in Etappe 14e: AIST++ clips have more
+ * keyframes and repeat less (about 170–280 kB gzip per song instead of 25–120 kB).
+ */
+const MAX_BYTES = 2_000_000;
 const MANIFEST_SUFFIX = ".manifest.json";
 
 const { values, positionals } = parseArgs({
