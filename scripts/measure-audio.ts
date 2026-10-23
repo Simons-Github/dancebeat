@@ -6,38 +6,14 @@
 // Tempo: coarse estimate and refinement as in the app (src/lib/beat.ts), then a comb filter over
 // the whole song ±0.5 BPM in 0.01 steps. Phase: the same comb filter at fixed tempo on the kick
 // band (lowpass 120 Hz); the full band locks onto hi-hat offbeats in some songs.
-// Logic: scripts/measureAudio.ts.
-import { spawnSync } from "node:child_process";
+// Logic: scripts/measureAudio.ts, decoding: scripts/decodeAudio.ts.
 import path from "node:path";
 
 import { estimateBpmFromSamples, onsetEnvelope, refineBpm } from "../src/lib/beat.ts";
+import { KICK_FILTER, SAMPLE_RATE, decode } from "./decodeAudio.ts";
 import { blockRms, fitBeatGrid, formatTime } from "./measureAudio.ts";
 
-const SAMPLE_RATE = 44_100;
 const BLOCK_BEATS = 4;
-
-function decode(file: string, filter?: string): Float32Array {
-  const args = ["-v", "error", "-i", file, "-ac", "1", "-ar", String(SAMPLE_RATE)];
-  if (filter) args.push("-af", filter);
-  args.push("-f", "f32le", "-");
-  const res = spawnSync("ffmpeg", args, { maxBuffer: 1 << 30 });
-  if (res.error) {
-    const missing = (res.error as NodeJS.ErrnoException).code === "ENOENT";
-    throw new Error(
-      missing
-        ? "ffmpeg nicht gefunden: bitte installieren (z. B. `brew install ffmpeg`). " +
-            "ffmpeg not found on the PATH."
-        : `ffmpeg konnte nicht starten: ${res.error.message}`,
-    );
-  }
-  if (res.status !== 0)
-    throw new Error(`ffmpeg-Fehler bei ${file}: ${res.stderr.toString().trim() || res.status}`);
-  const buf = res.stdout;
-  // Copy into an aligned buffer: the Buffer may sit at an unaligned offset of a shared pool.
-  const bytes = new Uint8Array(buf.byteLength - (buf.byteLength % 4));
-  bytes.set(buf.subarray(0, bytes.length));
-  return new Float32Array(bytes.buffer);
-}
 
 const files = process.argv.slice(2);
 if (files.length === 0) {
@@ -49,7 +25,7 @@ let failed = 0;
 for (const file of files) {
   try {
     const full = decode(file);
-    const low = decode(file, "lowpass=f=120,lowpass=f=120");
+    const low = decode(file, KICK_FILTER);
     const durationMs = Math.round((full.length / SAMPLE_RATE) * 1000);
     const fullEnv = onsetEnvelope(full, SAMPLE_RATE);
     const coarse = refineBpm(fullEnv, Math.round(estimateBpmFromSamples(full, SAMPLE_RATE)));

@@ -1,0 +1,218 @@
+{
+  "mHO0": {
+    "bpm": 110,
+    "measuredBpm": 110.03,
+    "beatPhaseMs": 60,
+    "durationMs": 54545
+  },
+  "mHO1": {
+    "bpm": 115,
+    "measuredBpm": 115.02,
+    "beatPhaseMs": 60,
+    "durationMs": 35478
+  },
+  "mHO2": {
+    "bpm": 120,
+    "measuredBpm": 119.97,
+    "beatPhaseMs": 60,
+    "durationMs": 34000
+  },
+  "mHO3": {
+    "bpm": 125,
+    "measuredBpm": 124.96,
+    "beatPhaseMs": 140,
+    "durationMs": 32160
+  },
+  "mHO4": {
+    "bpm": 130,
+    "measuredBpm": 130.01,
+    "beatPhaseMs": 130,
+    "durationMs": 29538
+  },
+  "mHO5": {
+    "bpm": 135,
+    "measuredBpm": 135,
+    "beatPhaseMs": 70,
+    "durationMs": 32000
+  },
+  "mJB0": {
+    "bpm": 80,
+    "measuredBpm": 80.03,
+    "beatPhaseMs": 80,
+    "durationMs": 63000
+  },
+  "mJB1": {
+    "bpm": 90,
+    "measuredBpm": 89.98,
+    "beatPhaseMs": 50,
+    "durationMs": 42667
+  },
+  "mJB2": {
+    "bpm": 100,
+    "measuredBpm": 100.06,
+    "beatPhaseMs": 310,
+    "durationMs": 38400
+  },
+  "mJB3": {
+    "bpm": 110,
+    "measuredBpm": 109.97,
+    "beatPhaseMs": 285,
+    "durationMs": 34909
+  },
+  "mJB4": {
+    "bpm": 120,
+    "measuredBpm": 119.97,
+    "beatPhaseMs": 40,
+    "durationMs": 36000
+  },
+  "mJB5": {
+    "bpm": 130,
+    "measuredBpm": 130.04,
+    "beatPhaseMs": 25,
+    "durationMs": 29538
+  },
+  "mLH0": {
+    "bpm": 80,
+    "measuredBpm": 79.99,
+    "beatPhaseMs": 610,
+    "durationMs": 48000
+  },
+  "mLH1": {
+    "bpm": 90,
+    "measuredBpm": 90,
+    "beatPhaseMs": 250,
+    "durationMs": 45667
+  },
+  "mLH2": {
+    "bpm": 100,
+    "measuredBpm": 99.98,
+    "beatPhaseMs": 60,
+    "durationMs": 40800
+  },
+  "mLH3": {
+    "bpm": 110,
+    "measuredBpm": 110.01,
+    "beatPhaseMs": 335,
+    "durationMs": 37091
+  },
+  "mLH4": {
+    "bpm": 120,
+    "measuredBpm": 119.96,
+    "beatPhaseMs": 310,
+    "durationMs": 34000
+  },
+  "mLH5": {
+    "bpm": 130,
+    "measuredBpm": 129.98,
+    "beatPhaseMs": 280,
+    "durationMs": 31385
+  },
+  "mLO0": {
+    "bpm": 80,
+    "measuredBpm": 79.99,
+    "beatPhaseMs": 50,
+    "durationMs": 51000
+  },
+  "mLO1": {
+    "bpm": 90,
+    "measuredBpm": 90.05,
+    "beatPhaseMs": 55,
+    "durationMs": 42667
+  },
+  "mLO2": {
+    "bpm": 100,
+    "measuredBpm": 99.98,
+    "beatPhaseMs": 30,
+    "durationMs": 40800
+  },
+  "mLO3": {
+    "bpm": 110,
+    "measuredBpm": 110.01,
+    "beatPhaseMs": 120,
+    "durationMs": 39273
+  },
+  "mLO4": {
+    "bpm": 120,
+    "measuredBpm": 120.02,
+    "beatPhaseMs": 70,
+    "durationMs": 34000
+  },
+  "mLO5": {
+    "bpm": 130,
+    "measuredBpm": 129.99,
+    "beatPhaseMs": 50,
+    "durationMs": 31385
+  },
+  "mMH0": {
+    "bpm": 80,
+    "measuredBpm": 80.01,
+    "beatPhaseMs": 60,
+    "durationMs": 51000
+  },
+  "mMH1": {
+    "bpm": 90,
+    "measuredBpm": 90.01,
+    "beatPhaseMs": 60,
+    "durationMs": 50667
+  },
+  "mMH2": {
+    "bpm": 100,
+    "measuredBpm": 100.01,
+    "beatPhaseMs": 420,
+    "durationMs": 40800
+  },
+  "mMH3": {
+    "bpm": 110,
+    "measuredBpm": 109.99,
+    "beatPhaseMs": 340,
+    "durationMs": 37091
+  },
+  "mMH4": {
+    "bpm": 120,
+    "measuredBpm": 120.01,
+    "beatPhaseMs": 430,
+    "durationMs": 34000
+  },
+  "mMH5": {
+    "bpm": 130,
+    "measuredBpm": 130.02,
+    "beatPhaseMs": 325,
+    "durationMs": 29538
+  },
+  "mWA0": {
+    "bpm": 80,
+    "measuredBpm": 80.01,
+    "beatPhaseMs": 60,
+    "durationMs": 51000
+  },
+  "mWA1": {
+    "bpm": 90,
+    "measuredBpm": 90,
+    "beatPhaseMs": 70,
+    "durationMs": 45333
+  },
+  "mWA2": {
+    "bpm": 100,
+    "measuredBpm": 99.97,
+    "beatPhaseMs": 290,
+    "durationMs": 38400
+  },
+  "mWA3": {
+    "bpm": 110,
+    "measuredBpm": 109.99,
+    "beatPhaseMs": 60,
+    "durationMs": 34909
+  },
+  "mWA4": {
+    "bpm": 120,
+    "measuredBpm": 119.97,
+    "beatPhaseMs": 80,
+    "durationMs": 32000
+  },
+  "mWA5": {
+    "bpm": 130,
+    "measuredBpm": 129.99,
+    "beatPhaseMs": 100,
+    "durationMs": 29538
+  }
+}

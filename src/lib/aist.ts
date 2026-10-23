@@ -56,6 +56,23 @@ export function aistGenre(name: string): string | null {
   return /^(g[A-Z]{2})_/.exec(name)?.[1] ?? null;
 }
 
+/** Music piece (e.g. "mHO0") of an AIST clip name, null without one. */
+export function aistMusicPiece(name: string): string | null {
+  return /_(m[A-Z]{2}[0-5])_/.exec(name)?.[1] ?? null;
+}
+
+/**
+ * Tempo of an AIST music piece (AIST Dance DB, data formats page; same table as `music_bpm` in
+ * scripts/aist/convert.py): House 110-135 in steps of 5, all other genres 80-130 in steps of 10.
+ * Null for anything that is not a piece of the ten AIST genres.
+ */
+export function aistMusicBpm(piece: string): number | null {
+  const m = /^m(BR|PO|LO|MH|LH|HO|WA|KR|JS|JB)([0-5])$/.exec(piece);
+  if (!m) return null;
+  const index = Number(m[2]);
+  return m[1] === "HO" ? 110 + 5 * index : 80 + 10 * index;
+}
+
 const joint = z.tuple([z.number().finite(), z.number().finite(), z.number().finite()]).nullable();
 
 /** Neutral JSON of the Python converter; a missing joint is null. */
@@ -76,10 +93,32 @@ export const AistClipSchema = z.object({
     ),
   /** Tempo of the AIST music piece. */
   bpm: z.number().min(30).max(300),
-  /** Time of any beat in clip time; 0 until measured against the music. */
+  /**
+   * Time of any beat in clip time; 0 without one. Phase 0 is right for AIST++: clip time 0 lies on
+   * the beat grid (kinematic beats, docs/choreography-format.md#aist-musik). The phase measured in
+   * the music files does not carry over to the clips.
+   */
   beatPhaseMs: z.number().finite().optional(),
 });
 export type AistClip = z.infer<typeof AistClipSchema>;
+
+/**
+ * Measurement of the AIST music pieces (scripts/aist/music.json, written by `bun run aist-music`):
+ * `measuredBpm` checks the table tempo `bpm`. `beatPhaseMs` is the first beat in the music file
+ * (not in the clip, see `AistClipSchema`), in [0, one beat); `durationMs` the file length.
+ */
+export const AistMusicTableSchema = z.record(
+  z.string().regex(/^m[A-Z]{2}[0-5]$/),
+  z
+    .object({
+      bpm: z.number().min(30).max(300),
+      measuredBpm: z.number().positive(),
+      beatPhaseMs: z.number().finite().nonnegative(),
+      durationMs: z.number().int().positive(),
+    })
+    .refine((e) => e.beatPhaseMs < 60_000 / e.bpm, "beatPhaseMs muss unter einem Beat liegen"),
+);
+export type AistMusicTable = z.infer<typeof AistMusicTableSchema>;
 
 export const AistClipListSchema = z
   .array(AistClipSchema)

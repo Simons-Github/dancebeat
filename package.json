@@ -13,6 +13,7 @@
     "eval-choreo": "bun scripts/eval-choreo.ts",
     "eval-demos": "bun scripts/eval-demos.ts",
     "aist-track": "bun scripts/aist/to-pose-track.ts",
+    "aist-music": "bun scripts/aist/measure-music.ts",
     "measure-audio": "bun scripts/measure-audio.ts",
     "build-demo": "bun scripts/build-demo.ts",
     "predev": "bun scripts/fetch-models.ts",

@@ -1,3 +1,6 @@
+import { readFileSync } from "node:fs";
+import path from "node:path";
+
 import { describe, expect, it } from "vitest";
 import {
   AIST_STANDING_GENRES,
@@ -6,6 +9,9 @@ import {
   AistClipSchema,
   aistGenre,
   AistKeypointsSchema,
+  aistMusicBpm,
+  aistMusicPiece,
+  AistMusicTableSchema,
   aistPoseTrack,
   clipYawDeg,
   COCO_TO_MEDIAPIPE,
@@ -121,6 +127,52 @@ describe("AIST_STANDING_GENRES and aistGenre", () => {
     expect(aistGenre("gBR_sFM_cAll_d04_mBR0_ch01")).toBe("gBR");
     expect(aistGenre("clip.json")).toBeNull();
     expect(aistGenre("")).toBeNull();
+  });
+});
+
+describe("AIST music pieces", () => {
+  it("reads the music piece from a clip name", () => {
+    expect(aistMusicPiece("gHO_sBM_cAll_d19_mHO0_ch01")).toBe("mHO0");
+    expect(aistMusicPiece("gWA_sFM_cAll_d25_mWA5_ch03")).toBe("mWA5");
+    expect(aistMusicPiece("gHO_sBM_cAll_d19_mHO6_ch01")).toBeNull();
+    expect(aistMusicPiece("mHO0")).toBeNull();
+  });
+
+  it("gives the AIST table tempo: House 110-135 by 5, others 80-130 by 10", () => {
+    expect([0, 1, 2, 3, 4, 5].map((i) => aistMusicBpm(`mHO${i}`))).toEqual([
+      110, 115, 120, 125, 130, 135,
+    ]);
+    expect([0, 1, 2, 3, 4, 5].map((i) => aistMusicBpm(`mLO${i}`))).toEqual([
+      80, 90, 100, 110, 120, 130,
+    ]);
+    expect(aistMusicBpm("mJB6")).toBeNull();
+    expect(aistMusicBpm("HO0")).toBeNull();
+    expect(aistMusicBpm("mXX0")).toBeNull();
+    expect(aistMusicBpm("mKR5")).toBe(130);
+  });
+
+  it("table schema accepts a phase below one beat only", () => {
+    const entry = { bpm: 120, measuredBpm: 119.97, beatPhaseMs: 60, durationMs: 34000 };
+    expect(AistMusicTableSchema.safeParse({ mHO2: entry }).success).toBe(true);
+    const bad = (v: unknown) => expect(AistMusicTableSchema.safeParse(v).success).toBe(false);
+    bad({ mHO2: { ...entry, beatPhaseMs: 500 } });
+    bad({ mHO2: { ...entry, beatPhaseMs: -1 } });
+    bad({ HO2: entry });
+    bad({ mHO2: { ...entry, durationMs: 0.5 } });
+  });
+
+  it("the committed measurement covers every standing piece at the table tempo", () => {
+    const table = AistMusicTableSchema.parse(
+      JSON.parse(readFileSync(path.resolve(__dirname, "../../scripts/aist/music.json"), "utf8")),
+    );
+    const expected = AIST_STANDING_GENRES.flatMap((g) =>
+      [0, 1, 2, 3, 4, 5].map((i) => `m${g.slice(1)}${i}`),
+    );
+    expect(Object.keys(table).sort()).toEqual(expected.sort());
+    for (const [piece, e] of Object.entries(table)) {
+      expect(e.bpm).toBe(aistMusicBpm(piece));
+      expect(Math.abs(e.measuredBpm - e.bpm)).toBeLessThanOrEqual(0.1);
+    }
   });
 });
 

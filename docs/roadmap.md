@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)                                                                   | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                                                                      | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)                                                                   | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1, 13h-2, 13i ✅; Beat-Phase und Gerätetest offen)                     | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1, 13h-2, 13h-3, 13i ✅; Gerätetest offen)                             | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ✅ (Gerätetest offen)                                                                   | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -1237,7 +1237,7 @@ Abweichungen vom Plan:
 - Die Teilung in 13h-1 und 13h-2.
 - Die Augen und Ohren werden mit abgebildet.
 - Die Clip-Liste liegt nicht im Repo, weil BPM und Beat-Phase aus den AIST-Angaben kommen müssen
-  und nicht geraten werden.
+  und nicht geraten werden. (Phase geklärt in 13h-3: 0.)
 - Die Quelle heißt `video:AIST++ …`, weil `videoMotionSource` unverändert genutzt wird.
 
 Tests: `src/test/aist.test.ts`, unabhängig vom Code geschrieben.
@@ -1251,7 +1251,7 @@ numpy 1 und 2). Geschrieben werden `<Clip>.aist.json` und `clips.json`. Die Clip
 wurde nur mit Versionen installiert, die älter als 24 h sind. Tests:
 `scripts/aist/test_convert.py` (7 Tests, unter anderem Angriff über `os.system` und
 Objekt-Arrays). Abweichung vom Plan: Die Clip-Liste erzeugt der Konverter aus den Clipnamen,
-statt sie von Hand neben das Skript zu legen. Die Beat-Phase fehlt weiter.
+statt sie von Hand neben das Skript zu legen. Die Beat-Phase fehlte noch (erledigt in 13h-3).
 Die AIST Dance DB erlaubt laut Nutzungsbedingungen nur akademische Forschung und verbietet die
 Weitergabe. Der Nutzer hat am 2026-10-22 zugestimmt. Die Daten liegen außerhalb des Repos.
 Ausgelieferte Clips: Lizenz geklärt am 2026-10-23 (AIST erlaubt die Nutzung, solange sie nicht
@@ -1308,7 +1308,7 @@ kommerziell ist; siehe 13h-2, „Offen“, und 14-0.1).
   64 Beats (32 Haltepunkte, 31 Clips). Innerhalb des Fensters wählt die Erkennung wirklich: Von
   9448 Haltepunkten liegen 4436 auf dem ersten und 5012 auf dem zweiten Beat. Die Cliplängen
   sind 1 Beat (2266×), 2 Beats (4512×) und 3 Beats (1855×).
-- **Beat-Phase: nicht gemessen, Phase 0 ist nicht belegt.** In `aist-tools` liegen nur die
+- **Beat-Phase** (Stand 13h-2; geklärt in 13h-3, dort auch warum die Bewegung jetzt reicht): In `aist-tools` liegen nur die
   Keypoints, keine Musik. Als Ersatz gemessen: kinematische Beats (Minima der geglätteten
   mittleren Gelenkgeschwindigkeit, wie der Beat Align Score von AIST++), gefaltet auf die
   Beatdauer. Ergebnis: Eine gemeinsame Phase gibt es nicht. Über alle 815 Clips ist die
@@ -1323,7 +1323,7 @@ kommerziell ist; siehe 13h-2, „Offen“, und 14-0.1).
 
 **Offen:**
 
-- Beat-Phase mit den AIST-Musikdateien messen (Download nötig, siehe unten zur Lizenz).
+- ~~Beat-Phase mit den AIST-Musikdateien messen.~~ Erledigt in 13h-3: Phase 0 (durch die Bewegung gestützt).
 - Gerätetest: Stören die Ellbogen-Schnapper aus Mocap-Clips beim Nachmachen?
 - ~~Lizenz vor dem Ausliefern erneut prüfen.~~ **Geklärt am 2026-10-23.** Die Terms of Use der
   AIST Dance DB (gelesen am 2026-10-22) erlauben nur akademische Forschung („AIST Dance DB may
@@ -1334,6 +1334,35 @@ kommerziell ist; siehe 13h-2, „Offen“, und 14-0.1).
   (`LICENSE.md`), der AIST-Credit nennt die Bedingung. `SHIPS_AIST` ist kein Lizenzschalter mehr:
   Er folgt nur noch dem Motion-Paket (Test in `credits.test.ts`) und steht seit 13i auf `true`.
   Keine Rechtsberatung.
+
+**13h-3 Beat-Phase der AIST-Musik – umgesetzt (2026-10-23).** Ergebnis: Clip-Zeit 0 liegt auf
+dem Beat (durch die Bewegung gestützt), die AIST++-Clips behalten `beatPhaseMs` 0. Die Phase der
+Musikdateien lässt sich nicht auf die Clips übertragen; 12 Stücke sind deutlich versetzt. `src/data/motion-pack.json` ändert sich deshalb nicht.
+Details: [choreography-format.md](choreography-format.md#aist-musik).
+
+- Musik: alle 60 MP3s liegen lokal in `Rohdaten/aist-music/`, dazu `urls.csv`. Der Ordner ist per
+  `.gitignore` ausgeschlossen (Fremdinhalt, nie einchecken). Quelle: `wget -i
+https://aistdancedb.ongaaccel.jp/v1.0.0/data/all_music_mp3_url.csv` (WAV analog über
+  `all_music_wav_url.csv`). Auf einem anderen Rechner neu laden.
+- Neu: `bun run aist-music` (`scripts/aist/measure-music.ts`) schreibt `scripts/aist/music.json`
+  (Tempo, Phase in der Datei, Länge der 36 Stücke der stehenden Genres). Die ffmpeg-Dekodierung
+  teilt es sich mit `measure-audio` (`scripts/decodeAudio.ts`, ohne Verhaltensänderung).
+- Tempo: Die AIST-Tabelle stimmt, alle 36 Stücke liegen innerhalb von 0,06 BPM. Eine freie Schätzung
+  hätte 13 Stücke auf ein falsches Verhältnis gelegt (z. B. mMH0 160 statt 80).
+- Phase der Dateien: 24 Stücke 25–140 ms, 12 Stücke 250–610 ms. Vollband und Kick-Band messen
+  dasselbe, ein Messfehler ist es also nicht.
+- Abgleich mit der Bewegung (Subagent, Skript außerhalb des Repos): kinematische Beats je Clip,
+  gefaltet auf den Beat. Mit Phase 0 ballen sich die Mittel der 6 Stücke je Genre eng (R 0,81–0,97
+  bei LO, LH, WA, MH; HO und JB je nach Glättung 0,25–0,88). Basic- und Freestyle-Clips liegen
+  gleich. Mit der Dateiphase streuen sie breit. Die Bewegungspausen liegen je Genre mit festem
+  Versatz zum Beat: LO etwa +60 ms, LH und WA etwa +100 ms, MH etwa −160 ms. Das ist ein
+  Stilmerkmal und kein Versatz der Daten. Anders als in 13h-2 wird keine Phase aus der Bewegung
+  abgelesen. Geprüft wird nur, ob die 6 Stücke eines Genres denselben Versatz zeigen.
+- Abweichung vom Plan: Der erste Entwurf übernahm die Dateiphase per `aist-track --music` in die
+  Clip-Liste. Wegen des Abgleichs ist das wieder entfernt. Es hätte die Clips bei 12 Stücken bis zu
+  einem halben Beat verschoben.
+- Tests: `aist.test.ts` (Stück aus dem Clipnamen, Tempo-Tabelle, Schema der Messung, eingecheckte
+  Messung deckt alle 36 Stücke beim Tabellentempo ab).
 
 **13i AIST-Clips ausliefern – umgesetzt, Gerätetest offen.** `src/data/motion-pack.json` enthält
 jetzt neben den 12 Demo-Clips 180 AIST++-Clips (192 Clips, 0,76 MB kompaktes JSON, im Build ein
@@ -1374,7 +1403,8 @@ mit dem `anchorBeat` des ersten Clips.
 
 **Offen:**
 
-- Beat-Phase der AIST-Musik messen (13h-2). Bis dahin sitzen AIST++-Clips mit Phase 0 im Takt.
+- ~~Beat-Phase der AIST-Musik messen (13h-2).~~ Erledigt in 13h-3: Phase 0 (durch die Bewegung gestützt), das
+  Paket bleibt unverändert.
 - Gerätetest: Stören die Ellbogen-Schnapper beim Nachmachen, und sind die AIST++-Moves mit der
   Kamera erkennbar?
 - Übergänge: Zwischen behaltenen AIST++-Clips bleiben nur 8 Übergänge. Der Generator verbindet
@@ -1554,8 +1584,8 @@ Nur am Gerät prüfbar, nicht geprüft (Plan 14d): Klang am iPhone-Lautsprecher,
 auf dem Takt, Refrain wiedererkennbar, Erkennung der Clips durch die Kamera und passende
 Schwierigkeit, Wartezeit des ersten Starts über Mobilfunk.
 
-Offen: Neubau der Demos mit dem AIST-Paket, sobald die Beat-Phase aus 13h-2 gemessen ist. Die
-Demos nutzen bis dahin nur die Demo-Clips (13i), `SHIPS_AIST` steht schon auf `true`. Die Lizenzfrage ist geklärt (2026-10-23, nur nicht-kommerziell), die
+Offen: Neubau der Demos mit dem AIST-Paket. Die Beat-Phase ist geklärt (13h-3, Phase 0), der
+Neubau ist damit frei. Die Demos nutzen bis dahin nur die Demo-Clips (13i), `SHIPS_AIST` steht schon auf `true`. Die Lizenzfrage ist geklärt (2026-10-23, nur nicht-kommerziell), die
 Zitate sind abgeglichen (14c-1).
 
 **Lizenzhinweise – umgesetzt (2026-10-23).** Bisher nannten die Credits nur die Musik. Jetzt

@@ -305,18 +305,18 @@ wie Video-Spuren. Ablauf: `.pkl` → `scripts/aist/convert.py` → neutrales JSO
   mit nicht endlichen Werten werden `null`, Zentimeter sind auf 0,01 gerundet. Der Konverter
   überspringt Genres ohne stehenden Tanz und Namen aus der `ignore_list.txt` von AIST++. Er
   schreibt `clips.json` mit dem BPM des Musikstücks laut AIST Dance DB: House `mHO0`–`mHO5`
-  110–135 in 5er-Schritten, alle anderen 80–130 in 10er-Schritten. Ohne `beatPhaseMs`, weil
-  die Daten keine Angabe zum ersten Beat enthalten. Test:
+  110–135 in 5er-Schritten, alle anderen 80–130 in 10er-Schritten. Ohne `beatPhaseMs`, also
+  Phase 0 (begründet unter [Musik und Beat-Phase](#aist-musik)). Test:
   `<venv>/bin/python -I scripts/aist/test_convert.py` (nicht Teil von `bun run test`).
 
 - **Eingabe** `<Clipname>.aist.json`: `{ "fps": 60, "joints": [[[x, y, z] | null, … 17], …] }`,
   `keypoints3d_optim` als COCO-17 in Zentimetern, AIST-Welt mit y nach oben, rechtshändig.
   Fehlende Gelenke sind `null`.
 - **Clip-Liste** (`--list`, JSON-Array): `{ "name": "gHO_sBM_cAll_d19_mHO0_ch01", "bpm": 120,
-"beatPhaseMs": 0 }`. Zugelassen sind nur Genres mit stehendem Tanz (`AIST_STANDING_GENRES`:
+"beatPhaseMs": 0 }`, `beatPhaseMs` optional. Zugelassen sind nur Genres mit stehendem Tanz (`AIST_STANDING_GENRES`:
   House, LA- und Middle-Hip-Hop, Locking, Waacking, Jazz Ballet), kein Break und kein Krump.
-  Namen müssen eindeutig sein. BPM und Beat-Phase kommen aus den AIST-Angaben zur Musik und
-  werden nicht geraten. `beatPhaseMs` fehlt bis zur Messung (dann 0).
+  Namen müssen eindeutig sein. Das BPM kommt aus der AIST-Tabelle (an den Musikdateien
+  nachgemessen, siehe unten). Der Konverter lässt `beatPhaseMs` weg, also 0: Clip-Zeit 0 liegt auf dem Beat.
 - **Gelenke** (`COCO_TO_MEDIAPIPE`): Nase 0→0, Augen 1/2→2/5, Ohren 3/4→7/8, Schultern 5/6→11/12,
   Ellbogen 7/8→13/14, Handgelenke 9/10→15/16, Hüften 11/12→23/24, Knie 13/14→25/26,
   Knöchel 15/16→27/28 (ungerade COCO-Indizes = links). Alle anderen MediaPipe-Punkte bekommen
@@ -341,6 +341,43 @@ Aufruf: `bun run aist-track --list=clips.json [--out=Ordner] a.aist.json …`, A
 `eval-results/aist/<Clipname>.posetrack.json`. `*.aist.json` und Pose-Spuren sind von git
 ignoriert, weil es fremde Daten sind. Das AIST erlaubt die nicht-kommerzielle Nutzung
 (Auskunft 2026-10-23, 14-0.1); ausgeliefert wird eine Auswahl (nächster Abschnitt).
+
+### Musik und Beat-Phase der AIST-Clips (Etappe 13h-3)
+
+<a id="aist-musik"></a>Die 60 Musikstücke der AIST Dance DB liegen lokal in
+`Rohdaten/aist-music/` (von git ignoriert, Fremdinhalt; Quelle in der Roadmap unter 13h-3).
+`bun run aist-music Rohdaten/aist-music/m{HO,LH,MH,LO,WA,JB}?.mp3` (`scripts/aist/measure-music.ts`,
+braucht `ffmpeg`) misst die 36 Stücke der stehenden Genres und schreibt
+`scripts/aist/music.json`. Eingecheckt sind nur die Zahlen, nie die Dateien. Schlägt eine Datei
+fehl, bleibt die Tabelle unverändert; gemessen wird deshalb immer der ganze Satz.
+
+- **Format** (`AistMusicTableSchema`): `{ "mHO0": { "bpm": 110, "measuredBpm": 110.03,
+"beatPhaseMs": 60, "durationMs": 54545 }, … }`. `bpm` ist der Tabellenwert
+  (`aistMusicBpm`, gleiche Tabelle wie `music_bpm` im Konverter), `beatPhaseMs` der erste Beat
+  in der Musikdatei, unter einem Beat.
+- **Tempo:** frei geschätzt landet es oft auf einem falschen Verhältnis (mMH0 160 statt 80, mLH1
+  120 statt 90). Das Skript sucht deshalb nur ±0,5 BPM um den Tabellenwert (Kammfilter über das
+  ganze Stück, Vollband) und warnt ab 0,1 BPM Abweichung. Ergebnis: alle 36 Stücke innerhalb von
+  0,06 BPM, die Tabelle stimmt (Test in `aist.test.ts`).
+- **Phase:** Kammfilter beim Tabellentempo auf dem Kick-Band, wie bei den Demo-Songs.
+- **Die Phase der Musikdatei gilt nicht für die Clips.** Geprüft gegen die kinematischen Beats
+  (Minima der geglätteten mittleren Gelenkgeschwindigkeit, σ 3 und 5 Bilder, gefaltet auf den
+  Beat, Kreismittel je Stück und Situation). Mit Phase 0 ballen sich die Mittel der 6 Stücke je
+  Genre eng (R über die Stücke 0,81–0,97 bei Locking, LA-Hip-Hop, Waacking und Middle-Hip-Hop;
+  Zufall läge bei etwa 0,35), Basic- und Freestyle-Clips liegen gleich. Mit der Phase der
+  Musikdatei streuen sie breit; besser als vertauschte Phasen gleichen Tempos ist sie nur bei
+  Locking und Waacking-Freestyle. 12 Stücke haben eine große Dateiphase (mLH0 610 ms, mMH2 420 ms, mJB2 310 ms),
+  Vollband und Kick-Band messen dort dasselbe. Die Dateien sind dort also gegen die Clips
+  versetzt; ein Messfehler ist es nicht. Folge: AIST++-Clips behalten `beatPhaseMs` 0.
+- **Warum die Bewegung hier reicht:** In 13h-2 taugte sie nicht als Ersatz, weil jedes Genre
+  mit eigenem Versatz auf den Beat tanzt. Hier wird keine Phase aus der Bewegung abgelesen,
+  sondern geprüft, ob die 6 Stücke eines Genres (verschiedene Tempi, Basic und Freestyle)
+  denselben Versatz zeigen. Das tun sie mit Phase 0, nicht mit der Dateiphase. Belegt ist damit
+  ein gemeinsames Raster ab Clip-Zeit 0; der Stilversatz bleibt in den Clips.
+- **Versatz der Bewegung zum Beat** (Stilmerkmal, kein Fehler): Bei Phase 0 liegen die
+  Bewegungspausen bei Locking etwa 60 ms, LA-Hip-Hop und Waacking etwa 100 ms nach dem Beat,
+  House und Jazz Ballet unsicher später, Middle-Hip-Hop etwa 160 ms davor. Die Haltepunkte
+  (`holdTimes`) wählen innerhalb ihres Fensters ohnehin den Punkt der Pause.
 
 ### Ausgelieferte AIST-Auswahl (Etappe 13i)
 

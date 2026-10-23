@@ -71,3 +71,6 @@ eval-results/
 
 # Python bytecode (scripts/aist)
 __pycache__/
+
+# AIST Dance DB music (third-party audio, never committed; see docs/roadmap.md)
+Rohdaten/aist-music/
