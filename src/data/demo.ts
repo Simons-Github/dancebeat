@@ -390,7 +390,9 @@ async function addDemo(repo: SongRepository, loadAudio: LoadDemoAudio, d: DemoEn
  * stored audio stays while it is the current demo audio; otherwise (older audio, or the player
  * chose another source) the MP3 is downloaded. An attached dance video is removed first, then
  * `save` overwrites the song (and the audio, if downloaded) in one transaction, so the demo is
- * never missing in between. Returns false if the replacement failed (logged).
+ * never missing in between. The song keeps its `createdAt`: the library sorts by it, and a new
+ * one would move every replaced demo behind the player's own songs. Returns false if the
+ * replacement failed (logged).
  */
 async function replaceDemo(
   repo: SongRepository,
@@ -412,7 +414,7 @@ async function replaceDemo(
     if (!current || getDeletedDemos().includes(d.id)) return true;
     if (current.videoBlobId) await repo.setVideo(d.id, undefined);
     if (getDeletedDemos().includes(d.id)) return true;
-    await repo.save(song, blob);
+    await repo.save({ ...song, createdAt: current.createdAt }, blob);
     markChoreoCurrent(d.id);
     return true;
   } catch (e) {

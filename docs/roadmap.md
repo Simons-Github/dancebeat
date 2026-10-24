@@ -1742,6 +1742,30 @@ Demos zeigt (erst nach dem Neuladen durch den Service Worker) und ob Safari das 
 nach dem Überschreiben weiter abspielt. Vor einer Veröffentlichung an andere Nutzer neu bewerten:
 dann nur unbearbeitete Demos ersetzen und Highscore und Sterne behalten.
 
+**14h Browserprüfung mit AIST-Paket – erledigt (2026-10-24), Gerätetest offen.** Erste
+Playwright-Prüfung seit 13i (14d lief noch ohne AIST-Clips). Projektlokaler Server, Flags per
+`ps` geprüft, Dev-Server, frisches Profil.
+
+- Seed: vier Demos, alle Marker in `dancebeat.demoChoreoVersions` auf 3, Audio-Marker 5.
+- Spiel mit `?sim=1&noise=10&miss=0.1`: Lemonade Skies mit Wechsel ins Querformat bis zum
+  Ergebnis (100× PERFECT, 2× SUPER, Megastar, neuer Highscore). Coach, Piktoleiste mit Pfeilen
+  und Skelett werden in beiden Formaten gezeichnet.
+- Ersatzpfad 14g: Marker einer Demo auf 2 gesetzt, neu geladen. Nur diese Choreografie wird
+  geladen, kein Audio; Highscore wieder 0, Marker wieder 3.
+- „Choreografie neu erzeugen“ (Generator mit AIST-Paket): gespeichert, spielbar.
+- Credits: AIST++ (CC BY 4.0) und AIST Dance DB mit der Bedingung „nur nicht-kommerziell“. Kein
+  Abruf an fremde Hosts. Bibliothek, Ergebnis und Einstellungen in 390×844 und 844×390 ohne
+  Überlauf; Konsole über die ganze Sitzung ohne Fehler und Warnungen.
+
+Befund, behoben: Eine ersetzte Demo bekam ein neues `createdAt` und rutschte ans Ende der
+Bibliothek, die danach sortiert. Bei einer neuen `DEMO_CHOREO_VERSION` wären alle vier Demos
+hinter die eigenen Songs gewandert, in der Reihenfolge, in der die Ersetzungen fertig werden.
+`replaceDemo` (`src/data/demo.ts`) behält jetzt das `createdAt` des vorhandenen Songs; alles
+andere wird wie entschieden ersetzt. Im Browser gegengeprüft (erste Demo bleibt nach dem Ersetzen
+vorne). Test: `demoSeed.test.ts` („keeps the library position of replaced demos“, schlägt ohne
+den Fix fehl). Doku: [architecture.md](architecture.md#speicher), dort auch die veraltete Angabe
+„aktuell 2“ auf 3 korrigiert.
+
 **Lizenzhinweise – umgesetzt (2026-10-23).** Bisher nannten die Credits nur die Musik. Jetzt
 kommen hinzu (Inhalt in `src/data/credits.ts`, Anzeige in „Über und Credits“):
 

@@ -350,11 +350,13 @@ erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle
   5, MP3 statt Synthese): der nächste Seed ersetzt bei vorhandenen Demos einmalig nur das Audio
   (`save` mit dem unveränderten gespeicherten Song), danach steht die Version in `localStorage`
   `dancebeat.demoAudioVersion`. Ändert sich eine vorgebaute Choreografie, wird
-  `DEMO_CHOREO_VERSION` erhöht (aktuell 2; ein Fingerprint-Test in `demoSeed.test.ts` erzwingt
+  `DEMO_CHOREO_VERSION` erhöht (aktuell 3; ein Fingerprint-Test in `demoSeed.test.ts` erzwingt
   das): Der nächste Seed ersetzt dann jede vorhandene, nicht gelöschte Demo einmalig komplett mit
   einem frischen Song. Highscore, Sterne, Umbenennung, Offsets, eigene Choreografie und ein
   angehängtes Tanzvideo gehen verloren. Erst entfernt `setVideo` das Video, dann überschreibt
-  `save` den Song in einer Transaktion, die Demo fehlt also nie. Das gespeicherte Audio bleibt,
+  `save` den Song in einer Transaktion, die Demo fehlt also nie. Nur `createdAt` bleibt erhalten,
+  weil die Bibliothek danach sortiert; sonst stünden ersetzte Demos hinter den eigenen Songs (seit
+  14h). Das gespeicherte Audio bleibt,
   solange es das aktuelle Demo-Audio ist; sonst wird die MP3 neu geladen. Entschieden am
   2026-10-23, weil die App nur zum Testen genutzt wird; vor einer Veröffentlichung neu bewerten.
   Die Choreo-Version steht pro Demo in `dancebeat.demoChoreoVersions` (ID → Version), weil der
