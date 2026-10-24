@@ -21,7 +21,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)                                                                   | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                                                                      | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)                                                                   | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1, 13h-2, 13h-3, 13i ✅; Gerätetest offen)                             | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1, 13h-2, 13h-3, 13i, 13j ✅; Gerätetest offen)                        | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ✅ (Gerätetest offen)                                                                   | Opus für den Songaufbau, Sonnet für den Rest                          |
 
 ## Erledigt: Grundlagen
@@ -1407,7 +1407,8 @@ mit dem `anchorBeat` des ersten Clips.
   Paket bleibt unverändert.
 - Gerätetest: Stören die Ellbogen-Schnapper beim Nachmachen, und sind die AIST++-Moves mit der
   Kamera erkennbar?
-- Übergänge: Zwischen behaltenen AIST++-Clips bleiben nur 8 Übergänge. Der Generator verbindet
+- ~~Übergänge~~ Erledigt in 13j (Folgen aus den Quellen, stärkeres Übergangsgewicht).
+  Befund vorher: Zwischen behaltenen AIST++-Clips bleiben nur 8 Übergänge. Der Generator verbindet
   die übrigen Clips mit dem Grundgewicht. Zwei Abhilfen gemessen (2026-10-23), beide verworfen:
   (1) Verworfene Clips auf den nächsten behaltenen gleichen Tempos abbilden (größter Abstand von
   Start- und Ankerpose): Median 74°, p10 54°. Bis 45° entstehen nur 19 Paare, ohne Schwelle
@@ -1416,6 +1417,52 @@ mit dem `anchorBeat` des ersten Clips.
   keinen Nachfolger innerhalb von 45°. Ein echter Gewinn bräuchte eine Auswahl, die ganze
   Folgen aus den Quellen behält, statt Einzelclips per Farthest-Point zu wählen.
 - ~~Neubau der Demos mit AIST++-Clips (siehe 14).~~ Erledigt in 14e.
+
+**13j Folgen aus den Quellen – umgesetzt (2026-10-23), Gerätetest offen.** Zwei Änderungen, die
+nur zusammen wirken:
+
+- `selectShippedClips` (`src/lib/motionPack.ts`) verlängert jeden per Farthest-Point gewählten
+  Startclip entlang seines häufigsten beobachteten Nachfolgers im selben Eimer, bis die Kette
+  `SHIP_CHAIN_CLIPS` (3) Clips hat. Mit Kettenlänge 1 entsteht byte-genau das alte Paket.
+  Ergebnis: gleiche 192 Clips und 0,75 MB, 65 statt 8 Übergänge zwischen AIST++-Clips (91 statt
+  34 Paare insgesamt). Länge 4 brachte nur 68, kostet aber Startclips und damit Posenvielfalt.
+- Der Generator gewichtet beobachtete Übergänge mit `OBSERVED_TRANSITION_WEIGHT` (20) statt 1
+  (`src/lib/generator/select.ts`). Das Paket allein änderte fast nichts: Bei Gewicht 1 folgte der
+  Generator auf Stufe 2 in 5,4 % statt 3,6 % der Schritte einem beobachteten Übergang.
+
+Gemessen (eigenes Skript, 4 Tempi × 20 Seeds): Anteil der Schritte auf beobachteten Übergängen
+je Stufe 15 / 4 / 13 % → 39 / 24 / 47 %. Gewicht 8 ergab 29 / 16 / 31 %, Gewicht 50 ergab
+50 / 35 / 62 %. Gewählt ist 20. Bei 50 sank p95 noch etwas weiter, aber das Übergangsgewicht
+überstimmt dann zunehmend Energiekurve und Spiegelpaare, und das misst der Messplatz nicht.
+
+`eval-choreo` (20 Seeds), vorher → nachher:
+
+- p95 der Winkelgeschwindigkeit sinkt in 11 von 12 Zellen, am stärksten auf Stufe 3 (90 BPM
+  543 → 428 °/s, 128 BPM 733 → 639, 150 BPM 636 → 534). Nur 90 BPM Stufe 2 steigt leicht
+  (453 → 463). Die Höchstwerte bleiben bei 1630–1799 °/s (Ellbogen-Schnapper
+  innerhalb der Clips, 13h-2).
+- mittlerer Winkelabstand aufeinanderfolgender Moves 38,6–45,8° → 35,9–45,1°
+- Abdeckung fast überall höher (z. B. 90 BPM Stufe 2 0,52 → 0,68; nur 150 BPM Stufe 1 0,64 → 0,63),
+  Wiederholungen weiter 0
+- Quote 1,000, schlechtester Lauf 0,998 (vorher 0,997)
+
+`eval-demos` (vier Demos neu gebaut, `DEMO_CHOREO_VERSION` 3): Quote und Sterne unverändert
+(überall 5 Sterne, schlechtester Lauf 0,995 bei Rise Until The Morning auf Stufe 2). p95 auf der
+Stufe des Manifests: Lemonade Skies 566 → 582 °/s, Gold on the Glass 494 → 603, Gold in My Pocket
+547 → 604, Rise Until The Morning 763 → 654. Der Bereich liegt damit bei 582–654 statt 494–763.
+Über alle Stufen sinkt p95 in 6 von 12 Zellen. Jede Demo ist ein einzelner Bau mit festem Seed,
+deshalb streuen diese Werte stärker als die Mittel aus `eval-choreo`. Größe 1,16–1,59 MB,
+gzip 191–252 kB je JSON.
+
+Bestehende Installationen bekommen die neuen Demos über `DEMO_CHOREO_VERSION` 3 (14g):
+Highscore, Sterne und eigene Änderungen gehen dabei verloren, wie am 2026-10-23 entschieden.
+Eigene Songs ändern sich erst beim Neu-Erzeugen. Tests: `motionPack.test.ts` (Ketten,
+Gleichstand, fremder Eimer, Obergrenze, Kettenlänge 1 wie vorher, Übergänge im ausgelieferten
+Paket), `generator.test.ts` (beobachteter Übergang bevorzugt), `demoSeed.test.ts`
+(Fingerprint). Doku: [choreography-format.md](choreography-format.md#aist-auswahl).
+
+Nur am Gerät prüfbar, nicht geprüft: ob der Coach mit den Quellfolgen flüssiger wirkt und ob die
+Folgen sich leichter nachtanzen lassen.
 
 ### 14. Neue Demo-Songs ✅ (Gerätetest offen)
 

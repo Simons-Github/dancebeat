@@ -367,6 +367,13 @@ describe("buildMotionPack", () => {
     }
     expect(buckets.size).toBeGreaterThan(0);
     for (const n of buckets.values()) expect(n).toBeLessThanOrEqual(SHIP_CLIPS_PER_BUCKET);
+    // Chains (Etappe 13j) keep real AIST sequences: a regression to isolated clips drops these.
+    const aistIds = new Set(shipped.clips.filter(isAistClip).map((c) => c.id));
+    const aistPairs = Object.values(shipped.transitions)
+      .flatMap((rows) => Object.entries(rows))
+      .filter(([a]) => aistIds.has(a))
+      .flatMap(([, row]) => Object.keys(row).filter((b) => aistIds.has(b)));
+    expect(aistPairs.length).toBeGreaterThanOrEqual(50);
   });
 
   it("loadMotionPack parses the shipped pack", async () => {
@@ -449,7 +456,9 @@ describe("selectShippedClips", () => {
     );
     expect(MotionPackSchema.safeParse(p).success).toBe(true);
     // All tie on playability and energy: x:1 first, then x:3 (160° away, x:2 only 80°).
-    const shipped = selectShippedClips(p, 2);
+    // chainClips 1: without it x:1 would pull in its observed successor x:2 (same bucket), and
+    // this test is about cutting mirrors and transitions, not about chains.
+    const shipped = selectShippedClips(p, 2, 1);
     expect(ids(shipped)).toEqual(["demo:a", "x:1", "x:3"]);
     expect(shipped.clips.find((c) => c.id === "x:1")?.mirrorOf).toBeUndefined();
     expect(shipped.transitions).toEqual({
@@ -457,5 +466,99 @@ describe("selectShippedClips", () => {
     });
     expect(MotionPackSchema.safeParse(shipped).success).toBe(true);
     expect(withoutAistClips(p)).toEqual(pack([clip("demo:a", { source: "demo" })], {}));
+  });
+
+  describe("chains", () => {
+    const styles: MotionClip["styles"] = ["party", "hiphop"];
+    /** Seed s (highest energy), t1..t3 close to it, f far away; all in bucket 120/1. */
+    const chainClips = () => [
+      aist("s", { la: 90, ra: 90 }, { energy: 0.9, styles }),
+      aist("t1", { la: 100, ra: 90 }, { styles }),
+      aist("t2", { la: 110, ra: 90 }, { styles }),
+      aist("t3", { la: 120, ra: 90 }, { styles }),
+      aist("f", { la: 170, ra: 170 }, { styles }),
+    ];
+    // s → t1: 3 in party; s → t2: 2 + 2 summed over party and hiphop = 4, so t2 wins.
+    const chainTransitions: MotionPack["transitions"] = {
+      party: { s: { t1: 3, t2: 2 }, t2: { t3: 1 } },
+      hiphop: { s: { t2: 2 } },
+    };
+
+    it("follows the most frequent same-bucket successor (summed over styles) up to chainClips", () => {
+      const p = pack(chainClips(), chainTransitions);
+      // Seed s, chain s → t2 → t3, then the next seed f is the farthest from all picks.
+      expect(ids(selectShippedClips(p, 4, 3))).toEqual(["s", "t2", "t3", "f"]);
+      // chainClips 2 stops after t2; f is the next seed.
+      expect(ids(selectShippedClips(p, 3, 2))).toEqual(["s", "t2", "f"]);
+    });
+
+    it("breaks ties between successors by the smaller id", () => {
+      const p = pack(
+        [
+          aist("s", { la: 90, ra: 90 }, { energy: 0.9 }),
+          aist("y", { la: 170, ra: 170 }),
+          aist("x", { la: 100, ra: 90 }),
+        ],
+        { party: { s: { y: 2, x: 2 } } },
+      );
+      // Without the chain y (farthest) would be picked; the tie on count 2 goes to x.
+      expect(ids(selectShippedClips(p, 2, 1))).toEqual(["s", "y"]);
+      expect(ids(selectShippedClips(p, 2, 2))).toEqual(["s", "x"]);
+    });
+
+    it("skips successors in other buckets, rest poses and picked clips", () => {
+      const p = pack(
+        [
+          aist("s", { la: 90, ra: 90 }, { energy: 0.9 }),
+          aist("v", { la: 100, ra: 90 }),
+          aist("w", { la: 110, ra: 90 }),
+          aist("f", { la: 170, ra: 170 }),
+          aist("o", { la: 100, ra: 90 }, { sourceBpm: 90 }),
+          aist("d2", { la: 100, ra: 90 }, { difficulty: 2 }),
+          aist("r", { la: 100, ra: 90 }, { energy: 0.05 }),
+        ],
+        // o (other tempo), d2 (other difficulty) and r (rest pose) outnumber v; v's only
+        // successor s is already picked, so the chain ends after two clips and f is the next seed.
+        { party: { s: { o: 9, d2: 8, r: 7, v: 1 }, v: { s: 5 } } },
+      );
+      expect(ids(selectShippedClips(p, 3, 3))).toEqual(["s", "v", "f", "o", "d2"]);
+      // A seed whose only successor is in another bucket stays alone.
+      const q = pack(
+        [
+          aist("s", { la: 90, ra: 90 }, { energy: 0.9 }),
+          aist("w", { la: 100, ra: 90 }),
+          aist("f", { la: 170, ra: 170 }),
+          aist("o", { la: 100, ra: 90 }, { sourceBpm: 90 }),
+        ],
+        { party: { s: { o: 3 } } },
+      );
+      expect(ids(selectShippedClips(q, 2, 3))).toEqual(["s", "f", "o"]);
+    });
+
+    it("chainClips 1 equals the plain farthest-point pick", () => {
+      const withChains = pack(chainClips(), chainTransitions);
+      const plain = pack(chainClips());
+      // Seed s, farthest f, then t3 (30° from s; t1 and t2 are closer).
+      expect(ids(selectShippedClips(withChains, 3, 1))).toEqual(["s", "t3", "f"]);
+      expect(ids(selectShippedClips(withChains, 3, 1))).toEqual(ids(selectShippedClips(plain, 3)));
+      expect(ids(selectShippedClips(withChains, 3, 3))).not.toEqual(
+        ids(selectShippedClips(plain, 3)),
+      );
+    });
+
+    it("keeps the bucket cap when a chain would exceed it", () => {
+      const p = pack(
+        [
+          aist("s", { la: 90, ra: 90 }, { energy: 0.9 }),
+          aist("a", { la: 100, ra: 90 }),
+          aist("b", { la: 110, ra: 90 }),
+          aist("c", { la: 120, ra: 90 }),
+          aist("d", { la: 130, ra: 90 }),
+        ],
+        { party: { s: { a: 1 }, a: { b: 1 }, b: { c: 1 }, c: { d: 1 } } },
+      );
+      expect(ids(selectShippedClips(p, 2, 5))).toEqual(["s", "a"]);
+      expect(ids(selectShippedClips(p, 3, 5))).toEqual(["s", "a", "b"]);
+    });
   });
 });

@@ -12,6 +12,7 @@ import {
   MIN_INTRO_MS,
   MIN_MOVE_ENERGY,
   MIN_STEP_MS,
+  OBSERVED_TRANSITION_WEIGHT,
   PHRASE_BEATS,
   TEMPO_TOLERANCE,
   beatMsOf,
@@ -392,6 +393,37 @@ describe("selectMoves", () => {
       // Twice the chance rate; with > 1000 samples that is far outside random variation.
       expect(hits / total).toBeGreaterThan(2 * chance);
     }
+  });
+
+  it("prefers observed transitions with OBSERVED_TRANSITION_WEIGHT per occurrence", () => {
+    // After a, b (observed once) and c (never observed) are otherwise equal: same energy,
+    // difficulty and playability, no mirrors. Expected share of b: (1 + 20) / (1 + 20 + 1).
+    const pack = makePack(
+      [
+        restClip(),
+        clip("a", { la: 90, ra: 90 }),
+        clip("b", { la: 90, ra: 170 }),
+        clip("c", { la: 170, ra: 90 }),
+      ],
+      { party: { a: { b: 1 } } },
+    );
+    expect(OBSERVED_TRANSITION_WEIGHT).toBe(20);
+    let toB = 0,
+      toC = 0;
+    for (let i = 0; i < 200; i++) {
+      const inp = input({ seed: `observed-${i}`, durationMs: 30_000 });
+      const refs = selectMoves(planStructure(inp), pack, inp, randomFromString(inp.seed));
+      // The closing pose is weighted by energy only, so its predecessor pair is left out.
+      for (let j = 0; j + 2 < refs.length; j++) {
+        if (refs[j]!.clipId !== "a") continue;
+        if (refs[j + 1]!.clipId === "b") toB++;
+        else if (refs[j + 1]!.clipId === "c") toC++;
+      }
+    }
+    const share = toB / (toB + toC);
+    console.info(`observed a → b: ${toB}/${toB + toC} = ${share.toFixed(3)}, expected 0.955`);
+    expect(toB + toC).toBeGreaterThan(200);
+    expect(share).toBeGreaterThan(0.8);
   });
 
   it("difficulty 1 uses no difficulty-2 clips, difficulty 2 and 3 use leg moves", () => {

@@ -514,6 +514,8 @@ export const AIST_VIDEO_PREFIX = "AIST++ ";
 export const AIST_SOURCE_PREFIX = `video:${AIST_VIDEO_PREFIX}`;
 /** AIST clips kept per (sourceBpm, difficulty) bucket in the shipped pack (Etappe 13i). */
 export const SHIP_CLIPS_PER_BUCKET = 12;
+/** Longest run of one source sequence kept per seed in a bucket (Etappe 13j). */
+export const SHIP_CHAIN_CLIPS = 3;
 
 /** Whether a clip was cut from an AIST++ track. */
 export const isAistClip = (c: Pick<MotionClip, "source">) =>
@@ -522,57 +524,109 @@ export const isAistClip = (c: Pick<MotionClip, "source">) =>
 const byId = (a: { id: string }, b: { id: string }) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0);
 
 /**
- * Greedy farthest-point pick of up to `n` clips by anchor pose: the first is the most playable
- * (then highest energy, then smallest id), each next one the clip whose distance to its nearest
- * already picked clip is largest (ties by id). Spreads the picks over the pose space instead of
- * taking near-duplicates. Clips without an anchor pose are skipped.
+ * Greedy farthest-point pick of up to `n` clips by anchor pose, extended along observed
+ * sequences: the first seed is the most playable clip (then highest energy, then smallest id),
+ * each next seed the clip whose distance to its nearest already picked clip is largest (ties by
+ * id). After each seed, `next` is followed until the chain has `chainClips` clips, `next` has
+ * nothing left or `n` is reached; `next` gets the picked ids and must only return unpicked
+ * clips of `clips`. With `chainClips` 1 this is a plain farthest-point pick. Spreads the seeds
+ * over the pose space instead of taking near-duplicates. Clips without an anchor pose are
+ * skipped.
  */
-function farthestPoints(clips: readonly MotionClip[], n: number): MotionClip[] {
+function farthestChains(
+  clips: readonly MotionClip[],
+  n: number,
+  chainClips: number,
+  next: (id: string, picked: ReadonlySet<string>) => MotionClip | undefined,
+): MotionClip[] {
   const pool = clips
     .map((c) => ({ c, pose: anchorPose(c) }))
     .filter((x): x is { c: MotionClip; pose: Skeleton3D } => x.pose !== null)
     .sort((a, b) => b.c.playability - a.c.playability || b.c.energy - a.c.energy || byId(a.c, b.c));
   const first = pool[0];
   if (!first || n <= 0) return [];
-  const picked = [first];
+  const picked: MotionClip[] = [];
+  const pickedIds = new Set<string>();
   const rest = pool.slice(1).sort((a, b) => byId(a.c, b.c));
-  const nearest = rest.map((x) => boneDistance(x.pose, first.pose));
-  while (picked.length < n && rest.length) {
+  const nearest = rest.map(() => Infinity);
+  const take = (x: { c: MotionClip; pose: Skeleton3D }) => {
+    picked.push(x.c);
+    pickedIds.add(x.c.id);
+    const i = rest.indexOf(x);
+    if (i >= 0) {
+      rest.splice(i, 1);
+      nearest.splice(i, 1);
+    }
+    rest.forEach((r, j) => (nearest[j] = Math.min(nearest[j]!, boneDistance(r.pose, x.pose))));
+  };
+  let seed: { c: MotionClip; pose: Skeleton3D } | undefined = first;
+  while (seed && picked.length < n) {
+    take(seed);
+    for (let len = 1, id = seed.c.id; len < chainClips && picked.length < n; len++) {
+      const c = next(id, pickedIds);
+      const x = c && rest.find((r) => r.c === c);
+      if (!x) break;
+      take(x);
+      id = c.id;
+    }
     let best = 0;
     // `rest` is sorted by id and only a strictly larger distance wins: ties go to the smaller id.
     for (let i = 1; i < rest.length; i++) if (nearest[i]! > nearest[best]!) best = i;
-    const [next] = rest.splice(best, 1);
-    nearest.splice(best, 1);
-    picked.push(next!);
-    rest.forEach((x, i) => (nearest[i] = Math.min(nearest[i]!, boneDistance(x.pose, next!.pose))));
+    seed = rest[best];
   }
-  return picked.map((x) => x.c);
+  return picked;
 }
 
 /**
- * The subset of a built pack that ships in src/data/motion-pack.json (Etappe 13i): every clip
- * not from AIST++ unchanged, of the AIST++ clips (AIST_SOURCE_PREFIX) with at least
+ * The subset of a built pack that ships in src/data/motion-pack.json (Etappe 13i, chains 13j):
+ * every clip not from AIST++ unchanged, of the AIST++ clips (AIST_SOURCE_PREFIX) with at least
  * MIN_MOVE_ENERGY (the generator never uses rest poses as moves) up to `perBucket` per
- * (sourceBpm, difficulty), spread by `farthestPoints`. The buckets follow the generator's
- * filters (tempo tolerance, difficulty), so every tempo and level keeps its own variety.
- * Mirrors and transitions are cut to the kept clips (`restrictPack`). Clip order as in `pack`;
- * deterministic; validated with MotionPackSchema.
+ * (sourceBpm, difficulty), spread by `farthestChains`. The buckets follow the generator's
+ * filters (tempo tolerance, difficulty), so every tempo and level keeps its own variety. Each
+ * seed keeps up to `chainClips` clips of its source sequence: the next clip is the most frequent
+ * observed successor (any style, ties by id) in the same bucket, so the shipped pack keeps real
+ * transitions instead of isolated clips. Mirrors and transitions are cut to the kept clips
+ * (`restrictPack`). Clip order as in `pack`; deterministic; validated with MotionPackSchema.
  */
 export function selectShippedClips(
   pack: MotionPack,
   perBucket = SHIP_CLIPS_PER_BUCKET,
+  chainClips = SHIP_CHAIN_CLIPS,
 ): MotionPack {
+  const bucketOf = (c: MotionClip) => `${c.sourceBpm ?? ""}/${c.difficulty}`;
   const buckets = new Map<string, MotionClip[]>();
   for (const c of pack.clips) {
     if (!isAistClip(c) || c.energy < MIN_MOVE_ENERGY) continue;
-    const key = `${c.sourceBpm ?? ""}/${c.difficulty}`;
+    const key = bucketOf(c);
     const list = buckets.get(key);
     if (list) list.push(c);
     else buckets.set(key, [c]);
   }
+  const successors = new Map<string, Map<string, number>>();
+  for (const rows of Object.values(pack.transitions))
+    for (const [a, row] of Object.entries(rows)) {
+      const s = successors.get(a) ?? new Map<string, number>();
+      for (const [b, count] of Object.entries(row)) s.set(b, (s.get(b) ?? 0) + count);
+      successors.set(a, s);
+    }
+
   const keep = new Set(pack.clips.filter((c) => !isAistClip(c)).map((c) => c.id));
-  for (const list of buckets.values())
-    for (const c of farthestPoints(list, perBucket)) keep.add(c.id);
+  for (const list of buckets.values()) {
+    // Only clips farthestChains can take: a successor without anchor pose would end the chain.
+    const inBucket = new Map(list.filter((c) => anchorPose(c)).map((c) => [c.id, c]));
+    const next = (id: string, picked: ReadonlySet<string>) => {
+      let best: [string, number] | undefined;
+      for (const [b, count] of successors.get(id) ?? [])
+        if (
+          inBucket.has(b) &&
+          !picked.has(b) &&
+          (!best || count > best[1] || (count === best[1] && b < best[0]))
+        )
+          best = [b, count];
+      return best && inBucket.get(best[0]);
+    };
+    for (const c of farthestChains(list, perBucket, chainClips, next)) keep.add(c.id);
+  }
 
   return MotionPackSchema.parse(restrictPack(pack, keep));
 }

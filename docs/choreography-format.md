@@ -397,12 +397,21 @@ Clipzahl, Clips je Eimer und Dateigröße.
   der Clip mit der höchsten `playability`, dann `energy`, dann kleinster ID; danach jeweils der
   Clip mit dem größten Abstand zum nächsten schon gewählten, bei Gleichstand die kleinere ID.
   Clips ohne Ankerpose fallen weg.
+- **Folgen** (seit 13j): Nach jedem so gewählten Startclip folgt die Auswahl der Quellfolge, bis
+  die Kette `SHIP_CHAIN_CLIPS` (3) Clips hat oder der Eimer voll ist. Nächster Clip ist der
+  häufigste beobachtete Nachfolger (Übergänge aller Stile summiert, bei Gleichstand die kleinere
+  ID), der im selben Eimer liegt und noch nicht gewählt ist; gibt es keinen, endet die Kette. Der
+  nächste Startclip ist wieder der fernste zu allen gewählten. Mit Kettenlänge 1 ist das genau
+  die Auswahl aus 13i. Grund: Einzelclips per Farthest-Point ließen zwischen den 180 AIST++-Clips
+  nur 8 Übergänge übrig, mit Ketten sind es 65. Stufe-1-Eimer haben kaum Nachfolger im eigenen
+  Eimer (die Nachbarn sind meist Stufe 2) und bleiben fast wie vorher.
 - **Aufräumen:** `mirrorOf` auf einen nicht behaltenen Clip entfällt, Übergänge bleiben nur
   zwischen behaltenen Clips (leere Zeilen und Stile entfallen). Reihenfolge wie im vollen Paket,
   deterministisch, Ergebnis gegen `MotionPackSchema` geprüft.
 
 Stand 13i: 192 Clips (12 Demo, 180 AIST++ aus 15 Eimern zu je 12), 0,76 MB, im Build ein eigener
-Chunk von 648 kB (149 kB gzip). Seit Etappe 14e bauen auch die Demo-Songs aus dem ganzen Paket
+Chunk von 648 kB (149 kB gzip). Stand 13j: gleiche Clipzahl, 0,75 MB, 91 Übergangspaare statt 34 (65
+zwischen AIST++-Clips statt 8). Seit Etappe 14e bauen auch die Demo-Songs aus dem ganzen Paket
 (siehe [Demo-Pipeline](#demo-pipeline)); `withoutAistClips` nutzt nur noch der Aktualitätstest des
 Pakets.
 
@@ -454,8 +463,10 @@ beiden Stufen (feste Clip-Folgen für die Demo-Songs aus Etappe 14).
 Schwierigkeit ≤ Eingabe, Energie ≥ `MIN_MOVE_ENERGY` (0,1; `neutral` ist nie ein Move) und, falls
 sie `sourceBpm` haben, höchstens `TEMPO_TOLERANCE` (±12 %) Tempounterschied; Länge ≤ Slot. Pro
 Phrasenschlüssel (in Reihenfolge des ersten Auftretens) eine gewichtete Markov-Kette:
-`(BASE_TRANSITION_WEIGHT + Anzahl im Paket) · Energiepassung · Spiegelbonus · Stufenbonus ·
-playability`. Energiepassung als Gauß-Glocke um die Zielenergie (σ = `ENERGY_SIGMA` 0,25); der
+`(BASE_TRANSITION_WEIGHT + OBSERVED_TRANSITION_WEIGHT · Anzahl im Paket) · Energiepassung ·
+Spiegelbonus · Stufenbonus · playability`. Ein einmal beobachteter Übergang zählt damit 21-mal so
+viel wie ein unbeobachteter (`OBSERVED_TRANSITION_WEIGHT` = 20 seit 13j, vorher 1; Messung in der
+[Roadmap](roadmap.md), 13j). Energiepassung als Gauß-Glocke um die Zielenergie (σ = `ENERGY_SIGMA` 0,25); der
 Spiegelpartner des vorigen Clips zählt `MIRROR_BONUS` (4) mal, aber nicht zurück (kein L R L);
 Clips genau der gewählten Schwierigkeit zählen `LEVEL_BONUS` (2) mal. Kein Clip folgt direkt auf
 sich selbst, auch nicht über Phrasengrenzen und Wiederholungen: Der erste Slot meidet den letzten
@@ -641,7 +652,7 @@ buildDemoChoreo(manifest, pack) → Choreography    // realizeFrames, ohne Moves
 Stand 14e (mit AIST++-Clips). Vorher, nur mit Demo-Clips, waren es 0,64–0,87 MB und 1,65 MB für
 Rise Until The Morning. AIST++-Clips haben mehr Keyframes und wiederholen sich kaum, deshalb
 wächst gzip stärker als die Rohgröße: 171–281 kB je JSON statt 24–119 kB (im Build 136–228 kB
-gzip je Chunk). Das Skript
+gzip je Chunk). Stand 13j: 1,16–1,59 MB, gzip 191–252 kB je JSON. Das Skript
 warnt über 2 MB, der Test hält jede Datei unter 2 MB. Die Schwierigkeit ist seit 14c-2 festgelegt
 (siehe unten).
 
