@@ -991,6 +991,33 @@ zeigt `moveMotionDegPerS`; die Platzierung ändert den Holdout-Fehler nicht und 
 Spalte verglichen. Laufzeit etwa 2 s je
 Minute Video beim Standardraster. Neue Standardwerte vor dem Übernehmen im Spiel gegenprüfen.
 
+### Video-Messplatz (Etappe 8i-1)
+
+`bun run eval-video [a.posetrack.json …]` (`scripts/eval-video.ts`, Logik in
+`scripts/evalVideo.ts`) baut aus jeder Rohdaten-Datei die Choreografie wie der Dialog
+(`importOptions`) und bewertet sie mit dem echten `Scorer` gegen einen simulierten Spieler.
+Ohne Argumente liest es alle `*.posetrack.json` aus `$DANCEBEAT_POSETRACK_DIR` (Standard
+`Rohdaten/`, ignoriert).
+
+- **Spieler:** tanzt die Rohdaten (nicht die geglättete Referenz) mit 30 Bildern/s, linear
+  zwischen den Proben (nicht über Lücken > 150 ms), mit Gauß-Rauschen auf jeder Koordinate
+  (Standard 0,01 Bildhöhen), zufälligem Zeitfehler je Bild (σ 20 ms) und 5 % Aussetzern. Seiten
+  wie die gespeicherte Choreografie (`mirror`). Alles mit festen Seeds (Standard 5), die Eval ist
+  deterministisch. Optionen `--seeds`, `--noise`, `--jitter`, `--miss`, `--fps`, `--variant`,
+  `--out`.
+- **Szenarien:** „selbst“, „+¼ Beat“ und „+½ Beat“ (Spieler zu spät), „fremd“ (das nächste Video
+  der Liste ab seinem Bereichsanfang, wiederholt). Je Szenario Anteile PERFECT…X, Sterne, Quote,
+  Score. **Trennschärfe** = Quote „selbst“ − Quote „fremd“.
+- **Varianten:** „One-Euro“ (Standard) und „ohne One-Euro“ (Filter durchlässig): misst, was
+  die eigene Glättung zusätzlich zur Glättung von MediaPipe im VIDEO-Modus bringt.
+- **Determinismus:** zwei Builds aus derselben Datei, verglichen als JSON ohne `id`.
+- **Zeitstempel:** Mit `$DANCEBEAT_VIDEO_DIR` (etwa in `.env.local`, die bun liest und git
+  ignoriert) und `ffprobe` liest das Skript die Bildzeiten des Quellvideos. Der Spieler sieht
+  jede Probe dann zur Zeit des Bildes, das der Browser wirklich zeigte; die Referenz behält die
+  gespeicherten Zeiten. Die Tabelle „Zeitstempel“ nennt den Abstand. Die Videos bleiben außerhalb
+  des Repos.
+- Ausgabe als JSON in `eval-results/eval-video.json`.
+
 ## Choreografie-Editor (Etappe 8d-1)
 
 Route `/edit/$songId` (`src/routes/edit/$songId.tsx`, gleicher Aufbau wie der Sync-Test), Einstieg

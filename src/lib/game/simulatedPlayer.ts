@@ -1,4 +1,5 @@
 import { frameAt } from "../pose";
+import { gaussian } from "../random";
 import type { AngleKey, Angles, Choreography } from "../types";
 
 export { seededRandom } from "../random";
@@ -14,12 +15,6 @@ export interface SimOptions {
   missRate: number;
   /** Random numbers in [0, 1). Pass a seeded one for reproducible tests. */
   random?: () => number;
-}
-
-function gaussian(random: () => number) {
-  const u = Math.max(random(), 1e-12);
-  const v = random();
-  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
 }
 
 const wrap = (a: number) => ((((a + 180) % 360) + 360) % 360) - 180;
