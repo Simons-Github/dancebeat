@@ -24,11 +24,14 @@ export interface PoseTrack {
    * MediaPipe world landmarks of the same person, null if none; absent (or undefined, as zod
    * parses it) if the analysis recorded no world landmarks. Landmarks and angles of the
    * choreography come from the 2D landmarks; `world` only feeds the frames' `pose3d` (13d).
+   * `fallback` (Etappe 8i-2): the time is the seek target, not a confirmed frame time
+   * (diagnostics only).
    */
   samples: {
     timeMs: number;
     landmarks: Landmark[] | null;
     world?: Landmark3d[] | null | undefined;
+    fallback?: true | undefined;
   }[];
 }
 
@@ -529,6 +532,8 @@ export interface TrackMetrics {
   samples: number;
   /** Samples with a detected person / samples (0..1). */
   detectionRatio: number;
+  /** Samples whose frame no frame callback confirmed (`fallback`, Etappe 8i-2). */
+  fallbackSamples: number;
   /**
    * Mean |second difference| of the joint angles over consecutive samples, in degrees per
    * sample. Real movement is smooth and contributes little; detection noise dominates. Raw
@@ -638,7 +643,7 @@ export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackM
   const trimmed = track.samples
     .filter((s) => s.timeMs >= start && s.timeMs <= end)
     // `world` is not needed here: all metrics are measured on the 2D landmarks.
-    .map((s) => ({ timeMs: s.timeMs - start, landmarks: s.landmarks }));
+    .map((s) => ({ timeMs: s.timeMs - start, landmarks: s.landmarks, fallback: s.fallback }));
   const detected = trimmed.filter((s) => s.landmarks !== null).length;
   const durationMs = Number.isFinite(end)
     ? end - start
@@ -666,6 +671,7 @@ export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackM
   return {
     samples: trimmed.length,
     detectionRatio: trimmed.length ? detected / trimmed.length : 0,
+    fallbackSamples: trimmed.filter((s) => s.fallback).length,
     jitterRawDeg: angleJitter(trimmed, track.aspect, maxGapMs),
     jitterSmoothDeg: angleJitter(
       smoothTrack(trimmed, opts.filter, maxGapMs),

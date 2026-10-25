@@ -534,6 +534,20 @@ describe("trackMetrics", () => {
     expect(m.moves).toBe(6); // the gap costs the moves at 2000 and 3000 ms
     expect(m.usableMoveRatio).toBeCloseTo(6 / 8, 10);
     expect(m.error).toBeNull();
+    expect(m.fallbackSamples).toBe(0);
+  });
+
+  it("zählt Proben ohne bestätigte Bildzeit im Abschnitt (8i-2)", () => {
+    const track = makeTrack();
+    track.samples.forEach((s, i) => {
+      if (i % 10 === 0) s.fallback = true;
+    });
+    const all = track.samples.filter((s) => s.fallback).length;
+    expect(trackMetrics(track, opts).fallbackSamples).toBe(all);
+    const ranged = trackMetrics(track, { ...opts, range: { startMs: 0, endMs: 1000 } });
+    expect(ranged.fallbackSamples).toBe(
+      track.samples.filter((s) => s.fallback && s.timeMs <= 1000).length,
+    );
   });
 
   it("misst Rauschen als Zittern, und die Glättung senkt es", () => {

@@ -6,7 +6,9 @@ import type { Landmark } from "./types";
  * Offline pose analysis of a video element: seeks through the video on a fixed time grid and
  * runs the estimator on every frame. The result keeps every detected person; `trackTarget`
  * (targetPerson.ts) turns it into the `PoseTrack` that feeds `choreoFromPoseTrack`.
- * Wall-clock time is only used for progress throttling; the samples carry video time.
+ * Wall-clock time is only used for progress throttling; the samples carry video time: the
+ * presentation time (`mediaTime`) of the frame that was analyzed (Etappe 8i-2), or the seek
+ * target where no frame callback confirmed the frame (marked `fallback`).
  */
 
 export type VideoAnalysisErrorCode =
@@ -63,7 +65,11 @@ const lastTimestamps = new WeakMap<PoseEstimator, number>();
 
 export const abortError = () => new DOMException("Die Analyse wurde abgebrochen.", "AbortError");
 
-/** Seeks to `timeMs` and resolves once the frame is (very likely) decoded. */
+/**
+ * Seeks to `timeMs` and resolves once the frame is (very likely) decoded: with the presented
+ * frame's `mediaTime` in ms when a video-frame callback confirmed it, else with null (no
+ * callback support, or it did not come within FRAME_FALLBACK_MS after `seeked`).
+ */
 function seekTo(
   video: HTMLVideoElement,
   timeMs: number,
@@ -71,10 +77,11 @@ function seekTo(
   /** Max distance between the presented frame's mediaTime and `timeMs`. */
   frameToleranceMs: number,
   signal: AbortSignal | undefined,
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
+): Promise<number | null> {
+  return new Promise<number | null>((resolve, reject) => {
     let fallback: ReturnType<typeof setTimeout> | undefined;
     let frameHandle: number | undefined;
+    let presentedMs: number | null = null;
     const hasVfc = typeof video.requestVideoFrameCallback === "function";
 
     const cleanup = () => {
@@ -88,7 +95,7 @@ function seekTo(
     };
     const done = () => {
       cleanup();
-      resolve();
+      resolve(presentedMs);
     };
     const fail = (e: unknown) => {
       cleanup();
@@ -117,6 +124,7 @@ function seekTo(
         frameHandle = video.requestVideoFrameCallback(onFrame);
         return;
       }
+      presentedMs = meta.mediaTime * 1000;
       // seeked not there yet: keep waiting for it (the timeout still applies).
       if (fallback !== undefined) done();
     };
@@ -128,11 +136,17 @@ function seekTo(
   });
 }
 
+/** Sample times keep 1 µs: enough for any frame rate, and stable in the exported JSON. */
+const roundMicros = (ms: number) => Math.round(ms * 1000) / 1000;
+
 /**
  * Steps through `range` (default: the whole video) every `intervalMs`, seeks the paused video
  * there and records all people the estimator finds (`detectAllWorld` with world landmarks in
  * `worlds`, else `detectAll`, else `detect` wrapped as zero or one person). Sample times are
- * video time in ms (not relative to the range). Rejects with an "AbortError" DOMException when `signal` aborts, and with
+ * video time in ms (not relative to the range): the presented frame's `mediaTime` (rounded to
+ * 1 µs), or the seek target with `fallback: true` when no frame callback confirmed the frame. A
+ * frame whose time is not after the previous sample's (the same frame again, e.g. a video
+ * with fewer frames per second than the grid) is not analyzed a second time. Rejects with an "AbortError" DOMException when `signal` aborts, and with
  * `VideoAnalysisError` for missing metadata, seek timeouts and media errors. Errors thrown by
  * `estimator.detect` / `detectAll` / `detectAllWorld` propagate unchanged.
  */
@@ -165,32 +179,42 @@ export async function analyzeVideo(
   const last = lastTimestamps.get(estimator);
   // Shift so the first timestamp lies one interval after the previous run's last one.
   const offset = last === undefined ? 0 : Math.max(0, last + intervalMs - startMs);
+  let lastTs = last ?? -Infinity;
 
   video.pause();
   const samples: MultiPoseTrack["samples"] = [];
   let lastReport = -Infinity;
   for (let i = 0; i < steps; i++) {
     if (signal?.aborted) throw abortError();
-    const timeMs = startMs + i * intervalMs;
-    await seekTo(video, timeMs, seekTimeoutMs, frameToleranceMs, signal);
+    const target = startMs + i * intervalMs;
+    const shown = await seekTo(video, target, seekTimeoutMs, frameToleranceMs, signal);
     if (signal?.aborted) throw abortError();
-    const ts = offset + timeMs;
-    lastTimestamps.set(estimator, ts);
-    if (estimator.detectAllWorld) {
-      const found = estimator.detectAllWorld(video, ts);
-      samples.push({
-        timeMs,
-        poses: found.map((d) => d.landmarks),
-        worlds: found.map((d) => d.world),
-      });
-    } else {
-      let poses: Landmark[][];
-      if (estimator.detectAll) poses = estimator.detectAll(video, ts);
-      else {
-        const one = estimator.detect(video, ts);
-        poses = one ? [one] : [];
+    const timeMs = shown === null ? target : roundMicros(shown);
+    const prev = samples[samples.length - 1];
+    if (!prev || timeMs > prev.timeMs) {
+      // MediaPipe wants strictly increasing timestamps; whole ms differ for distinct frames up
+      // to 1000 fps, the guard only matters for a frame shown before the range start.
+      const ts = Math.max(offset + Math.round(timeMs), lastTs + 1);
+      lastTs = ts;
+      lastTimestamps.set(estimator, ts);
+      const mark = shown === null ? { fallback: true as const } : {};
+      if (estimator.detectAllWorld) {
+        const found = estimator.detectAllWorld(video, ts);
+        samples.push({
+          timeMs,
+          poses: found.map((d) => d.landmarks),
+          worlds: found.map((d) => d.world),
+          ...mark,
+        });
+      } else {
+        let poses: Landmark[][];
+        if (estimator.detectAll) poses = estimator.detectAll(video, ts);
+        else {
+          const one = estimator.detect(video, ts);
+          poses = one ? [one] : [];
+        }
+        samples.push({ timeMs, poses, ...mark });
       }
-      samples.push({ timeMs, poses });
     }
     if (onProgress) {
       const fraction = (i + 1) / steps;

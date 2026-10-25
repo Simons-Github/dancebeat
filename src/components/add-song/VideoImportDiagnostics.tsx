@@ -61,6 +61,7 @@ export function VideoImportDiagnostics({ file, analysisMs }: VideoImportDiagnost
         <li>
           Erkennung {pct(m.detectionRatio)} von {m.samples} Proben
         </li>
+        <li>Ohne bestätigte Bildzeit (Rückfall) {m.fallbackSamples} Proben</li>
         <li>
           Moves {m.moves} von {m.moveSlots} Rasterpunkten ({pct(m.usableMoveRatio)})
         </li>

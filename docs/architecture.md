@@ -613,9 +613,22 @@ geladenen, pausierten `<video>`; `src/hooks/useVideoAnalysis.ts` kapselt Zustand
   5 s); Listener, Timer und Callbacks werden auf jedem Weg entfernt.
 - Für versteckte oder nicht eingehängte Videos feuert der Bild-Callback nie; jeder Schritt kostet
   dann 120 ms. Der Import-Dialog (8c) muss das Video sichtbar im DOM halten.
-- Zeitstempel für `detect` steigen streng, auch wenn ein Estimator mehrere Analysen nacheinander
-  macht (der nächste Lauf wird hinter den letzten Zeitstempel verschoben). Der Hook nimmt ohnehin
-  pro Lauf einen neuen Estimator.
+- **Probenzeit = Bildzeit (Etappe 8i-2):** Bestätigt der Bild-Callback das Bild, ist die
+  Probenzeit dessen `mediaTime` (auf 1 µs gerundet), nicht das Rasterziel. Bei 30 fps und 50-ms-Raster
+  wird aus 50 also 33,333 ms; vorher lagen die Zeiten im Mittel 8,3 ms, höchstens 16,7 ms neben dem
+  analysierten Bild. Ein Bild, dessen Zeit nicht nach der vorigen Probe liegt (dasselbe Bild noch
+  einmal, Raster feiner als die Bilder), wird nicht erneut analysiert. Ohne bestätigtes Bild (kein
+  `requestVideoFrameCallback`, Callback nach 120 ms nicht da) bleibt das Rasterziel die Zeit, und
+  die Probe trägt `fallback: true`; die Dev-Diagnose zählt diese Proben, die Rohdaten-Datei
+  behält das Feld (optional, ohne neue Version).
+- **Grenze:** Bei Videos unter etwa 25 fps liegt das gezeigte Bild oft weiter als
+  `max(intervalMs/2, 40 ms)` vor dem Ziel und wird als verspätetes Bild verworfen; diese Proben
+  landen im Rückfall. Das Raster bleibt vorerst 50 ms (ob ein Raster nach Bilddauer besser ist,
+  entscheidet der Messplatz).
+- Zeitstempel für `detect` sind ganze Millisekunden (`Math.round` der Probenzeit, für
+  verschiedene Bilder bis 1000 fps eindeutig) und steigen streng, auch wenn ein Estimator mehrere
+  Analysen nacheinander macht (der nächste Lauf wird hinter den letzten Zeitstempel verschoben).
+  Der Hook nimmt ohnehin pro Lauf einen neuen Estimator.
 - Abbruch über `AbortSignal` (`AbortError`), Fehler als `VideoAnalysisError` mit `code`
   (`no-metadata`, `seek-timeout`, `video-error`, `empty-range`). Fortschritt höchstens alle
   250 ms; der Hook setzt nur dann State, nie pro Bild.

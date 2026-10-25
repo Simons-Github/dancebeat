@@ -21,9 +21,15 @@ export interface MultiPoseTrack {
    * Sorted by timeMs (video time). Empty array = no person detected. `worlds` (Etappe 13c) holds
    * the world landmarks parallel to `poses` (same index = same person, null if the model gave
    * none); absent when the estimator does not provide world landmarks. Person selection uses the
-   * 2D poses only.
+   * 2D poses only. `fallback` (Etappe 8i-2): no frame callback confirmed the frame, `timeMs` is
+   * the seek target and the analyzed frame may be a neighbour.
    */
-  samples: { timeMs: number; poses: Landmark[][]; worlds?: (Landmark3d[] | null)[] }[];
+  samples: {
+    timeMs: number;
+    poses: Landmark[][];
+    worlds?: (Landmark3d[] | null)[];
+    fallback?: true;
+  }[];
 }
 
 type MultiSample = MultiPoseTrack["samples"][number];
@@ -32,9 +38,10 @@ type TargetSample = PoseTrack["samples"][number];
 /** Target sample with pose `poseIndex` of `s` (null = none), carrying its world if recorded. */
 function targetSample(s: MultiSample, poseIndex: number | null): TargetSample {
   const landmarks = poseIndex === null ? null : (s.poses[poseIndex] ?? null);
-  if (!s.worlds) return { timeMs: s.timeMs, landmarks };
+  const mark = s.fallback ? { fallback: true as const } : {};
+  if (!s.worlds) return { timeMs: s.timeMs, landmarks, ...mark };
   const world = poseIndex === null || !landmarks ? null : (s.worlds[poseIndex] ?? null);
-  return { timeMs: s.timeMs, landmarks, world };
+  return { timeMs: s.timeMs, landmarks, world, ...mark };
 }
 
 /** The chosen person: pose `poseIndex` of sample `sampleIndex`. */
