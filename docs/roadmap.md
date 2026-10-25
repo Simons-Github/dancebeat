@@ -513,7 +513,7 @@ Gerätetest 7b-3 (offen):
       Hintergrund und nach über einer Stunde zurück → Hinweis erscheint, „Neu laden“ zeigt den
       neuen Build.
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1, 8h-2a, 8h-2b-1, 8h-2b-2a, 8h-2b-2b-1, 8h-2b-2b-2, 8h-2b-3 umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1, 8h-2a, 8h-2b-1, 8h-2b-2a, 8h-2b-2b-1, 8h-2b-2b-2, 8h-2b-3, 8i-1, 8i-2, 8i-4 umgesetzt)
 
 Aufteilung:
 
@@ -894,6 +894,66 @@ Aufteilung:
       - [ ] iPhone und Android, Hoch- und Querformat: großes Video verdeckt HUD und
             Piktoleiste nicht
       - [ ] Kamerabild und Spieler bleiben neben dem großen Video noch genug sichtbar
+
+- **8i Zuverlässiger Video-Import, erster Durchgang (2026-10-25) – 8i-1, 8i-2, 8i-4 umgesetzt,
+  8i-3 offen.** Ziel: aus einem lokalen Tanzvideo zuverlässig eine gut bewertbare Choreografie.
+  Bestandsaufnahme und priorisierte Lückenliste vorab; Spiegelung bleibt wie sie ist
+  (Spiegelraum: nur links und rechts tauschen, x unverändert; Entscheidung des Nutzers). Kein
+  Formatwechsel, kein Versionssprung (Downbeat und Wiederholungen erst, wenn klar ist, was
+  Editor und Generator brauchen). Worker, WebCodecs und „heavy“ in diesem Durchgang nicht.
+  - **8i-1 Video-Messplatz – umgesetzt.** `bun run eval-video` (`scripts/evalVideo.ts`): echter
+    `Scorer` gegen einen simulierten Spieler (Rohdaten mit 30 fps, Rauschen, Zeitfehler,
+    Aussetzer, feste Seeds), Szenarien selbst, +¼ und +½ Beat, fremdes Video; Trennschärfe,
+    Determinismus, Variante ohne One-Euro; Bildzeiten per `ffprobe` aus `$DANCEBEAT_VIDEO_DIR`
+    (`.env.local`, Videos bleiben außerhalb des Repos). Details:
+    [architecture.md](architecture.md#video-messplatz-etappe-8i-1).
+    - Befunde: Selbsttest überall 5 Sterne (BTS 0,93, TikTok 1,00). Eine Verschiebung um ¼ Beat
+      kostet fast nichts, ½ Beat wenig (das ±250-ms-Fenster deckt das ab; ein zusätzliches
+      Ausrichtungsfenster ist nicht nötig). Das fremde Video kommt noch auf 2–3 Sterne
+      (Trennschärfe 0,4–0,5): Das Scoring ist nachsichtig. Die eigene One-Euro-Glättung über der
+      von MediaPipe ändert kaum etwas (±0,02 Trennschärfe, je Video in andere Richtung).
+  - **8i-2 Exakte Zeitstempel – umgesetzt.** Probenzeit = `mediaTime` des bestätigten Bildes,
+    gleiches Bild nicht doppelt, Rückfall-Proben markiert (`fallback`) und in der Dev-Diagnose
+    gezählt. Gemessen im Browser (Playwright, GPU) an BTS und TikTok: Zeitfehler 8,3 ms im
+    Mittel / 16,7 ms höchstens → 0, dieselben Landmarks, je zwei Läufe bitgleich (vorher
+    ebenfalls), 0 Rückfälle; Bewertung unverändert. MediaPipe lieferte trotz anderer
+    Zeitstempel identische Landmarks. Grenze: Videos unter etwa 25 fps landen öfter im Rückfall
+    (Toleranz 40 ms), siehe [architecture.md](architecture.md#video-analyse-etappe-8b).
+  - **8i-3 Gelenke außerhalb des Bildes – gebaut, nicht übernommen (Entscheidung offen).**
+    Hysterese am Bildrand (aus bei < 2 %, wieder drin ab 5 % Abstand), markierte Gelenke
+    unsichtbar für Scoring und Coach. Gemessen an Zuschnitten auf die oberen 72 % (Füße
+    draußen): Die meisten Gelenke außerhalb meldet MediaPipe ohnehin mit visibility < 0,5, die
+    Schwelle fängt sie schon. Die Prüfung verbessert die Messläufe nicht eindeutig (BTS voll:
+    Selbsttest 0,926 → 0,937, aber Trennschärfe 0,489 → 0,431; TikTok-Zuschnitt Trennschärfe
+    0,472 → 0,436; sonst gleich), unabhängig vom Rand (0/3, 2/5, 5/8 %). Der Schaden beim
+    Zuschnitt liegt woanders: MediaPipe findet die Person seltener (171 von 690 Proben fehlen)
+    und auch die Armwinkel werden ungenauer. Code liegt als `git stash` („8i-3 Randpruefung“),
+    mit Messplatz-Erweiterung `x.player.posetrack.json` (Spieler tanzt eine andere Spur).
+  - **8i-4 Lücken – umgesetzt.** Eine Konstante `SHORT_GAP_MS` = 150 ms (statt 250 beim Filter
+    und 300 im Plan): kurze Lücken von Person und Gelenken vor dem Glätten linear füllen;
+    längere: Coach hält die letzte Pose statt zu gleiten (Alternative „Ausblenden“ gebaut,
+    blinkt bei kurzen langen Lücken); Moves prüfen die Pose wie der Scorer. Messung und
+    Begründung: [choreography-format.md](choreography-format.md#lücken-etappe-8i-4). Trennschärfe
+    BTS 0,489 → 0,491, TikTok 0,418 → 0,484, Zuschnitte 0,243 → 0,451 und 0,541 → 0,685.
+  - **Offen (nächste Durchgänge, priorisiert in der Bestandsaufnahme):** P2 Szenenschnitte,
+    Gold-Vorschlag nach Energie und Sichtbarkeit, Spectral Flux für die Beat-Schätzung;
+    P3 Downbeat/8er-Counts, Wiederholungen und Spiegelpaare, Worker, WebCodecs, „heavy“,
+    End-to-End mit Video als Fake-Kamera (Playwright-Konfiguration erst dann). Trennschärfe
+    des Scorings (fremdes Video 2–3 Sterne) als eigenes Thema prüfen.
+  - **Gerätetests 8i (offen):**
+    - [ ] iOS Safari: Bild-Callback nach dem Seek kommt, Dev-Diagnose „Ohne bestätigte Bildzeit
+          (Rückfall)“ bleibt bei 0 oder nahe 0; Zeitstempel in den Rohdaten auf Bildzeiten
+          (bei 30 fps …,33,333, 100, 133,333 …)
+    - [ ] Android Chrome: dasselbe; zwei Analysen desselben Videos ergeben dieselben Rohdaten
+    - [ ] Echte Kamera: importierten Tanz selbst nachtanzen; überwiegend PERFECT/SUPER, Sterne
+          nahe Maximum; einen anderen Tanz dazu tanzen gibt deutlich weniger
+    - [ ] Coach bei Lücken (Video, in dem der Tänzer kurz verdeckt ist oder aus dem Bild geht):
+          hält die letzte Pose, kein Gleiten, kein Blinken
+    - [ ] Langes Video (3 Minuten, Modell „Genau“): Analysedauer, Speicher, kein Absturz, Gerät
+          bleibt wach
+    - [ ] Wenig Speicher: „Video behalten“ mit 100–250 MB bei fast vollem Kontingent meldet
+          sich ohne halben Song; Anzeige des belegten Speichers stimmt
+    - [ ] Video unter 25 fps (z. B. 15 fps): Anteil Rückfall-Proben in der Diagnose
 
 Ursprüngliche Schritte:
 
