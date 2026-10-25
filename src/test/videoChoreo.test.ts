@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { mirrorChoreo } from "@/lib/choreo";
-import { ARM_KEYS, computeAngles, figure, isVisible, type FigureParams } from "@/lib/pose";
+import { ARM_KEYS, computeAngles, figure, frameAt, isVisible, type FigureParams } from "@/lib/pose";
+import { Scorer } from "@/lib/scorer";
 import { ChoreographySchema } from "@/lib/schema";
 import type { AngleKey, Angles, Frame, Landmark, Landmark3d, Move } from "@/lib/types";
 import {
   choreoFromPoseTrack,
   DEFAULT_MOVE_PLACEMENT,
+  fillShortGaps,
   DEFAULT_ONE_EURO,
   MIN_MOVE_GAP_MS,
   OneEuroFilter,
@@ -352,13 +354,99 @@ describe("choreoFromPoseTrack", () => {
       },
     });
     const c = choreoFromPoseTrack(track, { ...opts, mirror: false });
-    expect(c.frames.some((f) => f.timeMs > 2050 && f.timeMs < 2550)).toBe(false);
+    // The 600 ms gap is long: only the held gap frame lies inside (Etappe 8i-4), a copy of the
+    // last pose before the gap.
+    const inGap = c.frames.filter((f) => f.timeMs > 2050 && f.timeMs < 2550);
+    expect(inGap).toHaveLength(1);
+    expect(inGap[0]!.lowVisibility).toBe(true);
+    const before = c.frames.filter((f) => f.timeMs <= 2050).at(-1)!;
+    expect(inGap[0]!.landmarks).toEqual(before.landmarks);
     for (const f of c.frames) {
       for (const p of f.landmarks.slice(11, 29)) expect(p[0] === 0 && p[1] === 0).toBe(false);
+      if (f === inGap[0]) continue;
       if (f.timeMs >= 4000 && f.timeMs < 5000) {
         expect(f.angles.leftElbow).toBeUndefined();
         expect(f.landmarks[15]![2]).toBe(0.1);
       } else expect(f.angles.leftElbow).toBeDefined();
+    }
+  });
+
+  it("füllt kurze Lücken der Person und einzelner Gelenke linear (8i-4)", () => {
+    const track = makeTrack({
+      stepMs: 50,
+      edit: (t, lm) => {
+        if (t >= 2000 && t < 2100) return null; // two samples without a person: 150 ms between seen
+        if (t >= 4000 && t < 4100) lm[15] = [0.95, 0.95, 0.1]; // wrist unsure in two samples
+        return lm;
+      },
+    });
+    const c = choreoFromPoseTrack(track, { ...opts, mirror: false });
+    const at = (t: number) => c.frames.find((f) => Math.abs(f.timeMs - t) < 1);
+    expect(at(2000)?.lowVisibility).toBeUndefined();
+    expect(at(2000)?.angles.leftShoulder).toBeDefined();
+    expect(at(4000)?.angles.leftElbow).toBeDefined();
+    // One sample longer is a long gap: not filled.
+    const longer = makeTrack({ stepMs: 50, edit: (t, lm) => (t >= 2000 && t < 2150 ? null : lm) });
+    const c2 = choreoFromPoseTrack(longer, { ...opts, mirror: false });
+    expect(c2.frames.find((f) => Math.abs(f.timeMs - 2100) < 1)).toBeUndefined();
+    expect(c.frames.every((f) => !f.lowVisibility)).toBe(true);
+  });
+
+  it("fillShortGaps: Mitte zwischen den Nachbarn, niedrigere Sichtbarkeit, lange Lücken bleiben", () => {
+    const p = (x: number, v = 1): Landmark => [x, 0.5, v];
+    const out = fillShortGaps(
+      [
+        { timeMs: 0, landmarks: [p(0, 0.9), p(0)] },
+        { timeMs: 100, landmarks: null },
+        { timeMs: 200, landmarks: [p(1, 0.6), p(0.4, 0.2)] },
+        { timeMs: 300, landmarks: [p(1), p(0.6)] },
+        { timeMs: 900, landmarks: [p(0), p(0)] },
+      ],
+      300,
+    );
+    expect(out[1]!.landmarks![0]).toEqual([0.5, 0.5, 0.6]);
+    // Joint 1 is unsure at 100 (after the person fill: visibility 0.2) and at 200: bridged
+    // between 0 and 300, 300 ms apart.
+    expect(out[1]!.landmarks![1]![0]).toBeCloseTo(0.2);
+    expect(out[2]!.landmarks![1]![0]).toBeCloseTo(0.4);
+    expect(out[2]!.landmarks![1]![2]).toBe(1);
+    // 600 ms between 300 and 900: nothing in between to fill, the samples stay.
+    expect(out[4]).toEqual({ timeMs: 900, landmarks: [p(0), p(0)] });
+  });
+
+  it("lange Lücke ohne Person: ausblenden, halten oder (alt) gleiten (8i-4)", () => {
+    const track = makeTrack({
+      stepMs: 50,
+      edit: (t, lm) => (t >= 3000 && t < 4000 ? null : lm),
+    });
+    const build = (longGap: "hide" | "hold" | "glide") =>
+      choreoFromPoseTrack(track, { ...opts, mirror: false, longGap });
+    const inside = (c: ReturnType<typeof build>) =>
+      c.frames.filter((f) => f.timeMs > 2950 && f.timeMs < 4000);
+    const coachAt = (c: ReturnType<typeof build>, t: number) => frameAt(c.frames, t)!;
+
+    const hide = build("hide");
+    expect(inside(hide)).toHaveLength(1);
+    // The coach shows nothing in the gap: every landmark below the threshold.
+    expect(coachAt(hide, 3500).landmarks.some((q) => isVisible(q))).toBe(false);
+    expect(coachAt(hide, 3200).landmarks.some((q) => isVisible(q))).toBe(false);
+
+    const hold = build("hold");
+    const last = hold.frames.filter((f) => f.timeMs <= 2950).at(-1)!;
+    expect(coachAt(hold, 3500).landmarks.map((q) => [q[0], q[1]])).toEqual(
+      last.landmarks.map((q) => [q[0], q[1]]),
+    );
+    expect(inside(hold).at(-1)!.lowVisibility).toBe(true);
+
+    const glide = build("glide");
+    expect(inside(glide)).toHaveLength(0);
+    // No move in or at the edge of the gap (gliding, as before 8i-4, may put one there), and every
+    // move has target angles.
+    for (const c of [hide, hold]) {
+      for (const m of c.moves) expect(m.timeMs <= 2950 || m.timeMs >= 4000).toBe(true);
+      expect(
+        new Scorer(c).moves.every((_, i) => Object.keys(new Scorer(c).target(i)!).length > 0),
+      ).toBe(true);
     }
   });
 

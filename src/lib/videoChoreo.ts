@@ -70,6 +70,36 @@ export const DEFAULT_MOVE_PLACEMENT: MovePlacement = "holds";
  */
 export const MIN_MOVE_GAP_MS = 300;
 
+/**
+ * Longest gap the video import bridges (Etappe 8i-4), measured between two samples that see the
+ * person (or the joint): up to two missed samples of the 50 ms analysis grid. Shorter gaps are
+ * filled by linear interpolation before smoothing, and the One-Euro filter runs on through them;
+ * longer ones restart the filters and break the coach (`LongGapStyle`). One value for all three
+ * (it replaces the former 250 ms filter reset, which had no measurable effect in Etappe 8g-5).
+ * Chosen with `bun run eval-video` on two dance videos, full and cut to a portrait crop: 100 and
+ * 150 ms were never worse than no filling and separated own from other dances clearly better on
+ * three of four; from 200 ms on the straight line guessed fast arm moves wrong (BTS: separation
+ * 0.49 → 0.42 at 200 ms, 0.39 at 300 ms).
+ */
+export const SHORT_GAP_MS = 150;
+
+/**
+ * What the coach shows during a longer gap without the person (Etappe 8i-4). Before, `frameAt`
+ * glided in a straight line from the last pose before the gap to the first one after it, through
+ * poses the video never showed. "hold" is the default: compared side by side on a real 600 ms gap
+ * it keeps the coach on screen, while "hide" drops it from the last frame before the gap and would
+ * blink at every gap just over SHORT_GAP_MS; both score the same in `eval-video`.
+ * - "hide": one frame in the middle of the gap with every landmark not visible; the coach draws
+ *   nothing from the last pose before the gap until the first one after it.
+ * - "hold": the last pose again, one frame interval before the first pose after the gap; the coach
+ *   stands still and moves into the new pose within that interval.
+ * - "glide": no extra frame (the behaviour before 8i-4; evaluation bench only).
+ * The extra frames carry `lowVisibility`, so no move lands in or at the edge of a gap.
+ */
+export const LONG_GAP_STYLES = ["hide", "hold", "glide"] as const;
+export type LongGapStyle = (typeof LONG_GAP_STYLES)[number];
+export const DEFAULT_LONG_GAP: LongGapStyle = "hold";
+
 export interface VideoChoreoOptions {
   title: string;
   bpm: number;
@@ -98,8 +128,13 @@ export interface VideoChoreoOptions {
   /** [accent, secondary]. Default: first song palette. */
   colors?: [string, string];
   filter?: Partial<OneEuroParams>;
-  /** A gap longer than this resets a landmark's filter. Default 250. */
+  /**
+   * Gaps up to this are filled (`fillShortGaps`) and the filter runs on; longer ones reset it and
+   * break the coach (`longGap`). Default SHORT_GAP_MS.
+   */
   maxGapMs?: number;
+  /** Coach during gaps longer than `maxGapMs`. Default DEFAULT_LONG_GAP. */
+  longGap?: LongGapStyle;
   /** Timestamp for createdAt/updatedAt. Default Date.now(). */
   now?: number;
 }
@@ -200,6 +235,92 @@ function pointFilter(dims: number, p: OneEuroParams, maxGapMs: number) {
   };
 }
 
+/** `a` and `b` mixed with weight `u` on b in the first `dims` entries; visibility the lower one. */
+function lerpPoint<P extends Point>(a: P, b: P, u: number, dims: number): P {
+  const coords = Array.from({ length: dims }, (_, d) => a[d]! + (b[d]! - a[d]!) * u);
+  const vis = Math.min(a.length > dims ? a[dims]! : 1, b.length > dims ? b[dims]! : 1);
+  return [...coords, vis] as unknown as P;
+}
+
+/** Person-level fill: the samples between `a` and `b` (indices) get their interpolated pose. */
+function fillPerson(out: Sample[], a: Sample, b: Sample, from: number, to: number) {
+  const al = a.landmarks!,
+    bl = b.landmarks!;
+  for (let m = from; m < to; m++) {
+    const s = out[m]!;
+    const u = (s.timeMs - a.timeMs) / (b.timeMs - a.timeMs);
+    const landmarks = al.map((p, i) => lerpPoint(p, bl[i] ?? p, u, 2));
+    if (s.world === undefined) {
+      out[m] = { ...s, landmarks };
+      continue;
+    }
+    const aw = a.world,
+      bw = b.world;
+    const world = aw && bw ? aw.map((p, i) => lerpPoint(p, bw[i] ?? p, u, 3)) : null;
+    out[m] = { ...s, landmarks, world };
+  }
+}
+
+/**
+ * Fills gaps up to `maxGapMs` (time between the two samples that see the person or the joint):
+ * 1. samples without a person between two with one get the linear mix of both (world landmarks
+ *    as well, if both have them);
+ * 2. a landmark below visibility 0.5 between two samples where it is visible gets the linear mix
+ *    of those two, with the lower visibility (world point alike).
+ * Longer gaps stay as they are. Pure; samples must be sorted by time.
+ */
+export function fillShortGaps(samples: Sample[], maxGapMs = SHORT_GAP_MS): Sample[] {
+  const out = samples.slice();
+  let prev = -1;
+  samples.forEach((s, k) => {
+    if (!s.landmarks) return;
+    const a = samples[prev];
+    if (a && k - prev > 1 && s.timeMs - a.timeMs <= maxGapMs) fillPerson(out, a, s, prev + 1, k);
+    prev = k;
+  });
+  // Joint gaps: copy a sample's lists before changing a point in them.
+  const own = new Set<number>();
+  const edit = (m: number) => {
+    const s = out[m]!;
+    if (!own.has(m)) {
+      own.add(m);
+      out[m] = {
+        ...s,
+        landmarks: s.landmarks!.slice(),
+        ...(s.world ? { world: s.world.slice() } : {}),
+      };
+    }
+    return out[m]!;
+  };
+  const points = Math.max(0, ...out.map((s) => s.landmarks?.length ?? 0));
+  for (let i = 0; i < points; i++) {
+    let last = -1;
+    for (let k = 0; k < out.length; k++) {
+      const p = out[k]!.landmarks?.[i];
+      if (!p) {
+        last = -1; // no person (a long gap): never bridge across it
+        continue;
+      }
+      if (!visibleAt(p, 2)) continue;
+      const a = out[last];
+      const b = out[k]!;
+      if (a && k - last > 1 && b.timeMs - a.timeMs <= maxGapMs) {
+        for (let m = last + 1; m < k; m++) {
+          const u = (out[m]!.timeMs - a.timeMs) / (b.timeMs - a.timeMs);
+          const s = edit(m);
+          s.landmarks![i] = lerpPoint(a.landmarks![i]!, p, u, 2);
+          const aw = a.world?.[i],
+            bw = b.world?.[i];
+          if (s.world && aw && bw && visibleAt(aw, 3) && visibleAt(bw, 3))
+            s.world[i] = lerpPoint(aw, bw, u, 3);
+        }
+      }
+      last = k;
+    }
+  }
+  return out;
+}
+
 /** Mean of a forward and a backward pass; invisible points and points without partner stay. */
 function averagePasses<P extends Point>(
   fwd: P[] | null,
@@ -243,7 +364,7 @@ function onePass(samples: Sample[], p: OneEuroParams, maxGapMs: number): Sample[
 export function smoothTrack(
   samples: Sample[],
   params: Partial<OneEuroParams> = {},
-  maxGapMs = 250,
+  maxGapMs = SHORT_GAP_MS,
 ): Sample[] {
   const p = { ...DEFAULT_ONE_EURO, ...params };
   const fwd = onePass(samples, p, maxGapMs);
@@ -425,6 +546,55 @@ function holdTimes(
   return out;
 }
 
+/**
+ * Adds the gap frames of `style` (see LongGapStyle) between consecutive samples with a person
+ * that are more than `maxGapMs` apart. `frames` and `skeletons` stay parallel and sorted.
+ */
+function breakLongGaps(
+  frames: Frame[],
+  skeletons: (Skeleton3D | null)[],
+  smoothed: Sample[],
+  maxGapMs: number,
+  interval: number,
+  style: LongGapStyle,
+) {
+  if (style === "glide") return;
+  const extra: { frame: Frame; sk: Skeleton3D | null }[] = [];
+  for (let k = 1; k < smoothed.length; k++) {
+    const ta = smoothed[k - 1]!.timeMs,
+      tb = smoothed[k]!.timeMs;
+    if (tb - ta <= maxGapMs) continue;
+    // The frame the coach shows last before the gap.
+    let i = frames.length - 1;
+    while (i > 0 && frames[i]!.timeMs > ta) i--;
+    const before = frames[i];
+    if (!before || before.timeMs > ta) continue;
+    if (style === "hide") {
+      extra.push({
+        frame: {
+          timeMs: round((ta + tb) / 2, 1),
+          landmarks: before.landmarks.map((p) => [p[0], p[1], 0] as Landmark),
+          angles: {},
+          lowVisibility: true,
+        },
+        sk: null,
+      });
+    } else {
+      extra.push({
+        frame: { ...before, timeMs: round(Math.max(ta, tb - interval), 1), lowVisibility: true },
+        sk: skeletons[i] ?? null,
+      });
+    }
+  }
+  if (!extra.length) return;
+  const all = frames
+    .map((frame, i) => ({ frame, sk: skeletons[i] ?? null }))
+    .concat(extra)
+    .sort((a, b) => a.frame.timeMs - b.frame.timeMs);
+  frames.splice(0, frames.length, ...all.map((x) => x.frame));
+  skeletons.splice(0, skeletons.length, ...all.map((x) => x.sk));
+}
+
 /** Builds a choreography from a raw video pose track. Throws (German message) if unusable. */
 export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions): Choreography {
   const interval = opts.frameIntervalMs ?? 100;
@@ -444,8 +614,9 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
   const last = trimmed[trimmed.length - 1];
   const durationMs = Number.isFinite(end) ? end - start : (last?.timeMs ?? 0);
 
-  // 2. Smooth, 5. downsample: per slot the nearest sample with a detected person.
-  const smoothed = smoothTrack(trimmed, opts.filter, opts.maxGapMs).filter(
+  // 1b. Fill short gaps, 2. smooth, 5. downsample: per slot the nearest sample with a person.
+  const maxGapMs = opts.maxGapMs ?? SHORT_GAP_MS;
+  const smoothed = smoothTrack(fillShortGaps(trimmed, maxGapMs), opts.filter, maxGapMs).filter(
     (s): s is Sample & { landmarks: Landmark[] } => s.landmarks !== null,
   );
   const frames: Frame[] = [];
@@ -474,6 +645,8 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
     frames.push(frame);
   }
   if (frames.length < 2) throw new Error("Im Video wurde zu selten eine Person erkannt.");
+  // 5b. Break the coach at the long gaps that remain (see LongGapStyle).
+  breakLongGaps(frames, skeletons, smoothed, maxGapMs, interval, opts.longGap ?? DEFAULT_LONG_GAP);
 
   // 6. Moves on the beat grid where the reference pose is reliable.
   const step = (60000 / opts.bpm) * beatsPerMove;
@@ -481,9 +654,11 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
     const f = frames.reduce((a, b) => (Math.abs(b.timeMs - t) < Math.abs(a.timeMs - t) ? b : a));
     return Math.abs(f.timeMs - t) <= interval ? f : null;
   };
+  // The nearest frame must be a reliable pose, and so must the scorer's lookup (`frameAt`), which
+  // may interpolate towards a gap frame.
   const usable = (t: number) => {
     const f = nearest(t);
-    return f !== null && isUsablePose(f);
+    return f !== null && isUsablePose(f) && poseUsableAt(frames, t);
   };
   const beatMs = 60000 / opts.bpm;
   const times =
@@ -639,7 +814,7 @@ function holdoutError(
 export function trackMetrics(track: PoseTrack, opts: VideoChoreoOptions): TrackMetrics {
   const start = opts.range?.startMs ?? 0;
   const end = opts.range?.endMs ?? Infinity;
-  const maxGapMs = opts.maxGapMs ?? 250;
+  const maxGapMs = opts.maxGapMs ?? SHORT_GAP_MS;
   const trimmed = track.samples
     .filter((s) => s.timeMs >= start && s.timeMs <= end)
     // `world` is not needed here: all metrics are measured on the 2D landmarks.

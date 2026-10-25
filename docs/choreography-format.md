@@ -698,10 +698,17 @@ Ergebnis (20 Seeds; Moves/min und p95 sind je Stufe fest):
 Choreografie im Format v2:
 
 1. Zeitbereich zuschneiden; der Anfang des Bereichs wird 0.
+   1b. **Kurze Lücken füllen** (`fillShortGaps`, Etappe 8i-4): Liegen zwei Proben, die die
+   Person sehen, höchstens `SHORT_GAP_MS` = 150 ms auseinander, bekommen die Proben dazwischen
+   die lineare Mischung beider Posen (Weltpunkte ebenso). Danach gilt dasselbe je Gelenk: Ein
+   Punkt mit `visibility < 0.5` zwischen zwei sichtbaren, höchstens 150 ms entfernten Proben
+   wird linear ergänzt und bekommt die niedrigere Sichtbarkeit der beiden. Längere Lücken
+   bleiben. 150 ms = bis zu zwei verpasste Proben im 50-ms-Raster; Messung siehe
+   [Lücken](#lücken-etappe-8i-4).
 2. Glätten (One-Euro, vorwärts und rückwärts; Standard `minCutoff` 2 Hz, `beta` 40, `dCutoff`
    1 Hz). Punkte mit `visibility < 0.5` laufen nie durch den Filter und bleiben unsichtbar; nach
-   einer Lücke beginnt der Filter des Punkts neu. Begründung der Werte: siehe
-   [Standardwerte](#standardwerte-aus-der-messung-etappe-8g-5).
+   einer Lücke über `SHORT_GAP_MS` beginnt der Filter des Punkts neu (vorher 250 ms). Begründung
+   der Werte: siehe [Standardwerte](#standardwerte-aus-der-messung-etappe-8g-5).
 3. Winkel über `computeAngles(…, { aspect })` aus den Rohkoordinaten. Gespeichert werden die
    Landmarks im quadratischen Raum: mit `s = max(aspect, 1)` gilt
    `x' = 0.5 + (x − 0.5) · aspect / s` und `y' = 0.5 + (y − 0.5) / s`. Die längere Bildseite
@@ -728,8 +735,17 @@ Choreografie im Format v2:
    weiter aus den 2D-Punkten. Gemessen an einer synthetischen 3-Minuten-Choreo (1800 Frames, 33
    Landmarks, Test in `src/test/choreoV2.test.ts`): `pose3d` an jedem Frame +57,8 % (mit 2
    Stellen +51,3 %), ausgedünnt +29,0 % (1,37 → 1,77 MB). Ziel war unter +50 %.
+   5b. **Lange Lücken** ohne Person (über 150 ms, Etappe 8i-4): Der Coach gleitet nicht mehr
+   über die Lücke. Standard „Halten“ (`longGap: "hold"`): eine Kopie des letzten Frames vor der
+   Lücke, ein Frame-Abstand (100 ms) vor der ersten Pose danach, mit `lowVisibility`. Der Coach
+   steht still und geht in diesen 100 ms in die neue Pose. Alternative `"hide"`: ein Frame in
+   der Mitte der Lücke mit Sichtbarkeit 0 an allen Punkten, der Coach verschwindet. Kein
+   Formatwechsel, nur zusätzliche Frames.
 6. Moves nach `movePlacement` (Etappe 8g-4c). Ein Kandidat entfällt, wenn der Frame dort
-   fehlt, `lowVisibility` hat oder weniger als 4 Arm- und Beinwinkel trägt.
+   fehlt, `lowVisibility` hat oder weniger als 4 Arm- und Beinwinkel trägt, und (seit 8i-4)
+   wenn die Pose, die der Scorer dort per `frameAt` liest, nicht verlässlich ist
+   (`poseUsableAt`: ein Nachbar-Frame mit `lowVisibility` oder zu wenige Winkel). So landet kein
+   Move in oder am Rand einer langen Lücke.
    - `"grid"` („Fester Takt“): Moves alle `beatsPerMove` Beats (Standard 2) ab
      `beatOffsetMs`.
    - `"holds"` (Standard seit 8g-5, „Haltepunkte“): Die Beats werden in Fenster zu k Beats geteilt, k =
@@ -789,7 +805,8 @@ niedriger ist besser:
   Glättung, weil schnelle Moves abgeschnitten wurden. `minCutoff 2, beta 40` lag bei beiden
   Videos vorn und innerhalb eines erweiterten Rasters (`minCutoff` bis 1000, `beta` bis 320),
   also nicht am Rand. Bei BTS ist der Abstand (0,06°) nicht aussagekräftig.
-- `maxGapMs` hatte keine Wirkung (keine längeren Lücken in den Videos) und bleibt 250.
+- `maxGapMs` hatte keine Wirkung (keine längeren Lücken in den Videos) und blieb 250. Seit
+  Etappe 8i-4 ist es `SHORT_GAP_MS` = 150 ms und gilt auch für das Füllen kurzer Lücken.
 - Haltepunkte (`"holds"`) sind jetzt Standard: gleicher Holdout-Fehler wie `"grid"`, aber
   ruhigere Zielposen an den Moves (`moveMotionDegPerS` 98 statt 107 °/s bei BTS, 116 statt
   155 °/s beim TikTok) und bei BTS mehr brauchbare Moves (33 statt 31 von 36).
@@ -797,6 +814,31 @@ niedriger ist besser:
   Importe. Dev-Rohdaten ohne `movePlacement` (vor 8g-4c) werden weiter mit `"grid"` gerechnet.
 - Zwei Videos sind eine kleine Basis; mit weiteren Videos (Party-Klassiker, Zumba) erneut
   prüfen. Ob sich Haltepunkte im Spiel besser anfühlen, bleibt ein Gerätetest.
+
+### Lücken (Etappe 8i-4)
+
+Gemessen mit `bun run eval-video` (10 Seeds) an BTS und TikTok, frisch extrahiert im Browser
+(Modell „full“), dazu je ein Zuschnitt auf die oberen 72 % des Bildes (Füße draußen; die
+Referenz kommt aus dem Zuschnitt). Werte: Moves / Quote Selbsttest / Trennschärfe (Quote
+„selbst“ − Quote „fremd“). Die Zeilen 100–300 ms sind mit „Ausblenden“ gemessen.
+
+| Grenze für kurze Lücken         | BTS            | TikTok         | BTS-Zuschnitt  | TikTok-Zuschnitt |
+| ------------------------------- | -------------- | -------------- | -------------- | ---------------- |
+| ohne Füllen (vor 8i-4, gleiten) | 32/0,926/0,489 | 17/1,000/0,418 | 26/0,745/0,243 | 18/0,973/0,541   |
+| 100 ms                          | 30/0,915/0,496 | 17/0,999/0,480 | 17/0,874/0,469 | 18/0,997/0,665   |
+| **150 ms (Standard)**           | 30/0,915/0,491 | 17/0,999/0,484 | 18/0,857/0,451 | 18/0,995/0,673   |
+| 200 ms                          | 34/0,885/0,420 | 18/0,994/0,619 | 24/0,872/0,440 | 18/0,997/0,752   |
+| 300 ms                          | 36/0,889/0,390 | 18/0,999/0,577 | 28/0,834/0,393 | 18/0,997/0,749   |
+
+- 100 und 150 ms sind nirgends schlechter als vorher. Ab 200 ms errät die Gerade bei BTS
+  (schnelle Armbewegungen) zu viele Gelenke falsch: mehr Moves, aber niedrigere Trennschärfe.
+  Die Wirkung kommt fast ganz vom Füllen einzelner Gelenke, das Füllen ganzer Posen ändert wenig.
+- Beim BTS-Zuschnitt fallen 8 Moves an Lückenrändern weg; das waren die X-Urteile (9 % → 0 %).
+- „Halten“ und „Ausblenden“ ergeben dieselben Werte (mit „Halten“ 18/0,857/0,451 bzw.
+  18/0,995/0,685 in den Zuschnitten), Gleiten ist beim BTS-Zuschnitt schlechter (21 Moves,
+  Trennschärfe 0,313). Gewählt nach dem Aussehen: Im Bildvergleich an einer echten 600-ms-Lücke
+  bleibt der Coach beim Halten sichtbar; Ausblenden lässt ihn schon ab dem letzten Frame vor der
+  Lücke verschwinden und würde bei jeder Lücke knapp über 150 ms blinken.
 
 ## Editor
 

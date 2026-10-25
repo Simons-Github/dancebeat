@@ -994,7 +994,7 @@ wird:
 
 `bun run tune-video <a.posetrack.json> [b.posetrack.json …]` (`scripts/tune-video-choreo.ts`,
 Logik in `scripts/tuning.ts`) rechnet für jede Datei ein Raster aus One-Euro-`minCutoff`
-(Standard 0,5/1/2/4/8), `beta` (2/10/20/40/80) und `maxGapMs` (150/250/400) durch und gibt je Video
+(Standard 0,5/1/2/4/8), `beta` (2/10/20/40/80) und `maxGapMs` (100/150/300; Standard `SHORT_GAP_MS` = 150 seit 8i-4) durch und gibt je Video
 eine Tabelle nach Holdout-Fehler aus (Zittern, Moves je Rasterpunkte, Parameter; die aktuellen
 Standardwerte sind markiert). Bei mehreren Dateien folgt die mittlere Wertung über alle Videos;
 Einstellungen, die an einem Video scheitern, fallen dort heraus. Raster per Komma-Liste

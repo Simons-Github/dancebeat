@@ -10,6 +10,7 @@ import {
   DEFAULT_MOVE_PLACEMENT,
   DEFAULT_ONE_EURO,
   MOVE_PLACEMENTS,
+  SHORT_GAP_MS,
   trackMetrics,
   type MovePlacement,
   type TrackMetrics,
@@ -30,7 +31,7 @@ export type TuningGrid = { [K in keyof TuningParams]: TuningParams[K][] };
 export const CURRENT: TuningParams = {
   minCutoff: DEFAULT_ONE_EURO.minCutoff,
   beta: DEFAULT_ONE_EURO.beta,
-  maxGapMs: 250,
+  maxGapMs: SHORT_GAP_MS,
   beatsPerMove: 2,
   placement: DEFAULT_MOVE_PLACEMENT,
 };
@@ -38,7 +39,7 @@ export const CURRENT: TuningParams = {
 export const DEFAULT_GRID: TuningGrid = {
   minCutoff: [0.5, 1, 2, 4, 8],
   beta: [2, 10, 20, 40, 80],
-  maxGapMs: [150, 250, 400],
+  maxGapMs: [100, SHORT_GAP_MS, 300],
   beatsPerMove: [2],
   placement: [DEFAULT_MOVE_PLACEMENT],
 };

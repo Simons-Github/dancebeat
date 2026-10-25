@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { buildPoseTrackFile, type PoseTrackFile } from "@/lib/poseTrackFile";
 import { figure } from "@/lib/pose";
 import type { Landmark } from "@/lib/types";
+import { SHORT_GAP_MS } from "@/lib/videoChoreo";
 
 import {
   CURRENT,
@@ -63,7 +64,7 @@ describe("tuning", () => {
     const points = gridPoints({
       minCutoff: [1, 2],
       beta: [10, 20, 40],
-      maxGapMs: [250],
+      maxGapMs: [SHORT_GAP_MS],
       beatsPerMove: [2],
       placement: ["holds"],
     });
@@ -75,7 +76,7 @@ describe("tuning", () => {
     const points = gridPoints({
       minCutoff: [1, 1000],
       beta: [10],
-      maxGapMs: [250],
+      maxGapMs: [SHORT_GAP_MS],
       beatsPerMove: [2],
       placement: ["grid"],
     });
@@ -89,7 +90,7 @@ describe("tuning", () => {
     const points = gridPoints({
       minCutoff: [1, 2],
       beta: [40],
-      maxGapMs: [250],
+      maxGapMs: [SHORT_GAP_MS],
       beatsPerMove: [2],
       placement: ["holds"],
     });
@@ -114,7 +115,7 @@ describe("tuning", () => {
     const points = gridPoints({
       minCutoff: [2],
       beta: [40],
-      maxGapMs: [250],
+      maxGapMs: [SHORT_GAP_MS],
       beatsPerMove: [2],
       placement: ["grid", "holds"],
     });
