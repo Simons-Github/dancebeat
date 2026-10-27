@@ -1,14 +1,18 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  dedupePoses,
   defaultTarget,
   hasMultiplePersons,
+  isDuplicatePose,
   jumpLimit,
   maxPersons,
   nearestSampleIndex,
   personOrder,
   pickPoseAt,
   poseCenter,
+  poseSize,
+  TARGET_AMBIGUITY_MARGIN,
   TARGET_JUMP_BASE,
   TARGET_JUMP_MAX,
   trackTarget,
@@ -271,5 +275,66 @@ describe("Hilfsfunktionen Zielperson", () => {
     expect(nearestSampleIndex(track, -10)).toBe(0);
     expect(nearestSampleIndex(track, 9999)).toBe(2);
     expect(nearestSampleIndex({ aspect: 1, samples: [] }, 0)).toBe(-1);
+  });
+});
+
+describe("Doppelt erkannte Person (Gerätetest B3)", () => {
+  const person = shiftedFigure(0, { dx: -0.2 });
+  /** The same person again, slightly off and less sure (a second detection of one body). */
+  const copy = person.map((p): Landmark => [p[0] + 0.004, p[1] - 0.003, (p[2] ?? 1) * 0.8]);
+  const other = shiftedFigure(700, { dx: 0.2 });
+
+  it("erkennt eine Doppelerkennung, aber nicht zwei Personen nebeneinander", () => {
+    expect(isDuplicatePose(person, copy, ASPECT)).toBe(true);
+    expect(isDuplicatePose(person, other, ASPECT)).toBe(false);
+    // Two dancers close together, one shoulder width apart, stay two people.
+    const shoulders = Math.abs(person[11]![0] - person[12]![0]) * ASPECT;
+    expect(shoulders).toBeLessThan(poseSize(person, ASPECT) / 3);
+    const near = shiftedFigure(0, { dx: -0.2 + shoulders / ASPECT });
+    expect(isDuplicatePose(person, near, ASPECT)).toBe(false);
+  });
+
+  it("behält je Person die sicherere Erkennung in der Modell-Reihenfolge", () => {
+    expect(dedupePoses([copy, other, person], ASPECT)).toEqual([1, 2]);
+    expect(dedupePoses([person, other], ASPECT)).toEqual([0, 1]);
+    expect(dedupePoses([], ASPECT)).toEqual([]);
+  });
+
+  it("ohne sichtbare Punkte ist nichts doppelt", () => {
+    const hidden = person.map((p): Landmark => [p[0], p[1], 0]);
+    expect(isDuplicatePose(hidden, hidden, ASPECT)).toBe(false);
+    expect(dedupePoses([hidden, hidden], ASPECT)).toEqual([0, 1]);
+  });
+});
+
+describe("trackTarget bei uneindeutiger Zuordnung (Gerätetest B2)", () => {
+  it("lässt ein Sample leer, wenn zwei Personen gleich nah an der Zielperson stehen", () => {
+    const off = 0.04 / ASPECT;
+    const ambiguous = (t: number) => t >= 1000 && t <= 1100;
+    const track = makeTrack((t) =>
+      ambiguous(t)
+        ? [shiftedFigure(t, { dx: -0.2 + off }), shiftedFigure(t, { dx: -0.2 - off }), right(t)]
+        : [left(t), right(t)],
+    );
+    const out = trackTarget(track, { sampleIndex: 0, poseIndex: 0 });
+    for (const s of out.samples) {
+      if (ambiguous(s.timeMs)) expect(s.landmarks).toBeNull();
+      else expect(centerX(s.landmarks)).toBeCloseTo(0.3, 5);
+    }
+  });
+
+  it("nimmt die nächste Person, wenn die zweite deutlich weiter weg steht", () => {
+    const near = 0.01 / ASPECT;
+    const far = near + (TARGET_AMBIGUITY_MARGIN + 0.02) / ASPECT;
+    const track = makeTrack((t) => [
+      shiftedFigure(t, { dx: -0.2 + near }),
+      shiftedFigure(t, { dx: -0.2 - far }),
+      right(t),
+    ]);
+    const out = trackTarget(
+      { ...track, samples: [{ timeMs: -50, poses: [left(0), right(0)] }, ...track.samples] },
+      { sampleIndex: 0, poseIndex: 0 },
+    );
+    for (const s of out.samples.slice(1)) expect(centerX(s.landmarks)).toBeCloseTo(0.3 + near, 5);
   });
 });

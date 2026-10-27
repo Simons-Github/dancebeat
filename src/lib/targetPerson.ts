@@ -64,6 +64,12 @@ export const TARGET_JUMP_BASE = 0.12;
 export const TARGET_JUMP_PER_S = 0.6;
 /** Upper bound of the allowed jump, whatever the gap. */
 export const TARGET_JUMP_MAX = 0.5;
+/**
+ * Ambiguity guard (B2): when a second person lies at most this much (image heights) farther from
+ * the last target center than the nearest one, the sample stays empty instead of guessing, e.g.
+ * while two dancers cross. The coach holds the last pose over such a gap.
+ */
+export const TARGET_AMBIGUITY_MARGIN = 0.05;
 /** A tap within this distance (image heights) of a torso center picks that person. */
 export const PICK_RADIUS = 0.15;
 
@@ -102,6 +108,49 @@ function poseBox(lm: Landmark[], aspect: number) {
 export function poseSize(lm: Landmark[], aspect: number): number {
   const b = poseBox(lm, aspect);
   return b ? Math.max(b.right - b.left, b.bottom - b.top) : 0;
+}
+
+// Start values, check on device (Gerätetest 2026-10-27, B3): with numPoses > 1 MediaPipe may
+// report the same person twice (the tracked pose and a fresh detection), which showed up as two
+// people on one dancer in the picker and let the target alternate between the two copies.
+/** Two poses are one person if their common visible landmarks lie this close (body sizes). */
+export const DUPLICATE_RATIO = 0.12;
+/** Common visible landmarks needed for the landmark comparison; else the torso centers count. */
+const DUPLICATE_MIN_COMMON = 4;
+
+const visibilitySum = (lm: Landmark[]) => lm.reduce((s, p) => s + (p[2] ?? 1), 0);
+
+/** Whether `a` and `b` are the same person detected twice (see DUPLICATE_RATIO). */
+export function isDuplicatePose(a: Landmark[], b: Landmark[], aspect: number): boolean {
+  const size = Math.max(poseSize(a, aspect), poseSize(b, aspect));
+  if (!(size > 0)) return false;
+  let sum = 0,
+    n = 0;
+  for (const [i, p] of a.entries()) {
+    const q = b[i];
+    if (!isVisible(p) || !q || !isVisible(q)) continue;
+    sum += Math.hypot((p[0] - q[0]) * aspect, p[1] - q[1]);
+    n++;
+  }
+  if (n >= DUPLICATE_MIN_COMMON) return sum / n <= DUPLICATE_RATIO * size;
+  const ca = poseCenter(a, aspect),
+    cb = poseCenter(b, aspect);
+  return !!ca && !!cb && dist(ca, cb) <= DUPLICATE_RATIO * size;
+}
+
+/**
+ * Indices of the poses to keep, in their original order: of every group of duplicates
+ * (`isDuplicatePose`) only the pose with the highest visibility sum stays.
+ */
+export function dedupePoses(poses: Landmark[][], aspect: number): number[] {
+  const order = poses
+    .map((lm, i) => ({ i, v: visibilitySum(lm) }))
+    .sort((x, y) => y.v - x.v || x.i - y.i);
+  const kept: number[] = [];
+  for (const { i } of order) {
+    if (kept.every((k) => !isDuplicatePose(poses[k]!, poses[i]!, aspect))) kept.push(i);
+  }
+  return kept.sort((x, y) => x - y);
 }
 
 // Start values, check on device: a second person must show up in enough samples before the
@@ -182,7 +231,8 @@ export const jumpLimit = (gapMs: number) =>
 /**
  * Follows the chosen person from the seed sample forward and backward: per sample the pose whose
  * torso center is nearest to the last known target center, if it lies within `jumpLimit` of the
- * time since the target was last seen. Otherwise the sample has no person (null); another person
+ * time since the target was last seen. Otherwise, or when another person lies within
+ * `TARGET_AMBIGUITY_MARGIN` of that distance, the sample has no person (null); another person
  * is never taken instead. The returned landmarks are the track's own arrays (no copies). If the
  * track has world landmarks, each sample carries the world of the chosen pose (`world`).
  *
@@ -209,13 +259,18 @@ export function trackTarget(track: MultiPoseTrack, seed: TargetSeed | null): Pos
       const s = samples[i]!;
       const limit = jumpLimit(s.timeMs - last.timeMs);
       let best: { poseIndex: number; center: Point; d: number } | null = null;
+      let second = Infinity;
       for (const [poseIndex, lm] of s.poses.entries()) {
         const center = poseCenter(lm, aspect);
         if (!center) continue;
         const d = dist(center, last.center);
-        if (d <= limit && (!best || d < best.d)) best = { poseIndex, center, d };
+        if (d > limit) continue;
+        if (!best || d < best.d) {
+          if (best) second = best.d;
+          best = { poseIndex, center, d };
+        } else second = Math.min(second, d);
       }
-      if (!best) continue;
+      if (!best || second - best.d <= TARGET_AMBIGUITY_MARGIN) continue;
       out[i] = targetSample(s, best.poseIndex);
       last = { center: best.center, timeMs: s.timeMs };
     }

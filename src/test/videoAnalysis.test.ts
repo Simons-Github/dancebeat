@@ -11,7 +11,14 @@ import {
 } from "@/lib/videoAnalysis";
 import { defaultTarget, trackTarget } from "@/lib/targetPerson";
 import { choreoFromPoseTrack } from "@/lib/videoChoreo";
-import { fakeEstimator, FakeVideo, fakeWorldEstimator, worldOf } from "./videoAnalysisFakes";
+import {
+  fakeEstimator,
+  fakeMultiEstimator,
+  FakeVideo,
+  fakeWorldEstimator,
+  shiftedFigure,
+  worldOf,
+} from "./videoAnalysisFakes";
 
 const someone: Landmark[] = [[0.5, 0.5, 1]];
 
@@ -70,6 +77,27 @@ describe("analyzeVideo", () => {
     ]);
     expect(all.mock.calls.map((c) => c[1])).toEqual([0, 50, 100]);
     expect(est.detect).not.toHaveBeenCalled();
+  });
+
+  it("legt eine doppelt erkannte Person nur einmal ab, auch mit Weltpunkten (B3)", async () => {
+    const video = new FakeVideo({ durationMs: 50 });
+    const person = shiftedFigure(0, { dx: -0.2 });
+    const copy = person.map((p): Landmark => [p[0] + 0.004, p[1], (p[2] ?? 1) * 0.8]);
+    const other = shiftedFigure(0, { dx: 0.2 });
+    const est = fakeMultiEstimator(() => [copy, other, person]);
+    const track = await analyzeVideo(video.asVideo(), est);
+    expect(track.samples.map((s) => s.poses)).toEqual([
+      [other, person],
+      [other, person],
+    ]);
+    const world = await analyzeVideo(
+      video.asVideo(),
+      fakeWorldEstimator(() => [copy, other, person]),
+    );
+    for (const s of world.samples) {
+      expect(s.poses).toEqual([other, person]);
+      expect(s.worlds).toEqual([worldOf(other), worldOf(person)]);
+    }
   });
 
   it("bevorzugt detectAllWorld und legt die Weltpunkte parallel zu den Personen ab", async () => {

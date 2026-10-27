@@ -937,6 +937,15 @@ werden. Logik in `src/lib/targetPerson.ts` (ohne React).
   seit die Person zuletzt gesehen wurde: `0,12 + 0,6 × Sekunden`, höchstens `0,5` Bildhöhen
   (Startwerte, am Gerät prüfen). Sonst bleibt die Probe leer; eine andere Person wird nie
   eingesetzt. Die Reihenfolge, in der MediaPipe die Personen meldet, spielt keine Rolle.
+- Doppelte Erkennungen (Gerätetest 2026-10-27, B3): MediaPipe meldet mit `numPoses` > 1
+  dieselbe Person manchmal zweimal. `analyzeVideo` legt je Probe nur eine Pose pro Person ab
+  (`dedupePoses`): Zwei Posen gelten als eine Person, wenn ihre gemeinsam sichtbaren Punkte im
+  Mittel höchstens `DUPLICATE_RATIO` = 0,12 Körpergrößen auseinanderliegen (bei weniger als
+  4 gemeinsamen Punkten die Rumpfmitten). Es bleibt die Pose mit der höchsten Summe der
+  Sichtbarkeiten, mit ihren Weltpunkten; die Reihenfolge der übrigen bleibt.
+- Uneindeutige Zuordnung (B2): Liegt eine zweite Person höchstens `TARGET_AMBIGUITY_MARGIN`
+  = 0,05 Bildhöhen weiter von der letzten Mitte entfernt als die nächste, bleibt die Probe leer,
+  statt zu raten (etwa beim Kreuzen). Der Coach hält über diese Lücke die letzte Pose.
 - Es zählen nur Personen mit sichtbarem Rumpf (mindestens eine Schulter oder Hüfte). Mehrere
   Personen gelten erst, wenn mindestens 5 Proben und mindestens 5 % der Proben mit Pose zwei
   oder mehr solche Personen haben (`MIN_MULTI_SAMPLES`, `MIN_MULTI_RATIO`, Startwerte). Eine

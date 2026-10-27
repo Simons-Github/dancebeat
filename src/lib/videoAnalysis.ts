@@ -1,5 +1,5 @@
 import type { PoseEstimator } from "./poseEstimator";
-import type { MultiPoseTrack } from "./targetPerson";
+import { dedupePoses, type MultiPoseTrack } from "./targetPerson";
 import type { Landmark } from "./types";
 
 /**
@@ -141,7 +141,7 @@ const roundMicros = (ms: number) => Math.round(ms * 1000) / 1000;
 
 /**
  * Steps through `range` (default: the whole video) every `intervalMs`, seeks the paused video
- * there and records all people the estimator finds (`detectAllWorld` with world landmarks in
+ * there and records all people the estimator finds, the same person only once (`dedupePoses`) (`detectAllWorld` with world landmarks in
  * `worlds`, else `detectAll`, else `detect` wrapped as zero or one person). Sample times are
  * video time in ms (not relative to the range): the presented frame's `mediaTime` (rounded to
  * 1 µs), or the seek target with `fallback: true` when no frame callback confirmed the frame. A
@@ -199,7 +199,11 @@ export async function analyzeVideo(
       lastTimestamps.set(estimator, ts);
       const mark = shown === null ? { fallback: true as const } : {};
       if (estimator.detectAllWorld) {
-        const found = estimator.detectAllWorld(video, ts);
+        const all = estimator.detectAllWorld(video, ts);
+        const found = dedupePoses(
+          all.map((d) => d.landmarks),
+          aspect,
+        ).map((i) => all[i]!);
         samples.push({
           timeMs,
           poses: found.map((d) => d.landmarks),
@@ -208,8 +212,10 @@ export async function analyzeVideo(
         });
       } else {
         let poses: Landmark[][];
-        if (estimator.detectAll) poses = estimator.detectAll(video, ts);
-        else {
+        if (estimator.detectAll) {
+          const all = estimator.detectAll(video, ts);
+          poses = dedupePoses(all, aspect).map((i) => all[i]!);
+        } else {
           const one = estimator.detect(video, ts);
           poses = one ? [one] : [];
         }
