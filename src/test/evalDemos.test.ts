@@ -50,10 +50,13 @@ describe("runDemoEval", () => {
     }
   });
 
-  it("builds with the overridden difficulty (level 3 doubles the density)", () => {
+  it("builds with the overridden difficulty (level 3 denser, at most twice)", () => {
     const [one, two, three] = run({ seeds: 1, noiseDeg: 0, missRate: 0 });
     expect(two!.aggregate!.mean.moves).toBe(one!.aggregate!.mean.moves);
-    expect(three!.aggregate!.mean.moves / one!.aggregate!.mean.moves).toBeCloseTo(2, 1);
+    // Level 3 halves the step (B8: 4 → 2 beats) except where a quiet section keeps 4 beats.
+    const ratio = three!.aggregate!.mean.moves / one!.aggregate!.mean.moves;
+    expect(ratio).toBeGreaterThan(1.3);
+    expect(ratio).toBeLessThanOrEqual(2.01);
   });
 
   it("minStars is the lowest run, not the mean, once noise makes runs differ", () => {

@@ -447,9 +447,13 @@ beiden Stufen (feste Clip-Folgen für die Demo-Songs aus Etappe 14).
 - Phrasen zu 8 Beats, je 4 Phrasen eine Gruppe mit dem Muster A A B A. Gruppen wechseln zwischen
   Strophe (eigene Phrasen je Strophe) und Refrain (jeder Refrain dieselben Phrasen,
   `chorus-A`/`chorus-B`). Gleicher Schlüssel = exakt dieselbe Clip-Folge.
-- Dichte (Beats pro Move, 1, 2 oder 4): Grundwert nach Schwierigkeit (1: 2, 2: 2, 3: 1);
-  Phrasenenergie unter ⅓ verdoppelt, ab ⅔ halbiert (nur Schwierigkeit 2 und 3); danach wird
-  verdoppelt, bis Moves mindestens `MIN_STEP_MS` (400 ms) auseinanderliegen.
+- Dichte (Beats pro Move, 1, 2 oder 4): Grundwert nach Schwierigkeit (1: 4, 2: 4, 3: 2);
+  Phrasenenergie unter ⅓ verdoppelt (höchstens 4), ab ⅔ halbiert (nur Schwierigkeit 2 und 3);
+  danach wird verdoppelt, bis Moves mindestens `MIN_STEP_MS` (700 ms) auseinanderliegen.
+  Bis zum Gerätetest 2026-10-27 waren es 2 / 2 / 1 und 400 ms (B8: auf jeder Stufe zu viele Moves
+  zu schnell). `eval-demos` auf der ausgelieferten Stufe, Moves pro Minute vorher → nachher: Gold
+  in My Pocket 54 → 30, Gold on the Glass 50 → 30, Lemonade Skies 45 → 28, Rise Until The Morning
+  121 → 61; Quote bei 30° Rauschen unverändert (0,83–0,87 → 0,85–0,88).
 - Phrasenenergie: mit Kurve der Rang (0–1) des Mittelwerts je Phrase unter allen Phrasen (vom
   Pegel unabhängig); reicht die Kurve nicht über alle Phrasen, gilt die Struktur: Strophe A 0,3,
   B 0,5, Refrain A 0,55, B 0,65 (bleibt unter ⅔, nur eine gemessene Kurve verdichtet
@@ -689,7 +693,8 @@ Ergebnis (20 Seeds; Moves/min und p95 sind je Stufe fest):
   gemessen (10 Seeds, 10 % Ausfall, Sterne der Manifest-Stufe). Sie trennen jetzt das Können des
   simulierten Spielers, aber nicht die Songs: Sein Rauschen hängt nicht von der Bewegung ab, jeder
   Song und jede Stufe ergibt bei gleichem Rauschen dieselben Sterne.
-- **Regel stattdessen:** Messbar trennt nur Stufe 3 (doppelte Dichte). Stufe 1 und 2 sind bei
+- **Regel stattdessen:** Messbar trennt nur Stufe 3 (doppelte Dichte; Zahlen unten von vor B8,
+  seitdem jeweils etwa die Hälfte). Stufe 1 und 2 sind bei
   gleicher Energie gleich dicht (`BASE_STEP_BEATS`, die höchste `MANIFEST_ENERGY` 0,6 liegt unter
   `HIGH_ENERGY`); sie unterscheiden sich nur in der Clip-Auswahl. Die Zuordnung 1 oder 2 folgt
   deshalb dem Song selbst: Lemonade Skies ist am langsamsten (111 BPM, 45 Moves/min) und bleibt

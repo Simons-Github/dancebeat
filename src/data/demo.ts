@@ -211,9 +211,9 @@ const AUDIO_VERSION_KEY = "dancebeat.demoAudioVersion";
  * 1 – no marker yet (seeded before Etappe 14g) · 2 – AIST pack with smooth entries (14f) ·
  * 3 – AIST sequences in the pack, observed transitions weighted (13j) · 4 – beat phase in
  * `offsetMs`, moves on k · beat (Gerätetest 2026-10-27, B7; also drops sync offsets that had
- * absorbed the phase)
+ * absorbed the phase) · 5 – half the move density (Gerätetest 2026-10-27, B8)
  */
-export const DEMO_CHOREO_VERSION = 4;
+export const DEMO_CHOREO_VERSION = 5;
 /**
  * Choreography version per demo id. Per demo, not global like the audio marker: the seed runs
  * again after every library write, and a retry must not wipe demos that were already replaced.

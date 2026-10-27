@@ -305,13 +305,14 @@ describe("planStructure", () => {
 
   it("chooses density from difficulty and structure energy", () => {
     // Without a curve: verse A 0.3 (< LOW_ENERGY → step doubles), the rest normal.
-    const plan = planStructure(input({ difficulty: 1, durationMs: 240_000 }));
+    const plan = planStructure(input({ difficulty: 3, durationMs: 240_000 }));
     const verseA = plan.phrases.find((p) => p.section === "verse")!;
     const chorusA = plan.phrases.find((p) => p.key === "chorus-A")!;
-    expect(verseA.slots[0]!.lengthBeats).toBe(BASE_STEP_BEATS[1] * 2);
-    expect(chorusA.slots[0]!.lengthBeats).toBe(BASE_STEP_BEATS[1]);
-    const hard = planStructure(input({ difficulty: 3, durationMs: 240_000 }));
-    expect(hard.phrases.find((p) => p.key === "chorus-A")!.slots[0]!.lengthBeats).toBe(1);
+    expect(verseA.slots[0]!.lengthBeats).toBe(BASE_STEP_BEATS[3] * 2);
+    expect(chorusA.slots[0]!.lengthBeats).toBe(BASE_STEP_BEATS[3]);
+    // Difficulty 1: already MAX_STEP_BEATS, the quiet verse cannot get sparser (B8: 4 / 4 / 2).
+    const easy = planStructure(input({ difficulty: 1, durationMs: 240_000 }));
+    for (const p of easy.phrases) expect(p.slots[0]!.lengthBeats).toBe(MAX_STEP_BEATS);
   });
 
   it("returns no phrases and no closing pose when the song is shorter than the margin", () => {
@@ -421,7 +422,8 @@ describe("selectMoves", () => {
     let toB = 0,
       toC = 0;
     for (let i = 0; i < 200; i++) {
-      const inp = input({ seed: `observed-${i}`, durationMs: 30_000 });
+      // Difficulty 3: four moves per phrase, so most pairs are chosen, not repeated phrases.
+      const inp = input({ seed: `observed-${i}`, durationMs: 30_000, difficulty: 3 });
       const refs = selectMoves(planStructure(inp), pack, inp, randomFromString(inp.seed));
       // The closing pose is weighted by energy only, so its predecessor pair is left out.
       for (let j = 0; j + 2 < refs.length; j++) {
@@ -587,7 +589,9 @@ describe("energy curve", () => {
       );
       expect(goldMove?.gold).toBe(true);
     }
-    expect(lMoves).toBeGreaterThan(qMoves * 2);
+    // Quiet verses at MAX_STEP_BEATS (4), loud ones at 2 beats: exactly twice as dense.
+    expect(lMoves).toBeGreaterThanOrEqual(qMoves * 2);
+    expect(lMoves).toBeGreaterThan(qMoves);
     expect(lEnergy).toBeGreaterThan(qEnergy);
   });
 

@@ -1571,6 +1571,15 @@ Folgen sich leichter nachtanzen lassen.
 
 ### 14. Neue Demo-Songs ✅ (Gerätetest offen)
 
+**Gerätetest-Befund 2026-10-27, Paket D (B8) – umgesetzt, Gerätetest offen.** Zu viele Moves zu
+schnell hintereinander, laut Nutzer auf allen Stufen gleich. Generator-Dichte halbiert:
+`BASE_STEP_BEATS` 4 / 4 / 2 statt 2 / 2 / 1, `MIN_STEP_MS` 700 statt 400 ms. Gilt für die Demos
+und für „Song hinzufügen“ und „Neu erzeugen“. Moves pro Minute auf der ausgelieferten Stufe:
+Gold in My Pocket 54 → 30, Gold on the Glass 50 → 30, Lemonade Skies 45 → 28, Rise Until The
+Morning 121 → 61; Wertung im Simulator unverändert. Demos neu gebaut, `DEMO_CHOREO_VERSION` 5.
+Details in [choreography-format.md](choreography-format.md#generator). Gerätetest offen: wirkt
+das Tempo jetzt nachtanzbar, ohne dass lange Lücken ohne Move entstehen?
+
 Vier Demos mit eigener KI-Musik (Gemini, MP3 in `public/demo-audio/`); Songaufbau per Manifest über
 den Generator aus 13 (fester Plan, Refrain identisch, Gold Moves am Höhepunkt); Credits. Lizenzklärung 14-0 erledigt
 (2026-10-22: AIST++-Bewegung darf ausgeliefert werden, laut AIST-Auskunft vom 2026-10-23 nur

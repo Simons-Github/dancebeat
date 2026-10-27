@@ -15,14 +15,20 @@ export const GROUP_PATTERN = ["A", "A", "B", "A"] as const;
 export const MIN_INTRO_MS = 2000;
 /** Beats between the last move and the end of the song (the move's window must close first). */
 export const END_MARGIN_BEATS = 2;
-/** Beats per move by difficulty before the energy adjustment. */
-export const BASE_STEP_BEATS: Record<1 | 2 | 3, number> = { 1: 2, 2: 2, 3: 1 };
+/**
+ * Beats per move by difficulty before the energy adjustment. 4 / 4 / 2 since the Gerätetest
+ * 2026-10-27 (B8: too many moves too fast on every level; before 2 / 2 / 1).
+ */
+export const BASE_STEP_BEATS: Record<1 | 2 | 3, number> = { 1: 4, 2: 4, 3: 2 };
 /** Phrases below this energy get half as many moves. */
 export const LOW_ENERGY = 1 / 3;
 /** Phrases at or above this energy get twice as many moves (difficulty 2 and 3). */
 export const HIGH_ENERGY = 2 / 3;
-/** Moves closer than this are too fast to copy; the step doubles until it is reached. */
-export const MIN_STEP_MS = 400;
+/**
+ * Moves closer than this are too fast to copy; the step doubles until it is reached. 700 since
+ * the Gerätetest 2026-10-27 (B8, before 400): one beat stays a step only below 86 BPM.
+ */
+export const MIN_STEP_MS = 700;
 /** Largest step: two moves per phrase. */
 export const MAX_STEP_BEATS = 4;
 /**
