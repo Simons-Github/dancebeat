@@ -3,6 +3,9 @@ import {
   accuracyPoints,
   angleDeviation,
   comboMultiplier,
+  DISTINCT_MAX,
+  DISTINCT_SCALE_DEG,
+  distinctWeights,
   judge,
   movePoints,
   nextCombo,
@@ -124,5 +127,40 @@ describe("Sterne (Befund N2)", () => {
   it("Rangtitel folgen den Sternen", () => {
     expect(rankTitle(allRated("SUPER").stars, false)).toBe("PROFI");
     expect(rankTitle(5, true)).toBe("MEGASTAR");
+  });
+});
+
+describe("Gewichtung nach unterscheidenden Gelenken (Gerätetest A2)", () => {
+  it("Gelenke nahe am typischen Wert des Songs zählen 1, abweichende mehr, gedeckelt", () => {
+    const w = distinctWeights([
+      { leftShoulder: 0, leftKnee: 0 },
+      { leftShoulder: 0, leftKnee: 0 },
+      { leftShoulder: 0 },
+      { leftShoulder: 90, leftKnee: 0 },
+      { leftShoulder: 179 },
+    ]);
+    // Typical left shoulder 0 (median), knee 0.
+    expect(w[0]?.leftShoulder).toBeCloseTo(1);
+    expect(w[0]?.leftKnee).toBe(1);
+    expect(w[3]?.leftShoulder).toBeCloseTo(1 + 90 / DISTINCT_SCALE_DEG);
+    expect(w[3]?.leftKnee).toBe(1);
+    expect(w[4]).toEqual({ leftShoulder: DISTINCT_MAX });
+    expect(distinctWeights([])).toEqual([]);
+  });
+
+  it("rechnet über die ±180°-Grenze mit dem kürzesten Bogen", () => {
+    const w = distinctWeights([{ leftElbow: 175 }, { leftElbow: -175 }, { leftElbow: 178 }]);
+    for (const x of w) expect(x.leftElbow).toBeLessThan(1 + 10 / DISTINCT_SCALE_DEG);
+  });
+
+  it("ein unbewegtes Gelenk mit Treffer rettet eine falsche Armpose nicht mehr", () => {
+    const target = { leftShoulder: 80, rightShoulder: 0, leftKnee: 0, rightKnee: 0 };
+    const player = { leftShoulder: 0, rightShoulder: 0, leftKnee: 0, rightKnee: 0 };
+    const plain = angleDeviation(player, target)!;
+    const weighted = angleDeviation(player, target, { leftShoulder: DISTINCT_MAX })!;
+    expect(plain).toBeCloseTo((80 * 2) / 6);
+    expect(weighted).toBeCloseTo((80 * 12) / 16);
+    expect(judge(plain)).toBe("SUPER");
+    expect(judge(weighted)).toBe("X");
   });
 });

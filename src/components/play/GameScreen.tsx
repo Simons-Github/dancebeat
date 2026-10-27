@@ -46,7 +46,7 @@ import {
   type PlayMode,
 } from "@/lib/motion";
 import { vibrateFor } from "@/lib/haptics";
-import { MOVE_WINDOW_MS } from "@/lib/scorer";
+import { INTENSITY_WINDOW_MS, MOVE_WINDOW_MS } from "@/lib/scorer";
 import { computeAngles } from "@/lib/pose";
 import { getSettings, useSettings } from "@/lib/settings";
 import { setSfxVolume, sfx } from "@/lib/sfx";
@@ -227,7 +227,10 @@ export function GameScreen({
     );
   };
 
-  const endMs = (choreo.moves.at(-1)?.timeMs ?? 0) + MOVE_WINDOW_MS + END_TAIL_MS;
+  const endMs =
+    (choreo.moves.at(-1)?.timeMs ?? 0) +
+    Math.max(MOVE_WINDOW_MS, INTENSITY_WINDOW_MS) +
+    END_TAIL_MS;
   useEffect(() => {
     const src = () => audio.source.current;
     const ctl = new GameController({

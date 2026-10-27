@@ -2,17 +2,25 @@ import { frameAt } from "./pose";
 import {
   accuracyPoints,
   angleDeviation,
+  distinctWeights,
   judge,
   movePoints,
   nextCombo,
   referenceMax,
   starsFor,
+  type AngleWeights,
   type Difficulty,
 } from "./scoring";
 import type { Angles, Choreography, Move, Rating } from "./types";
 
-/** A move is judged by the best pose within ±MOVE_WINDOW_MS around its time. */
-export const MOVE_WINDOW_MS = 250;
+/**
+ * A move is judged by the best pose within ±MOVE_WINDOW_MS around its time. 150 instead of 250
+ * since the Gerätetest 2026-10-27 (A2): with 250 ms half a beat late still gave 5 stars, so the
+ * sync offset made no difference (docs/scoring.md#zeitfenster).
+ */
+export const MOVE_WINDOW_MS = 150;
+/** Window of the movement mode (`IntensityRating`): unchanged, the sensor needs the samples. */
+export const INTENSITY_WINDOW_MS = 250;
 
 /** Movement mode: rates a move from its window [fromMs, toMs] instead of the angles. */
 export type IntensityRating = (move: Move, fromMs: number, toMs: number) => Rating;
@@ -56,6 +64,7 @@ const emptyCounts = (): Record<Rating, number> => ({ PERFECT: 0, SUPER: 0, GOOD:
 export class Scorer {
   readonly moves: readonly Move[];
   private readonly targets: Angles[];
+  private readonly weights: AngleWeights[];
   private readonly difficulty: Difficulty;
   private best: (number | null)[] = [];
   private skipped: boolean[] = [];
@@ -73,6 +82,7 @@ export class Scorer {
     this.moves = choreo.moves;
     this.difficulty = difficulty;
     this.targets = choreo.moves.map((m) => frameAt(choreo.frames, m.timeMs)?.angles ?? {});
+    this.weights = distinctWeights(this.targets);
     this.reset();
   }
 
@@ -112,17 +122,19 @@ export class Scorer {
   /**
    * Records the player's pose at game time `t` (null = no usable pose) and judges every move
    * whose window ended before `t`. Returns the moves judged by this call.
-   * `intensityRating` replaces the angle comparison (movement mode); it gets the move's window.
+   * `intensityRating` replaces the angle comparison (movement mode); it gets the move's window
+   * of ±INTENSITY_WINDOW_MS.
    */
   sample(t: number, player: Angles | null, intensityRating?: IntensityRating): MoveResult[] {
     if (!Number.isFinite(t)) return [];
     const moves = this.moves;
+    const windowMs = intensityRating ? INTENSITY_WINDOW_MS : MOVE_WINDOW_MS;
     if (player) {
       for (let i = this.next; i < moves.length; i++) {
         const m = moves[i];
         if (!m || m.timeMs - MOVE_WINDOW_MS > t) break;
         if (t > m.timeMs + MOVE_WINDOW_MS) continue;
-        const dev = angleDeviation(player, this.targets[i] ?? {});
+        const dev = angleDeviation(player, this.targets[i] ?? {}, this.weights[i]);
         const prev = this.best[i] ?? null;
         if (dev != null && (prev == null || dev < prev)) this.best[i] = dev;
       }
@@ -130,10 +142,10 @@ export class Scorer {
     const out: MoveResult[] = [];
     while (this.next < moves.length) {
       const m = moves[this.next];
-      if (!m || t <= m.timeMs + MOVE_WINDOW_MS) break;
+      if (!m || t <= m.timeMs + windowMs) break;
       const i = this.next++;
       const rating = intensityRating
-        ? intensityRating(m, m.timeMs - MOVE_WINDOW_MS, m.timeMs + MOVE_WINDOW_MS)
+        ? intensityRating(m, m.timeMs - windowMs, m.timeMs + windowMs)
         : judge(this.best[i] ?? null, this.difficulty);
       out.push(this.finalize(i, m, rating));
     }

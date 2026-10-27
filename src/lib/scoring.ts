@@ -18,11 +18,63 @@ export const MIN_COVERAGE = 0.5;
 
 const weightOf = (k: AngleKey) => (ARM_KEYS.includes(k) ? 2 : k === "torsoLean" ? 0.5 : 1);
 
+/** Extra weight per angle on top of the joint weight (`distinctWeights`); missing = 1. */
+export type AngleWeights = Partial<Record<AngleKey, number>>;
+
+// Gerätetest 2026-10-27 (A2): a joint the song barely moves (straight legs, arms down) matches
+// for every player, so a completely different dance still got 2 stars. Measured with
+// `bun run eval-video` (docs/scoring.md#abweichung).
+/** Degrees away from the song's typical value that add 1 to an angle's weight. */
+export const DISTINCT_SCALE_DEG = 30;
+/** Upper bound of the extra weight. */
+export const DISTINCT_MAX = 6;
+
+/** Typical value of `values` (degrees): median of the offsets around their circular mean. */
+function typicalAngle(values: number[]): number {
+  const rad = Math.PI / 180;
+  const sin = values.reduce((a, v) => a + Math.sin(v * rad), 0);
+  const cos = values.reduce((a, v) => a + Math.cos(v * rad), 0);
+  const mean = Math.atan2(sin, cos) / rad;
+  const offsets = values.map((v) => angleDiff(v, mean)).sort((a, b) => a - b);
+  const mid = offsets.length / 2;
+  const median =
+    offsets.length % 2 ? offsets[Math.floor(mid)]! : (offsets[mid - 1]! + offsets[mid]!) / 2;
+  return mean + median;
+}
+
 /**
- * Gewichtete mittlere Abweichung in Grad (kürzester Bogen). Arme zählen doppelt, Rumpfneigung halb.
+ * Per move, how distinctive each target angle is: 1 + |deviation from the angle's typical value
+ * over all moves| / DISTINCT_SCALE_DEG, at most DISTINCT_MAX. Angles the moves rarely change
+ * count less than the ones that make a move what it is.
+ */
+export function distinctWeights(targets: Angles[]): AngleWeights[] {
+  const typical: AngleWeights = {};
+  const keys = new Set(targets.flatMap((t) => Object.keys(t) as AngleKey[]));
+  for (const k of keys) {
+    const values = targets.map((t) => t[k]).filter((v): v is number => v != null);
+    typical[k] = typicalAngle(values);
+  }
+  return targets.map((t) => {
+    const w: AngleWeights = {};
+    for (const [k, v] of Object.entries(t) as [AngleKey, number | undefined][]) {
+      const ref = typical[k];
+      if (v == null || ref == null) continue;
+      w[k] = Math.min(DISTINCT_MAX, 1 + Math.abs(angleDiff(v, ref)) / DISTINCT_SCALE_DEG);
+    }
+    return w;
+  });
+}
+
+/**
+ * Gewichtete mittlere Abweichung in Grad (kürzester Bogen). Arme zählen doppelt, Rumpfneigung halb,
+ * jeweils mal `weights` (`distinctWeights`, fehlend = 1).
  * null = nicht bewertbar: weniger als MIN_COVERAGE des Zielgewichts sichtbar oder kein Armwinkel.
  */
-export function angleDeviation(player: Angles, target: Angles): number | null {
+export function angleDeviation(
+  player: Angles,
+  target: Angles,
+  weights?: AngleWeights,
+): number | null {
   let sum = 0,
     w = 0,
     total = 0,
@@ -30,7 +82,7 @@ export function angleDeviation(player: Angles, target: Angles): number | null {
   for (const k of Object.keys(target) as AngleKey[]) {
     const t = target[k];
     if (t == null) continue;
-    const weight = weightOf(k);
+    const weight = weightOf(k) * (weights?.[k] ?? 1);
     total += weight;
     const p = player[k];
     if (p == null) continue;

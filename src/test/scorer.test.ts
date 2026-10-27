@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 
 import * as pose from "@/lib/pose";
-import { MOVE_WINDOW_MS, Scorer } from "@/lib/scorer";
+import { INTENSITY_WINDOW_MS, MOVE_WINDOW_MS, Scorer } from "@/lib/scorer";
 import { GOLD_FACTOR, POINTS } from "@/lib/scoring";
 import { seededRandom, simulatedAngles, type SimOptions } from "@/lib/game/simulatedPlayer";
 import type { Choreography } from "@/lib/types";
@@ -76,15 +76,25 @@ describe("Scorer mit simuliertem Spieler", () => {
     expect(s.done()).toBe(true);
   });
 
-  it("bewertet mit der besten Pose im ±250-ms-Fenster, außerhalb zählt nichts", () => {
+  it("bewertet mit der besten Pose im ±150-ms-Fenster, außerhalb zählt nichts", () => {
+    expect(MOVE_WINDOW_MS).toBe(150);
     const c = choreo(1);
     const target = new Scorer(c).target(0)!;
     const s = new Scorer(c);
     s.sample(1000 - MOVE_WINDOW_MS - 1, target); // too early
-    s.sample(1000 - 200, { ...target, leftShoulder: (target.leftShoulder ?? 0) + 50 });
-    s.sample(1000 + 200, target);
+    s.sample(1000 - 100, { ...target, leftShoulder: (target.leftShoulder ?? 0) + 50 });
+    s.sample(1000 + 100, target);
     const [r] = s.sample(1000 + MOVE_WINDOW_MS + 1, null);
     expect(r?.rating).toBe("PERFECT");
+  });
+
+  it("eine passende Pose 200 ms neben dem Move zählt nicht mehr (Gerätetest A2)", () => {
+    const c = choreo(1);
+    const target = new Scorer(c).target(0)!;
+    const s = new Scorer(c);
+    // The sample after the window closes the move at once.
+    const [r] = s.sample(1000 + 200, target);
+    expect(r?.rating).toBe("X");
   });
 });
 
@@ -200,14 +210,14 @@ describe("Bewegungsmodus (intensityRating)", () => {
     expect(rating).toHaveBeenNthCalledWith(
       1,
       c.moves[0],
-      1000 - MOVE_WINDOW_MS,
-      1000 + MOVE_WINDOW_MS,
+      1000 - INTENSITY_WINDOW_MS,
+      1000 + INTENSITY_WINDOW_MS,
     );
     expect(rating).toHaveBeenNthCalledWith(
       2,
       c.moves[1],
-      2000 - MOVE_WINDOW_MS,
-      2000 + MOVE_WINDOW_MS,
+      2000 - INTENSITY_WINDOW_MS,
+      2000 + INTENSITY_WINDOW_MS,
     );
     // Gold still multiplies the points.
     expect(results[1]?.points).toBe(POINTS.GOOD * GOLD_FACTOR);

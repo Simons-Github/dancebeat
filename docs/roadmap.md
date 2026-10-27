@@ -655,6 +655,26 @@ Aufteilung:
     - [ ] Tracking über Kreuzungen und kurze Verdeckungen: die Choreografie bleibt bei der
           gewählten Person (im Editor oder Spiel prüfen)
     - [ ] Dauer der Analyse mit `numPoses` 3 gegenüber vorher (1) für denselben Abschnitt
+  - **Gerätetest-Befunde 2026-10-27, Paket A (B1–B5) – umgesetzt, Gerätetest offen.**
+    - A1 (B2, B3): Rohdaten mit mehreren Personen liegen nicht vor (die Exporte enthalten nur
+      die Zielperson), daher Ursache aus dem Code: MediaPipe meldet mit `numPoses` 3 dieselbe
+      Person teils doppelt, `trackTarget` konnte zwischen beiden Kopien wechseln. Jetzt
+      `dedupePoses` in `analyzeVideo` und leere Probe bei uneindeutiger Zuordnung
+      (`TARGET_AMBIGUITY_MARGIN`), Details in
+      [architecture.md](architecture.md#zielperson-etappe-8f). Tests `targetPerson.test.ts`,
+      `videoAnalysis.test.ts`.
+    - A2 (B1, B4, B5): Die Wertung trennte zu schwach (`bun run eval-video`, BTS und TikTok):
+      ein halber Beat zu spät gab 5 Sterne, ein ganz anderer Tanz noch 2. Jetzt Fenster
+      ±150 ms statt ±250 ms (Bewegungsmodus bleibt 250 ms) und Gewichtung nach
+      unterscheidenden Gelenken (`distinctWeights`). Quote selbst / +½ Beat / fremd, BTS:
+      0,909 / 0,872 / 0,461 → 0,876 / 0,671 / 0,279; TikTok: 0,998 / 0,944 / 0,433 →
+      0,986 / 0,732 / 0,218. Sterne-Schwellen mit `eval-demos` geprüft, unverändert. Details in
+      [scoring.md](scoring.md#zeitfenster). Tests `scorer.test.ts`, `scoring.test.ts`. B4
+      (Haltepunkte gegen fester Takt) folgt vermutlich aus der schwachen Trennung und ist mit
+      der neuen Wertung erneut zu prüfen.
+    - Gerätetest offen: Zwei-Tänzer-Video erneut importieren (eine Person, keine Sprünge);
+      eigenen Videotanz nachtanzen (gute Wertung), absichtlich falsch tanzen (kaum Punkte);
+      Sync-Offset verstellen (spürbar schlechter); Demos fühlen sich nicht strenger an.
 - **8g Qualität mit echten Tanzvideos – 8g-2, 8g-3 und 8g-5 umgesetzt.** Ziel: aus YouTube-Videos (lokal per
   yt-dlp als MP4) zuverlässig gute Choreografien für Party-Klassiker, K-Pop Mirrored, Zumba und
   TikTok-Trends. Erst messen, dann gezielt verbessern.

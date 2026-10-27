@@ -12,7 +12,8 @@ Abweichungen von der ursprünglichen Beschreibung sind mit **Abweichung** markie
    sind und ein neues Kamerabild vorliegt.
 2. `t` ist die Spielzeit **des Bildes**, nicht der Ankunft des Erkennungsergebnisses (siehe
    [Zeitbasis](#zeitbasis)).
-3. Für jeden Move, dessen Fenster `t` enthält (**±250 ms** um `move.timeMs`), wird die
+3. Für jeden Move, dessen Fenster `t` enthält (**±150 ms** um `move.timeMs`, siehe
+   [Zeitfenster](#zeitfenster)), wird die
    Abweichung zu den Soll-Winkeln berechnet. Pro Move zählt die **beste** (kleinste) Abweichung.
    Die Soll-Winkel werden einmal pro Move vorberechnet (`frameAt` zum Zeitpunkt `move.timeMs`).
 4. Ist das Fenster vorbei, wird der Move bewertet: Punkte, Combo, Zähler, letztes Urteil.
@@ -23,6 +24,18 @@ Abweichungen von der ursprünglichen Beschreibung sind mit **Abweichung** markie
    Stell dich wieder ganz ins Bild.“ Die Moves in dieser Zeit sind trotzdem X.
 
 React rendert nur, wenn ein Move bewertet wurde (etwa einmal pro Move), nie pro Probe.
+
+## Zeitfenster
+
+- `MOVE_WINDOW_MS` = **150 ms** (bis zum Gerätetest 2026-10-27: 250 ms). Bei einer Probe alle
+  100 ms fallen 2–3 Proben in ein Fenster.
+- Grund (Befund B5): Mit ±250 ms bekam ein Spieler, der einen halben Beat zu spät tanzt, noch
+  5 Sterne; der Sync-Versatz machte daher keinen spürbaren Unterschied. Messung mit
+  `bun run eval-video` (BTS, TikTok, One-Euro, 5 Seeds), Quote „+½ Beat“: 0,872 / 0,944 vorher,
+  0,671 / 0,732 nachher (mit der Gewichtung unter [Abweichung](#abweichung)).
+- Preis: Ein falsch eingestellter Sync-Offset kostet jetzt schneller Punkte. Der Sync-Test
+  (Etappe 5d) wird damit wichtiger.
+- Der Bewegungsmodus behält **250 ms** (`INTENSITY_WINDOW_MS`), weil der Sensor Proben braucht.
 
 ## Zeitbasis
 
@@ -135,6 +148,17 @@ Gewichteter Mittelwert der absoluten Winkeldifferenzen über den kürzesten Boge
 | Hüften, Knie (Beine)       | 1       |
 | Rumpfneigung               | 0,5     |
 
+- **Unterscheidende Gelenke (Gerätetest 2026-10-27, B1/B5):** Jedes Gewicht wird je Move mit
+  `1 + |Soll − typischer Wert| / 30°` multipliziert, höchstens **6** (`distinctWeights`,
+  `DISTINCT_SCALE_DEG`, `DISTINCT_MAX`). Der typische Wert ist der Median des Winkels über alle
+  Moves des Songs (um den Kreismittelwert, damit ±180° nicht stört). Ein Gelenk, das der Song
+  kaum bewegt (gestreckte Beine, hängende Arme), passt bei fast jedem Spieler und zählt daher
+  weniger als die Gelenke, die den Move ausmachen. Berechnet einmal im `Scorer`-Konstruktor.
+- Grund: Ein ganz anderer Tanz bekam vorher 2 Sterne (Quote 0,461 / 0,433, 33–46 % SUPER oder
+  PERFECT). Mit Gewichtung und Zeitfenster: 1 Stern (0,279 / 0,218). Selbst getanzt
+  0,909 / 0,998 → 0,876 / 0,986. Trennschärfe (selbst − fremd) 0,448 / 0,565 → 0,597 / 0,768.
+  Die Mindestabdeckung rechnet mit denselben Gewichten.
+
 - Verglichen werden nur Winkel, die im Ziel **und** beim Spieler vorhanden sind. Fehlende Winkel
   werden übersprungen, nie als 0 gewertet. Landmarks mit `visibility < 0.5` zählen als fehlend.
 - **Mindestabdeckung (Abweichung, neu):** Die sichtbaren Winkel müssen mindestens **50 %** des
@@ -188,7 +212,13 @@ Die Abweichung wird durch den Toleranzfaktor der Schwierigkeit geteilt und dann 
 - **Kalibrierung** mit `bun run eval-demos --noise=… --miss=…` (vier Demos, 10 Seeds): bei 10–20°
   Rauschen Megastar (fast alles PERFECT), 30° 5 Sterne (rund 55 % PERFECT, Quote 0,83–0,88), 40°
   und 50° 4 Sterne (Quote 0,66–0,74), 60° 3 Sterne (Quote 0,56–0,59, kaum PERFECT); 10 % oder 20 %
-  Ausfall ändern daran fast nichts. Das Rauschen des Simulators ist je Bild unabhängig, und der
+  Ausfall ändern daran fast nichts.
+- **Nachgeeicht 2026-10-27** (Fenster 150 ms, Gewichtung): Mittel über alle Songs und Stufen,
+  10 % Ausfall, Quote vorher → nachher: 30° 0,825 → 0,857, 40° 0,724 → 0,747, 50° 0,657 → 0,671,
+  60° 0,556 → 0,582; Sterne 5 / 4 / 3,7–3,9 / 3 wie vorher, mit 20 % Ausfall ebenso. Die Ziele oben
+  bleiben erreicht, `STAR_THRESHOLDS` und `MEGA_THRESHOLD` bleiben daher unverändert. Dieser
+  Simulator rauscht alle Gelenke gleich, die Gewichtung wirkt bei ihm kaum; ihre Wirkung zeigt
+  `eval-video` (siehe [Abweichung](#abweichung)). Das Rauschen des Simulators ist je Bild unabhängig, und der
   Scorer nimmt das beste Bild im Fenster; ein echter Spieler mit 60° Fehler stünde schlechter da.
   Ob sich die Stufen richtig anfühlen, zeigt erst der Gerätetest.
 - Bereits gespeicherte Sterne bleiben stehen (kein Formatwechsel, keine Migration): Die Bibliothek
@@ -210,7 +240,7 @@ jeden Move. Logik in `src/lib/motion.ts`, Konstanten in `MOTION`.
   `event.timeStamp`, und nur während `playing`. Springt die Spielzeit zurück (Start, Neustart),
   leert der Aufrufer den Puffer (`MotionMeter.reset()`); „Weiter“ spult nicht zurück, Messungen
   von vor der Pause zählen also im selben Fenster weiter. Der Puffer hält höchstens 600 Messungen.
-- **Fenster:** wie im Winkelmodus `move.timeMs ± MOVE_WINDOW_MS` (250 ms). Wert = Mittelwert des
+- **Fenster:** `move.timeMs ± INTENSITY_WINDOW_MS` (250 ms, breiter als im Winkelmodus). Wert = Mittelwert des
   Betrags im Fenster. Weniger als `MOTION.minSamples` (3) Messungen → kein Wert → X; fehlende Daten
   zählen nie als 0.
 - **Urteil** (`judgeIntensity`), Schwellen in m/s², mal Faktor je Schwierigkeit (leicht 0,7,
