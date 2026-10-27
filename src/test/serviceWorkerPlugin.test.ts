@@ -15,7 +15,7 @@ const dist = (): Map<string, string> =>
     ["assets/index-abc.js", "app"],
     ["assets/_songId-def.js", "lazy route"],
     ["assets/index-ghi.css", "css"],
-    ["assets/fredoka-latin-400-normal-xyz.woff2", "font"],
+    ["assets/bricolage-grotesque-latin-wdth-normal-xyz.woff2", "font"],
     ["assets/index-abc.js.map", "map"],
     ["manifest.webmanifest", "{}"],
     ["favicon.svg", "<svg/>"],
@@ -49,7 +49,7 @@ describe("Service-Worker-Plugin: Precache-Liste", () => {
   it("enthält Shell, Lazy-Chunks, CSS, Fonts, Manifest und Icons, sortiert", () => {
     expect(selectPrecacheFiles(dist().keys())).toEqual([
       "assets/_songId-def.js",
-      "assets/fredoka-latin-400-normal-xyz.woff2",
+      "assets/bricolage-grotesque-latin-wdth-normal-xyz.woff2",
       "assets/index-abc.js",
       "assets/index-ghi.css",
       "favicon.svg",

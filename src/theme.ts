@@ -9,17 +9,37 @@ export const SONG_PALETTES = [
 ] as const;
 
 /**
- * Dark app background as hex (approximation of `--background` in src/styles.css, oklch(0.32 0.14 330)).
+ * Night: the dark app background behind the song glow (`--night`, `--background` in src/styles.css).
  * Used for the web manifest and the theme-color meta; keep public/manifest.webmanifest and index.html in sync.
  */
-export const APP_BACKGROUND = "#560553";
+export const APP_BACKGROUND = "#14061F";
 
 export const GOLD = "#FFC93C";
 export const GOLD_DEEP = "#E89B00";
+/** Highlight of gold surfaces (megastar). */
+export const GOLD_LIGHT = "#FFF6CF";
 
 export const FONTS = {
-  display: "'Fredoka', 'Baloo 2', system-ui, sans-serif",
+  display: "'Bricolage Grotesque Variable', system-ui, sans-serif",
 };
+
+/** Slightly pink white for text on night and glass. */
+export const PAPER = "#FFF2FA";
+
+/**
+ * Chrome: light, a dark "horizon" band in the middle, light again (like polished metal reflecting
+ * a horizon). `tint` is mixed in from the song color; `dark` is the darkest stop, checked against
+ * the night background in contrast.test.ts.
+ */
+export const CHROME = {
+  light: "#FFFFFF",
+  mid: "#E6DCEF",
+  dark: "#857799",
+  tint: 0.28,
+} as const;
+
+/** Song glow on the night background (opacity of the song colors in the two radial glows). */
+export const GLOW = { song: 0.45, secondary: 0.22 } as const;
 
 export const SPRING = { type: "spring", stiffness: 420, damping: 22 } as const;
 export const SPRING_SOFT = { type: "spring", stiffness: 180, damping: 20 } as const;
@@ -40,7 +60,7 @@ export const DEFAULT_SONG_THEME = {
 } as const;
 
 /** Scale of the selected / unselected song tile in the library. */
-export const TILE_SCALE = { selected: 1.07, idle: 0.93 } as const;
+export const TILE_SCALE = { selected: 1.04, idle: 0.92 } as const;
 
 /** Duration (ms) of the smooth background color change when another song is selected. */
 export const THEME_FADE_MS = 900;
@@ -59,27 +79,27 @@ export const MOTION_PRESETS: Record<MotionLevel, { drift: boolean; seconds: numb
     off: { drift: false, seconds: 0, vh: 0 },
   };
 
-/** Decorative background shapes. `x` / `y` / `size` are relative to the viewport (vw / % / vmax). */
+/**
+ * Decorative background. `mosaic`: a large five-pointed star built from small squares in the song
+ * color (pixel mosaic). `sparkle`: four-pointed glints. `x` / `y` are viewport percentages, `size` in
+ * vmax, `rotate` in degrees. Kept off the song title (bottom in portrait, right column in landscape).
+ */
 export const BG_SHAPES = [
-  { kind: "triangle", x: 6, y: 62, size: 14, tint: "white", opacity: 0.14 },
-  { kind: "circle", x: 22, y: 8, size: 9, tint: "secondary", opacity: 0.18 },
-  { kind: "triangle", x: 40, y: 38, size: 18, tint: "secondary", opacity: 0.16 },
-  { kind: "circle", x: 58, y: 74, size: 12, tint: "white", opacity: 0.12 },
-  { kind: "triangle", x: 74, y: 18, size: 10, tint: "white", opacity: 0.14 },
-  { kind: "circle", x: 88, y: 52, size: 16, tint: "secondary", opacity: 0.16 },
+  { kind: "mosaic", x: -14, y: -8, size: 62, rotate: -14, opacity: 0.55 },
+  { kind: "sparkle", x: 78, y: 7, size: 4.5, rotate: 0, opacity: 0.95 },
+  { kind: "sparkle", x: 88, y: 18, size: 2, rotate: 20, opacity: 0.8 },
+  { kind: "sparkle", x: 6, y: 52, size: 2.6, rotate: 10, opacity: 0.85 },
+  { kind: "sparkle", x: 52, y: 44, size: 1.6, rotate: 0, opacity: 0.7 },
+  { kind: "sparkle", x: 38, y: 4, size: 1.4, rotate: 30, opacity: 0.7 },
 ] as const;
 
 /**
- * Dark tint laid over the song colors so white text stays readable on every song color. `ink` is
- * the tint color, the numbers are its opacity per surface. Checked in src/test/contrast.test.ts.
+ * Dark tint for readable white text. `ink` is the tint color; `glass` is the opacity of the night
+ * glass behind panels and tiles (over the glowing background). Checked in src/test/contrast.test.ts.
  */
 export const SCRIM = {
   ink: "#1E0B36",
-  header: 0.7,
-  tile: 0.88,
-  banner: 0.74,
-  button: 0.55,
-  edge: 0.35,
+  glass: 0.72,
 } as const;
 
 /** Opacity of secondary (artist, hint) text. */
@@ -89,6 +109,17 @@ export const TEXT_SECONDARY_ALPHA = 0.9;
 export const MIN_CONTRAST = { text: 4.5, large: 3 } as const;
 
 export const FLAME = "#FF8A00";
+
+/** Glowing difficulty flame: tip, body and base of its gradient, plus the white-hot core. */
+/** Rainbow sheen over the song discs (conic gradient, screen-blended), like light on a real CD. */
+export const DISC_SHEEN = ["#FF9AE8", "#9AF3FF", "#FFF59A", "#C9A6FF", "#FF9AE8"] as const;
+
+export const FLAME_GRADIENT = {
+  tip: "#FFE66B",
+  body: FLAME,
+  base: "#FF2E93",
+  core: "#FFF8E6",
+} as const;
 export const ICON_OFF = "rgb(255 255 255 / 45%)";
 
 /** Colors for the setup camera overlay (drawn on canvas, so no CSS variables). */
@@ -167,13 +198,12 @@ export const PIKTO_FIGURE = {
 /** Rating popups: rise distance (vh) and duration (s). */
 export const POPUP = { riseVh: 6, seconds: 0.9 } as const;
 
-/** Result screen: score count-up (s, ease), star pop-in delay and stagger (s), lit star color. */
+/** Result screen: score count-up (s, ease), star pop-in delay and stagger (s). */
 export const RESULT = {
   countUpSeconds: 1.6,
   countUpEase: "easeOut",
   starDelaySeconds: 0.4,
   starStaggerSeconds: 0.22,
-  starOn: "#FFFFFF",
 } as const;
 
 /**

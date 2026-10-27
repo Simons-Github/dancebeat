@@ -26,8 +26,7 @@ import { LATENCY_MAX, LATENCY_MIN, LATENCY_STEP, useSettings, type Settings } fr
 import { formatOffsetMs } from "@/lib/sync";
 import { cn } from "@/lib/utils";
 
-const CARD =
-  "bg-(--scrim-banner) shadow-pop flex flex-col gap-4 rounded-3xl border border-white/15 p-5 text-white backdrop-blur-md";
+const CARD = "glass flex flex-col gap-4 rounded-3xl p-5 text-white";
 const BTN =
   "btn-pill h-12 gap-2 rounded-full px-6 text-base focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
 const HINT = "text-sm text-white/85";
@@ -44,7 +43,7 @@ const formatMb = (bytes: number) =>
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className={CARD}>
-      <h2 className="font-title text-stroke text-2xl">{title}</h2>
+      <h2 className="font-title text-2xl">{title}</h2>
       {children}
     </section>
   );
@@ -261,8 +260,8 @@ export function LicenseTexts() {
         <div className="flex flex-col gap-3">
           <h3 className="text-base font-medium">Apache License 2.0 (MediaPipe, Pose-Modelle)</h3>
           <pre className={LICENSE_PRE}>{texts.apache}</pre>
-          <h3 className="text-base font-medium">SIL Open Font License 1.1 (Fredoka)</h3>
-          <pre className={LICENSE_PRE}>{texts.fredoka}</pre>
+          <h3 className="text-base font-medium">SIL Open Font License 1.1 (Bricolage Grotesque)</h3>
+          <pre className={LICENSE_PRE}>{texts.font}</pre>
           <h3 className="text-base font-medium">Mitgelieferte npm-Pakete</h3>
           {texts.bundled === null ? (
             <p className={HINT}>Die Paketliste entsteht erst beim Produktions-Build.</p>
@@ -321,7 +320,9 @@ export function SettingsScreen() {
     <main className="safe-pad flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto flex w-full max-w-160 flex-col gap-4 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-title text-stroke min-w-0 text-3xl sm:text-4xl">Einstellungen</h1>
+          <h1 className="font-title chrome-text chrome-glow min-w-0 pb-[0.1em] text-4xl sm:text-5xl">
+            Einstellungen
+          </h1>
           <Button asChild size="lg" variant="secondary" className={BTN}>
             <Link to="/">
               <ArrowLeft aria-hidden />

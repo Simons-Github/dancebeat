@@ -23,7 +23,7 @@ export function UpdateBanner() {
     <div className="relative z-20 px-4 pb-2">
       <div
         role="status"
-        className="bg-(--scrim-banner) shadow-pop mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl border border-white/15 px-4 py-2 text-white backdrop-blur-md"
+        className="glass mx-auto flex max-w-2xl flex-wrap items-center justify-between gap-x-3 gap-y-2 rounded-2xl px-4 py-2 text-white"
       >
         <p className="text-sm font-semibold">Neue Version verfügbar</p>
         <div className="flex gap-2">

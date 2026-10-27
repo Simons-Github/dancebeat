@@ -23,6 +23,7 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)                                                                   | Sonnet                                                                |
 | 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1, 13h-2, 13h-3, 13i, 13j ✅; Gerätetest offen)                        | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ✅ (Gerätetest offen)                                                                   | Opus für den Songaufbau, Sonnet für den Rest                          |
+| 15. Visuelle Überarbeitung                   | ✅ (Gerätetest offen)                                                                   | Opus                                                                  |
 
 ## Erledigt: Grundlagen
 
@@ -1855,6 +1856,23 @@ Dev-Server hat die Datei nicht, dann erscheint ein Hinweis. Tests: `licenses.tes
 
 Offen: Die WASM-Laufzeit von MediaPipe enthält Fremdbibliotheken (z. B. TensorFlow Lite). Google
 liefert dafür im npm-Paket keine eigene Lizenzliste mit; genannt ist nur Apache 2.0 für das Paket.
+
+### 15. Visuelle Überarbeitung ✅ (Gerätetest offen)
+
+Y2K-Stil nach Moodboard des Nutzers, Details in [design.md](design.md#grundstil). Zwischenstand
+„Club-Flyer“ wurde verworfen.
+
+- Schrift Bricolage Grotesque statt Fredoka (Paket `@fontsource-variable/bricolage-grotesque`,
+  OFL, Credits und Lizenztext angepasst, `@fontsource/fredoka` entfernt).
+- Nacht-Hintergrund mit Glitzer und Songfarben-Glow, Mosaik-Stern und Funkelsterne statt
+  Verlauf mit Dreiecken und Kreisen; App-Hintergrund `#14061F` (Manifest, theme-color).
+- Chrom für Logo, Titel und Hauptbuttons; Liquid Glass für Kacheln, Panels und Nebenbuttons.
+- Menü: Titelblock im Daumenbereich; Kachelgröße per Container-Query aus Höhe und Breite;
+  schmale Kacheln kompakt; Neu-Zentrieren bei Größenwechsel; Titel während des Ladens leer.
+- Tests: contrast (Glas über Mosaik und Glow, Chrom auf Nacht, Nacht auf Chrom, Papier auf
+  Nacht), Lizenzen, Credits.
+- Offen am Gerät: Chrom-Text (`background-clip: text`, `1lh`) und `backdrop-filter` auf iOS
+  Safari, Leistung der Unschärfe auf älteren Android-Geräten, Glitzer bei hoher Pixeldichte.
 
 ## Offene Befunde
 

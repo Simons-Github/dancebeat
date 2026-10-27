@@ -519,15 +519,16 @@ api.spotify.com); jeweils mit dem Hinweis, dass die Gegenstelle die IP-Adresse s
 der Songquelle (YouTube, Host der Audio-URL bzw. Spotify, bei lokalen Dateien nichts). Ebenso
 die Vorschau im Choreografie-Editor (`/edit/$songId`, Etappe 8d-2b).
 
-**Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
-selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gibt keine Anfrage an
+**Schrift:** Bricolage Grotesque (OFL-Lizenz) kommt aus dem Paket
+`@fontsource-variable/bricolage-grotesque` und wird mit dem Build selbst ausgeliefert (variable
+Datei mit Gewichts- und Breitenachse, `wdth.css` in `src/styles.css`). Es gibt keine Anfrage an
 Google Fonts oder ein anderes CDN.
 
 **Lizenzhinweise:** Die Credits in den Einstellungen (`src/data/credits.ts`) nennen DanceBeat
 (PolyForm Noncommercial 1.0.0, `LICENSE.md`), die Demo-Musik, AIST++ und die AIST Dance DB (seit Etappe 13i im Motion-Paket),
-MediaPipe mit Pose-Modellen (Apache 2.0), Fredoka (OFL 1.1) und die npm-Pakete. Darunter lädt
+MediaPipe mit Pose-Modellen (Apache 2.0), Bricolage Grotesque (OFL 1.1) und die npm-Pakete. Darunter lädt
 „Lizenztexte“ erst beim Aufklappen die vollständigen Texte (`src/lib/licenses.ts`): Apache 2.0
-aus `src/data/licenses/`, OFL aus `@fontsource/fredoka/LICENSE`, die Paketliste aus
+aus `src/data/licenses/`, OFL aus `@fontsource-variable/bricolage-grotesque/LICENSE`, die Paketliste aus
 `licenses.json`. Diese Datei schreibt Vite beim Build (`build.license` in `vite.config.ts`). Alles
 kommt vom eigenen Origin, es gibt also keinen externen Abruf. Die Links in den Credits rufen erst
 beim Tippen etwas ab.

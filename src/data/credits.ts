@@ -84,14 +84,14 @@ const MEDIAPIPE_CREDIT: Credit = {
   ],
 };
 
-// Copyright line as in node_modules/@fontsource/fredoka/LICENSE.
+// Copyright line as in node_modules/@fontsource-variable/bricolage-grotesque/LICENSE.
 const FONT_CREDIT: Credit = {
-  title: "Schrift Fredoka",
+  title: "Schrift Bricolage Grotesque",
   lines: [
-    "Copyright 2016 The Fredoka Project Authors (https://github.com/hafontia/Fredoka-One). Lizenziert unter der SIL Open Font License 1.1, eingebunden über @fontsource/fredoka.",
+    "Copyright 2022 The Bricolage Grotesque Project Authors (https://github.com/ateliertriay/bricolage). Lizenziert unter der SIL Open Font License 1.1, eingebunden über @fontsource-variable/bricolage-grotesque.",
   ],
   links: [
-    { label: "Fredoka", href: "https://github.com/hafontia/Fredoka-One" },
+    { label: "Bricolage Grotesque", href: "https://github.com/ateliertriay/bricolage" },
     { label: "OFL 1.1", href: "https://openfontlicense.org/" },
   ],
 };

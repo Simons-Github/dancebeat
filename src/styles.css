@@ -1,6 +1,4 @@
-@import "@fontsource/fredoka/latin-400.css";
-@import "@fontsource/fredoka/latin-500.css";
-@import "@fontsource/fredoka/latin-700.css";
+@import "@fontsource-variable/bricolage-grotesque/wdth.css";
 @import "tailwindcss" source(none);
 @source "../src";
 @import "tw-animate-css";
@@ -8,8 +6,8 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-  --font-display: "Fredoka", "Baloo 2", system-ui, sans-serif;
-  --font-sans: "Fredoka", system-ui, sans-serif;
+  --font-display: "Bricolage Grotesque Variable", system-ui, sans-serif;
+  --font-sans: "Bricolage Grotesque Variable", system-ui, sans-serif;
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
@@ -39,6 +37,8 @@
   --color-song-2: var(--song-2);
   --color-gold: var(--gold);
   --color-ink: var(--ink);
+  --color-paper: var(--paper);
+  --color-night: var(--night);
   --color-glass: var(--glass);
 }
 
@@ -47,18 +47,28 @@
   --song: #ff2e93;
   --song-2: #00e5ff;
   --gold: oklch(0.86 0.17 85);
-  --ink: #1e0b36; /* overridden by AppShell from SCRIM.ink in src/theme.ts */
+  /* Defaults for dialogs (rendered outside AppShell); AppShell sets them from src/theme.ts. */
+  --ink: #1e0b36;
+  --paper: #fff2fa;
+  --night: #14061f;
+  --glass-bg: rgb(20 6 31 / 0.72);
+  --chrome-light: #ffffff;
+  --chrome-mid: #e6dcef;
+  --chrome-dark: #857799;
+  --chrome-tint: 28%;
+  --glow-song: 45%;
+  --glow-secondary: 22%;
   --glass: oklch(1 0 0 / 18%);
-  --background: oklch(0.32 0.14 330);
+  --background: var(--night);
   --foreground: oklch(0.99 0 0);
   --card: oklch(1 0 0 / 14%);
   --card-foreground: oklch(0.99 0 0);
-  --popover: oklch(0.3 0.12 320);
+  --popover: oklch(0.2 0.07 315);
   --popover-foreground: oklch(0.99 0 0);
-  --primary: oklch(0.99 0 0);
-  --primary-foreground: oklch(0.25 0.1 320);
-  --secondary: oklch(1 0 0 / 20%);
-  --secondary-foreground: oklch(0.99 0 0);
+  --primary: var(--paper);
+  --primary-foreground: var(--night);
+  --secondary: oklch(1 0 0 / 12%);
+  --secondary-foreground: var(--paper);
   --muted: oklch(1 0 0 / 12%);
   --muted-foreground: oklch(0.92 0.03 320);
   --accent: oklch(1 0 0 / 22%);
@@ -68,7 +78,7 @@
   --border: oklch(1 0 0 / 25%);
   --input: oklch(1 0 0 / 30%);
   --ring: oklch(1 0 0 / 70%);
-  --shadow-pop: 0 6px 0 oklch(0 0 0 / 25%), 0 12px 30px oklch(0 0 0 / 25%);
+  --shadow-pop: 0 0.5rem 1.5rem -0.5rem rgb(0 0 0 / 0.6);
 }
 
 @layer base {
@@ -88,16 +98,67 @@
   }
 }
 
+/* Condensed, heavy display cut of the one family (width axis of Bricolage Grotesque). */
 @utility font-title {
   font-family: var(--font-display);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.01em;
-  transform: skew(-6deg);
+  font-weight: 800;
+  font-stretch: 75%;
+  letter-spacing: -0.01em;
 }
+/* Ink outline and drop so light text reads on any camera picture or song cover. */
 @utility text-stroke {
-  -webkit-text-stroke: 2px oklch(0.2 0.08 300 / 60%);
+  -webkit-text-stroke: 0.06em var(--ink);
   paint-order: stroke fill;
+  text-shadow: 0.05em 0.06em 0 var(--ink);
+}
+/*
+ * Y2K chrome: light, a dark horizon band in the middle, light again, tinted with the song color.
+ * The gradient repeats per line (1lh), so wrapped titles get one horizon per line.
+ */
+@utility chrome-text {
+  background-image: linear-gradient(
+    180deg,
+    var(--chrome-light) 10%,
+    color-mix(in srgb, var(--song) var(--chrome-tint), var(--chrome-mid)) 45%,
+    var(--chrome-dark) 53%,
+    color-mix(in srgb, var(--song) var(--chrome-tint), var(--chrome-mid)) 72%,
+    var(--chrome-light) 95%
+  );
+  background-size: 100% 1lh;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* Dark edge under chrome text, then a soft glow in the song color (filter, so it sits behind). */
+@utility chrome-glow {
+  filter: drop-shadow(0 0.04em 0 var(--night))
+    drop-shadow(0 0 0.35em color-mix(in srgb, var(--song) 55%, transparent));
+}
+/* Chrome surface for primary buttons and the active tab. */
+@utility chrome-fill {
+  background-image: linear-gradient(
+    180deg,
+    var(--chrome-light) 0%,
+    var(--chrome-mid) 44%,
+    color-mix(in srgb, var(--chrome-dark) 55%, var(--chrome-mid)) 52%,
+    color-mix(in srgb, var(--song) var(--chrome-tint), var(--chrome-mid)) 80%,
+    var(--chrome-light) 100%
+  );
+  color: var(--night);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.9),
+    inset 0 -0.2rem 0.5rem rgb(40 0 50 / 0.18),
+    0 0 1.5rem -0.3rem var(--song);
+}
+/* Liquid glass: dark see-through night, bright top edge, faint rim, glow in the song color. */
+@utility glass {
+  background-color: var(--glass-bg);
+  -webkit-backdrop-filter: blur(18px) saturate(1.5);
+  backdrop-filter: blur(18px) saturate(1.5);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.4),
+    inset 0 0 0 1px rgb(255 255 255 / 0.14),
+    0 0 2.5rem -1rem var(--song);
 }
 @utility shadow-pop {
   box-shadow: var(--shadow-pop);
@@ -111,38 +172,56 @@
   padding-left: max(env(safe-area-inset-left), 1rem);
   padding-right: max(env(safe-area-inset-right), 1rem);
 }
+/* Night with fine glitter and the song glow from the top corners (strength: GLOW in theme.ts). */
 @utility bg-party {
-  background:
+  background-color: var(--night);
+  background-image:
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='1' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 5 0 0 0 -3.45'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E"),
     radial-gradient(
-      circle at 15% 20%,
-      color-mix(in oklab, var(--song-2) 55%, transparent),
-      transparent 45%
+      ellipse 95% 55% at 5% 0%,
+      color-mix(in srgb, var(--song) var(--glow-song), transparent),
+      transparent 75%
     ),
     radial-gradient(
-      circle at 85% 80%,
-      color-mix(in oklab, var(--song) 90%, white 0%),
-      transparent 55%
-    ),
-    linear-gradient(135deg, var(--song), color-mix(in oklab, var(--song) 50%, #3a0a6b));
-}
-/* Dark tints for readability; their strength comes from SCRIM in src/theme.ts. */
-@utility scrim-header {
-  background: linear-gradient(
-    to bottom,
-    var(--scrim-header) 55%,
-    color-mix(in srgb, var(--scrim-header) 40%, transparent) 78%,
-    transparent
-  );
-}
-@utility scrim-edge {
-  background: linear-gradient(to top, var(--scrim-edge), transparent);
+      ellipse 55% 40% at 100% 0%,
+      color-mix(in srgb, var(--song-2) var(--glow-secondary), transparent),
+      transparent 75%
+    );
+  background-size:
+    180px 180px,
+    auto,
+    auto;
 }
 @utility btn-pill {
   border-radius: 9999px;
   font-family: var(--font-display);
-  font-weight: 700;
-  text-transform: uppercase;
-  box-shadow: var(--shadow-pop);
+  font-weight: 750;
+  font-stretch: 87.5%;
+  transition:
+    transform 100ms ease-out,
+    filter 150ms;
+  &:hover:not(:disabled) {
+    filter: brightness(1.08);
+  }
+  &:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+}
+
+/* One slow glint on the selected song title's sparkle; off with reduced motion (see below). */
+@keyframes twinkle {
+  0%,
+  100% {
+    transform: scale(0.8) rotate(0deg);
+    opacity: 0.75;
+  }
+  50% {
+    transform: scale(1.1) rotate(25deg);
+    opacity: 1;
+  }
+}
+.animate-twinkle {
+  animation: twinkle 2.8s ease-in-out infinite;
 }
 
 @keyframes gold-pulse {
@@ -178,5 +257,8 @@
 @media (prefers-reduced-motion: reduce) {
   .song-frame {
     transition-duration: 1ms;
+  }
+  .animate-twinkle {
+    animation: none;
   }
 }
