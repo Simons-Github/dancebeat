@@ -1124,7 +1124,8 @@ Gilt für alle Songs, ohne Format- oder Bewertungswechsel, von nichts abhängig.
 als Kapseln (Oberarm/Oberschenkel dicker), Kopf, Hände, Füße; Verlauf von hellerer Songfarbe (oben)
 zur Songfarbe, heller Rand und ein Glow pro Frame (Rand-Ebene auf Offscreen-Canvas, ein
 `shadowBlur`). Landmarks mit `visibility < 0.5` lassen nur die betroffenen Teile weg. Maße, Rand,
-Glow und Größe (Hoch 44vw/32dvh, Quer 30vw/48dvh) stehen als `COACH` in `src/theme.ts`. Tests:
+Glow und Größe (seit B9 Hoch 54vw/38dvh, Quer 36vw/58dvh; mit YouTube eigene Werte) stehen als
+`COACH` in `src/theme.ts`. Tests:
 `src/test/draw.test.ts`. Offen am Gerät: Bildrate (iPhone 11, Android Mittelklasse, mit Kamera und
 Pose-Tracking), Lesbarkeit in 2 bis 3 m Abstand, Freiraum zu Score, Combo, Piktoleiste und
 YouTube-Box in Hoch- und Querformat.
@@ -1148,6 +1149,15 @@ Server, Flags per `ps` geprüft) mit `?sim=1` in 390×844 und 844×390: Coach-Si
 Piktogramme mit Pfeilen sichtbar, Score, Combo und Piktoleiste frei, Konsole ohne Fehler und
 Warnungen. **Nur am Gerät prüfbar, nicht getestet:** FPS auf iPhone 11 und Android Mittelklasse,
 Lesbarkeit aus 2 bis 3 m. Editor und Vorschau in Playwright nicht geprüft.
+
+**Gerätetest-Befund 2026-10-27, Paket E (B9) – umgesetzt, Gerätetest offen.** Coach etwas zu
+klein. `COACH.size` jetzt `min(54vw, 38dvh)` hoch und `min(36vw, 58dvh)` quer (vorher 44vw/32dvh
+und 30vw/48dvh): bei 390×844 211 statt 172 px, bei 844×390 226 statt 187 px. Gemessen im Browser
+(Simulation, beide Formate): Oberkante 621 px gegen Piktoleiste bis 201 px (hoch), 152 gegen
+135 px (quer), Score und Combo oben frei. YouTube-Songs haben eigene Werte (`COACH.sizeYouTube`,
+`min(44vw, calc(100vw - 240px), 32dvh)` hoch): Die Spielfläche hat 16 px Rand je Seite, der alte
+Coach überlappte die 200-px-YouTube-Box bei 390 px Breite schon um 14 px; jetzt 150 px mit 8 px
+Abstand, auf 360-px-Handys 120 px. Gerätetest offen: Größe in 2–3 m Abstand, Bildrate.
 
 ### 13. 3D-Kern und Choreo-Generator ⏳
 

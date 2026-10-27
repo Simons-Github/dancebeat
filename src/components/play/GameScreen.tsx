@@ -59,10 +59,11 @@ export const END_TAIL_MS = 2000;
 /** "Gold Move" appears this long before a gold move. */
 const GOLD_NOTICE_MS = 2500;
 /** Coach canvas size from the theme, as CSS variables (portrait and landscape). */
-const COACH_SIZE_VARS = {
-  "--coach-size": COACH.size.portrait,
-  "--coach-size-landscape": COACH.size.landscape,
-} as CSSProperties;
+const coachSizeVars = (size: { portrait: string; landscape: string }) =>
+  ({ "--coach-size": size.portrait, "--coach-size-landscape": size.landscape }) as CSSProperties;
+const COACH_SIZE_VARS = coachSizeVars(COACH.size);
+/** YouTube songs: smaller, so the YouTube box at the bottom right stays free. */
+const COACH_SIZE_VARS_YOUTUBE = coachSizeVars(COACH.sizeYouTube);
 /** Simulated frames per second in the dev simulation mode. */
 const SIM_FRAME_MS = 33;
 
@@ -601,7 +602,7 @@ export function GameScreen({
               ref={coachRef}
               aria-label="Coach"
               role="img"
-              style={COACH_SIZE_VARS}
+              style={isYouTube ? COACH_SIZE_VARS_YOUTUBE : COACH_SIZE_VARS}
               className="absolute bottom-0 left-0 size-(--coach-size) landscape:size-(--coach-size-landscape)"
             />
           )}

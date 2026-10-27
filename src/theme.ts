@@ -176,8 +176,20 @@ export const COACH = {
   glowBlur: 0.05,
   /** Gradient top: how far the song color is mixed toward white (0..1). Bottom is the song color. */
   gradientLight: 0.45,
-  /** CSS size of the coach canvas. Must leave the YouTube box (min 200 px) at the bottom right free. */
-  size: { portrait: "min(44vw, 32dvh)", landscape: "min(30vw, 48dvh)" },
+  /**
+   * CSS size of the coach canvas, about a fifth larger since the Gerätetest 2026-10-27 (B9, before
+   * min(44vw, 32dvh) and min(30vw, 48dvh) for every source).
+   */
+  size: { portrait: "min(54vw, 38dvh)", landscape: "min(36vw, 58dvh)" },
+  /**
+   * With a YouTube song the coach must leave the YouTube box (min 200 px) at the bottom right
+   * free: the play area is 100vw minus 2 × 16 px padding, so `100vw - 240px` keeps 200 px and an
+   * 8 px gap (the former 44vw overlapped it by 14 px at 390 px width).
+   */
+  sizeYouTube: {
+    portrait: "min(44vw, calc(100vw - 240px), 32dvh)",
+    landscape: "min(36vw, calc(100vw - 240px), 58dvh)",
+  },
 } as const;
 
 /**
