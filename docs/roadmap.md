@@ -413,6 +413,17 @@ Start-Offset im Dialog „Song hinzufügen“ entfällt: einstellbar über „So
 - [ ] Bildschirmsperre: seit 7a hält ein Wake Lock das Display an (siehe Gerätetest 7a);
       sperrt es trotzdem, pausiert das Spiel über `visibilitychange`.
 
+**Gerätetest-Befund 2026-10-27, Paket B (B6) – umgesetzt, Gerätetest offen.** Erkennung teils
+schlecht, Wertung wirkt zufällig, wer still steht, bekommt manchmal GOOD oder PERFECT. Ursache
+(nachgestellt im Test, echte Sensordaten liegen nicht vor): Das Urteil ist der Mittelwert des
+Betrags im 500-ms-Fenster, ein kurzer Ruck beim Stillstehen (Griff nachfassen, ~100 ms mit
+20 m/s²) hob ihn allein auf SUPER. Jetzt zählt jede Messung höchstens 12 m/s² (`sampleCap`), und
+mindestens 35 % der Messungen im Fenster müssen über 0,8 m/s² liegen (`minActiveShare`,
+`restLevel`), sonst gilt das Fenster als Stillstand (X). Startwerte, Details in
+[scoring.md](scoring.md#bewegungsmodus). Tests `motion.test.ts` (ruhige Hand, Ruck, Wiegen,
+Armschwung). Gerätetest offen: Stillstehen mit Handy in der Hand → X, auch beim Nachgreifen;
+normales Tanzen erreicht weiter PERFECT; Wiegen höchstens OK.
+
 ### 7. PWA und Gerätefunktionen ✅ (Gerätetest offen)
 
 **7a Wake Lock, Haptik, Manifest – umgesetzt, Gerätetest offen.**

@@ -105,6 +105,44 @@ describe("judgeIntensity", () => {
   });
 });
 
+describe("Stillstand gegen Bewegung (Gerätetest B6)", () => {
+  /** 60 Hz over the window of a move at 1000 ms (±250 ms); `mag(t)` gives |a| in m/s². */
+  function windowRating(mag: (t: number, i: number) => number) {
+    const m = new MotionMeter();
+    for (let i = 0, t = 750; t <= 1250; i++, t += 1000 / 60) {
+      // Spread the magnitude over two axes so the vector math is exercised too.
+      const a = mag(t, i);
+      m.push(t, lin(a * 0.6, a * 0.8));
+    }
+    const move = { timeMs: 1000, label: "M", iconId: "x", gold: false };
+    return motionScoring(m, () => "normal").rating(move, 750, 1250);
+  }
+  /** Hand tremor while standing still: small, irregular (deterministic). */
+  const tremor = (_t: number, i: number) => 0.15 + 0.1 * Math.abs(Math.sin(i * 1.7));
+
+  it("Stillstehen mit ruhiger Hand → X", () => {
+    expect(windowRating(tremor)).toBe("X");
+  });
+
+  it("Stillstehen mit kurzem Ruck (Griff nachfassen, 100 ms) → X", () => {
+    // 6 samples at 20–40 m/s²: the mean alone reached SUPER or PERFECT.
+    expect(windowRating((t, i) => (i >= 10 && i < 16 ? 20 : tremor(t, i)))).toBe("X");
+    expect(windowRating((t, i) => (i >= 10 && i < 16 ? 40 : tremor(t, i)))).toBe("X");
+  });
+
+  it("leichtes Wiegen ohne Tanz → höchstens OK", () => {
+    const sway = (t: number) => 0.9 * Math.abs(Math.sin((2 * Math.PI * t) / 1000));
+    expect(["X", "OK"]).toContain(windowRating(sway));
+  });
+
+  it("echtes Tanzen (Armschwung 1,5 Hz) → PERFECT, halb so stark → GOOD oder besser", () => {
+    const dance = (amp: number) => (t: number) =>
+      amp * Math.abs(Math.sin((2 * Math.PI * 1.5 * t) / 1000));
+    expect(windowRating(dance(10))).toBe("PERFECT");
+    expect(["GOOD", "SUPER"]).toContain(windowRating(dance(5)));
+  });
+});
+
 describe("requestMotionPermission", () => {
   it("ohne DeviceMotionEvent: unsupported", async () => {
     vi.stubGlobal("DeviceMotionEvent", undefined);

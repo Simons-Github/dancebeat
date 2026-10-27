@@ -14,6 +14,15 @@ export const MOTION = {
   goldFactor: 1.25,
   /** Fewer measurements in a window: no value, the move is X. */
   minSamples: 3,
+  // Gerätetest 2026-10-27 (B6): standing still sometimes got GOOD or PERFECT. A short jolt
+  // (re-gripping the phone, ~100 ms at 20–40 m/s²) lifted the mean of a 500 ms window to SUPER
+  // on its own. Both guards below are starting values, check on device.
+  /** Single measurements count at most this much (m/s²), so one jolt cannot carry a window. */
+  sampleCap: 12,
+  /** A measurement above this (m/s²) counts as movement; hand tremor at rest stays below. */
+  restLevel: 0.8,
+  /** Share of measurements in a window that must be movement; else the window is still (0). */
+  minActiveShare: 0.35,
   /** Low-pass factor for the gravity estimate when only `accelerationIncludingGravity` exists. */
   gravityAlpha: 0.8,
   /** Ring buffer size (~10 s at 60 Hz); older measurements are dropped. */
@@ -90,16 +99,24 @@ export class MotionMeter {
     this.last = Math.max(this.last, t);
   }
 
-  /** Mean magnitude in [fromMs, toMs]; null with fewer than `MOTION.minSamples` measurements. */
+  /**
+   * Mean magnitude in [fromMs, toMs], each measurement capped at `MOTION.sampleCap`; null with
+   * fewer than `MOTION.minSamples` measurements. 0 (still) when less than
+   * `MOTION.minActiveShare` of them lie above `MOTION.restLevel`: a short jolt is not dancing.
+   */
   intensity(fromMs: number, toMs: number): number | null {
     let sum = 0,
-      n = 0;
+      n = 0,
+      active = 0;
     this.times.forEach((t, i) => {
       if (t < fromMs || t > toMs) return;
-      sum += this.values[i] ?? 0;
+      const v = this.values[i] ?? 0;
+      sum += Math.min(v, MOTION.sampleCap);
+      if (v > MOTION.restLevel) active++;
       n++;
     });
-    return n < MOTION.minSamples ? null : sum / n;
+    if (n < MOTION.minSamples) return null;
+    return active < MOTION.minActiveShare * n ? 0 : sum / n;
   }
 
   reset() {

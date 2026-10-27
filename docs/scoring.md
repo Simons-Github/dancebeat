@@ -243,6 +243,11 @@ jeden Move. Logik in `src/lib/motion.ts`, Konstanten in `MOTION`.
 - **Fenster:** `move.timeMs ± INTENSITY_WINDOW_MS` (250 ms, breiter als im Winkelmodus). Wert = Mittelwert des
   Betrags im Fenster. Weniger als `MOTION.minSamples` (3) Messungen → kein Wert → X; fehlende Daten
   zählen nie als 0.
+- **Stillstand (Gerätetest 2026-10-27, B6):** Jede Messung zählt höchstens 12 m/s²
+  (`sampleCap`). Liegen weniger als 35 % der Messungen im Fenster über 0,8 m/s² (`restLevel`,
+  `minActiveShare`), gilt das Fenster als still: Wert 0 → X. Grund: Ein kurzer Ruck beim
+  Stillstehen (Griff nachfassen, ~100 ms mit 20 m/s²) hob den Mittelwert allein auf SUPER.
+  Startwerte, am Gerät abzustimmen.
 - **Urteil** (`judgeIntensity`), Schwellen in m/s², mal Faktor je Schwierigkeit (leicht 0,7,
   normal 1, schwer 1,4), Gold-Moves zusätzlich × 1,25. Startwerte, am Gerät abzustimmen.
 
