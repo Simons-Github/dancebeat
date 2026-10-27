@@ -213,21 +213,31 @@ describe("validity grid", () => {
             expect(plan.beatPhaseMs, ctx).toBeCloseTo(phase, 6);
             expect(plan.beatPhaseMs >= 0 && plan.beatPhaseMs < beatMs, ctx).toBe(true);
 
+            // autoChoreo (B7): the phase is offsetMs, the generator runs on k · beat after it.
+            // Rounded to 0.1 ms.
+            expect(Math.abs(c.offsetMs - phase), `${ctx} offset`).toBeLessThanOrEqual(0.051);
+            const used = { ...inp, beatPhaseMs: 0, durationMs: durationMs - c.offsetMs };
+            const usedPlan = planStructure(used);
             const t = c.moves.map((m) => m.timeMs);
             expect(t.length, ctx).toBeGreaterThan(0);
             for (let i = 1; i < t.length; i++) {
               expect(t[i]! - t[i - 1]!, `${ctx} gap #${i}`).toBeGreaterThanOrEqual(MIN_MOVE_GAP_MS);
             }
             for (const x of t) {
-              const k = Math.round((x - phase) / beatMs);
-              expect(Math.abs(phase + k * beatMs - x), `${ctx} on beat`).toBeLessThanOrEqual(1);
+              const k = Math.round(x / beatMs);
+              expect(Math.abs(k * beatMs - x), `${ctx} on beat`).toBeLessThanOrEqual(1);
+              // In audio time on the given phase.
+              const audio = x + c.offsetMs;
+              const j = Math.round((audio - phase) / beatMs);
+              expect(Math.abs(phase + j * beatMs - audio), `${ctx} audio beat`).toBeLessThanOrEqual(
+                1,
+              );
             }
-            const introEnd = phase + plan.introBeats * beatMs;
-            expect(t[0]!, `${ctx} intro`).toBeGreaterThanOrEqual(introEnd - 1);
-            expect(t.at(-1)!, `${ctx} end margin`).toBeLessThanOrEqual(
+            expect(t[0]!, `${ctx} intro`).toBeGreaterThanOrEqual(usedPlan.introBeats * beatMs - 1);
+            expect(t.at(-1)! + c.offsetMs, `${ctx} end margin`).toBeLessThanOrEqual(
               durationMs - END_MARGIN_BEATS * beatMs + 1,
             );
-            // Intro rule wherever the nominal intro fits into the song.
+            // Intro rule wherever the nominal intro fits into the song (generator input).
             const nominal = phase + 4 * beatMs >= MIN_INTRO_MS ? 4 : 8;
             if (lastMoveBeatOf(inp) >= nominal) expect(plan.introBeats, ctx).toBe(nominal);
             checked++;

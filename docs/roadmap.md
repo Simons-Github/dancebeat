@@ -358,6 +358,19 @@ Umgesetzt:
   `rename`). Kein Formatwechsel: `startOffsetMs` gab es schon.
 - **Offen:** Gerätetest: ob das Licht am Gerät mit dem gehörten Beat übereinstimmt (Bluetooth,
   iOS), Bedienung der Knöpfe per Touch, Dezimaltastatur auf iOS.
+- **Gerätetest-Befund 2026-10-27, Paket C (B7) – behoben, Gerätetest offen.** Das Beat-Licht lag
+  neben dem gehörten Beat. Ursache im Code, nicht in der Latenz: Generierte Choreografien (Demos,
+  „Song hinzufügen“, „Neu erzeugen“) legten die Beat-Phase in die Move-Zeiten und ließen
+  `offsetMs` auf 0, Licht, Beat-Puls, Sync-Vorschlag und Editor-Raster erwarten die Beats aber auf
+  k · Beat in Choreo-Zeit (Phase in `offsetMs`, wie beim Video-Import). Bei den Demos lag das
+  Licht 60–310 ms daneben, bei „Gold in My Pocket“ gut ein halber Beat; ein per Tippen ermittelter
+  Sync-Offset schob dann die ganze Choreografie um diesen Fehler. Jetzt Phase in `offsetMs`
+  (`autoChoreo`, `buildDemoChoreo`), Demos neu gebaut (gleiche Moves, um die Phase verschoben),
+  `DEMO_CHOREO_VERSION` 4 (ersetzt installierte Demos samt Sync-Offset). Details in
+  [choreography-format.md](choreography-format.md#demo-pipeline). Tests `demoBuild.test.ts`
+  (Licht auf dem Beat jeder Demo), `generator`, `newSong`, `regenerate`, `demoSeed`.
+  `eval-demos` unverändert. Gerätetest offen: Sync-Test einer Demo mit Lautsprecher, Licht auf
+  dem Beat ohne Offset; danach erst mit Bluetooth die Latenz kalibrieren.
 - Playwright (390×844 und 844×390): Vorschlag übernehmen, ±10 ms, Speichern; „Start ab“ 2,5 s
   und Offset bleiben nach Neuladen, Dialog scrollt im Querformat, Konsole sauber.
 

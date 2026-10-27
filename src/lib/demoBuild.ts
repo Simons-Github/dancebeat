@@ -228,19 +228,27 @@ export function demoSongId(manifestId: string): string {
 
 /**
  * The complete choreography of a demo song. Moves inside the intro are dropped (the intro dances
- * without moves); times are fixed (0), the seed sets them when it stores the song (14c).
+ * without moves); times are fixed (0), the seed sets them when it stores the song (14c). The beat
+ * phase is `offsetMs`, frames and moves start at the first beat.
  */
-export function buildDemoChoreo(m: DemoManifest, pack: MotionPack): Choreography {
+export function buildDemoChoreo(manifest: DemoManifest, pack: MotionPack): Choreography {
+  // Built on k · beat from the first beat; the phase goes into offsetMs (Gerätetest 2026-10-27,
+  // B7: with offsetMs 0 the sync test's beat light flashed up to half a beat off the music).
+  const m = {
+    ...manifest,
+    beatPhaseMs: 0,
+    durationMs: manifest.durationMs - manifest.beatPhaseMs,
+  };
   const plan = planFromManifest(m);
   const { frames, moves } = realizeFrames(plan, buildDemoClips(m, pack, plan), pack);
-  const introEndMs = Math.round(m.beatPhaseMs + plan.introBeats * beatMsOf(m.bpm));
+  const introEndMs = Math.round(plan.introBeats * beatMsOf(m.bpm));
   const palette = SONG_PALETTES[m.palette]!;
   return {
     version: CHOREO_VERSION,
     id: demoChoreoId(m.id),
     title: m.title,
     bpm: m.bpm,
-    offsetMs: 0,
+    offsetMs: manifest.beatPhaseMs,
     accentColor: palette.accent,
     secondaryColor: palette.secondary,
     frames,

@@ -195,16 +195,16 @@ describe("regenerateSong", () => {
     const beat = beatMsOf(128);
     const phase = beatPhaseMs % beat;
     expect(out.choreo.moves.length).toBeGreaterThan(0);
+    // B7: the phase is added to the kept offset; the moves lie on k · beat in choreography time,
+    // so on the phase in the song's own timeline (choreography time + old offset).
+    expect(out.choreo.offsetMs).toBeCloseTo(song.choreo.offsetMs + phase, 1);
     for (const m of out.choreo.moves) {
-      const k = Math.round((m.timeMs - phase) / beat);
-      expect(Math.abs(phase + k * beat - m.timeMs)).toBeLessThanOrEqual(1);
-    }
-    // And not on the zero phase grid (213 ms is far from any multiple of a beat).
-    const offGrid = out.choreo.moves.some((m) => {
       const k = Math.round(m.timeMs / beat);
-      return Math.abs(k * beat - m.timeMs) > 50;
-    });
-    expect(offGrid).toBe(true);
+      expect(Math.abs(k * beat - m.timeMs)).toBeLessThanOrEqual(1);
+      const own = m.timeMs + phase;
+      const j = Math.round((own - phase) / beat);
+      expect(Math.abs(phase + j * beat - own)).toBeLessThanOrEqual(1);
+    }
   });
 
   it("throws for a choreography without length", () => {

@@ -2,7 +2,7 @@
 import { autoChoreo } from "../../data/demo";
 import { analyzeAudio, estimateBeatPhaseMs, type AudioAnalysis } from "../beat";
 import { SongSchema } from "../schema";
-import type { EnergyCurve } from "../generator";
+import { shiftEnergy, type EnergyCurve } from "../generator";
 import type { Choreography, MotionPack, Song } from "../types";
 
 export interface RegenerateOptions {
@@ -27,7 +27,8 @@ export function choreoDurationMs(choreo: Choreography): number {
 /**
  * Builds the song with a newly generated choreography; everything else on the song stays.
  * The length comes from the stored choreography, because songs do not store their own length.
- * `offsetMs` is kept: it is the user's alignment of the choreography to the audio. The
+ * `offsetMs` is kept: it is the user's alignment of the choreography to the audio; the beat phase
+ * of the new choreography (its own `offsetMs`) is added on top. The
  * choreography id and `createdAt` are kept too. Throws if the result is invalid.
  */
 export function regenerateSong(
@@ -57,7 +58,7 @@ export function regenerateSong(
     difficulty,
     choreo: {
       ...generated,
-      offsetMs: song.choreo.offsetMs,
+      offsetMs: Math.round((song.choreo.offsetMs + generated.offsetMs) * 10) / 10,
       createdAt: song.choreo.createdAt,
       updatedAt: now,
     },
@@ -85,18 +86,7 @@ export async function audioTiming(
     return {};
   }
   const offsetMs = song.choreo.offsetMs;
-  const energy = shiftCurve(envelope, offsetMs);
+  const energy = shiftEnergy(envelope, offsetMs);
   const phase = estimateBeatPhaseMs(envelope, song.bpm, Math.max(0, offsetMs, song.startOffsetMs));
   return phase === null ? { energy } : { energy, beatPhaseMs: phase - offsetMs };
-}
-
-/** The curve as seen from `offsetMs` on: step i is the original step at i + offsetMs / hopMs. */
-function shiftCurve(curve: EnergyCurve, offsetMs: number): EnergyCurve {
-  const shift = Math.round(offsetMs / curve.hopMs);
-  if (shift === 0) return curve;
-  const values = Array.from(
-    { length: Math.max(0, curve.values.length - shift) },
-    (_, i) => curve.values[i + shift] ?? 0,
-  );
-  return { hopMs: curve.hopMs, values };
 }

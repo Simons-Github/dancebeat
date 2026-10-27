@@ -1,7 +1,13 @@
 import { z } from "zod";
 
 import { computeAngles, figure, type FigureParams } from "@/lib/pose";
-import { DEFAULT_STYLE, generateChoreo, type EnergyCurve } from "@/lib/generator";
+import {
+  DEFAULT_STYLE,
+  generateChoreo,
+  phaseWithinBeat,
+  shiftEnergy,
+  type EnergyCurve,
+} from "@/lib/generator";
 import type { Choreography, Frame, MotionPack, Move, Song } from "@/lib/types";
 import { CHOREO_VERSION, ChoreographySchema } from "@/lib/schema";
 import type { SongRepository } from "@/lib/library/repository";
@@ -203,9 +209,11 @@ const AUDIO_VERSION_KEY = "dancebeat.demoAudioVersion";
  * once, completely (highscore, stars and the player's edits are lost; decided 2026-10-23 while
  * only the developer uses the app, to be revisited before a public release).
  * 1 – no marker yet (seeded before Etappe 14g) · 2 – AIST pack with smooth entries (14f) ·
- * 3 – AIST sequences in the pack, observed transitions weighted (13j)
+ * 3 – AIST sequences in the pack, observed transitions weighted (13j) · 4 – beat phase in
+ * `offsetMs`, moves on k · beat (Gerätetest 2026-10-27, B7; also drops sync offsets that had
+ * absorbed the phase)
  */
-export const DEMO_CHOREO_VERSION = 3;
+export const DEMO_CHOREO_VERSION = 4;
 /**
  * Choreography version per demo id. Per demo, not global like the audio marker: the seed runs
  * again after every library write, and a retry must not wipe demos that were already replaced.
@@ -525,7 +533,9 @@ export interface AutoChoreoOptions {
 
 /**
  * Standard choreography for added songs without their own: built by the generator
- * (src/lib/generator) from the motion pack (`loadMotionPack`), deterministic per seed.
+ * (src/lib/generator) from the motion pack (`loadMotionPack`), deterministic per seed. The beat
+ * phase goes into `offsetMs` (folded into one beat, `phaseWithinBeat`) and the generator works on
+ * k · beat from there, like the video import: beat pulse, sync test and editor expect that.
  */
 export function autoChoreo(
   title: string,
@@ -536,12 +546,13 @@ export function autoChoreo(
   opts: AutoChoreoOptions = {},
 ): Choreography {
   const id = opts.id ?? crypto.randomUUID();
+  const phase = phaseWithinBeat(bpm, opts.beatPhaseMs ?? 0);
   const { frames, moves } = generateChoreo(
     {
       bpm,
-      beatPhaseMs: opts.beatPhaseMs ?? 0,
-      durationMs,
-      ...(opts.energy ? { energy: opts.energy } : {}),
+      beatPhaseMs: 0,
+      durationMs: Math.max(0, durationMs - phase),
+      ...(opts.energy ? { energy: shiftEnergy(opts.energy, phase) } : {}),
       style: opts.style ?? DEFAULT_STYLE,
       difficulty: opts.difficulty ?? 2,
       seed: opts.seed ?? id,
@@ -554,7 +565,7 @@ export function autoChoreo(
     id,
     title,
     bpm,
-    offsetMs: 0,
+    offsetMs: phase,
     accentColor: colors[0],
     secondaryColor: colors[1],
     frames,

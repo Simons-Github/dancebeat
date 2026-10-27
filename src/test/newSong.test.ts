@@ -163,8 +163,12 @@ describe("buildNewSong", () => {
       source: { kind: "file" },
       choreo: { ...AUTO, beatPhaseMs: 120 },
     });
-    for (const m of song.choreo.moves)
-      expect(Math.abs((m.timeMs - 120) % 500)).toBeLessThanOrEqual(1);
+    // The phase is the choreography offset (B7); in audio time the moves sit on it.
+    expect(song.choreo.offsetMs).toBe(120);
+    for (const m of song.choreo.moves) {
+      expect(Math.abs(m.timeMs % 500)).toBeLessThanOrEqual(1);
+      expect(Math.abs((m.timeMs + song.choreo.offsetMs - 120) % 500)).toBeLessThanOrEqual(1);
+    }
   });
 
   it("builds a local song with a fresh blobId and an auto choreography", () => {

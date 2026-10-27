@@ -620,8 +620,8 @@ describe("DEMO_CHOREO_VERSION", () => {
   // fails, the demos were rebuilt: raise DEMO_CHOREO_VERSION (src/data/demo.ts) so existing
   // libraries get them, then update both values here.
   const FINGERPRINT = {
-    version: 3,
-    sha256: "5cd25a276adb205835452e1cd5862734b08b92a8955731e2a88069a745e3c1aa",
+    version: 4,
+    sha256: "748c4466335a84a89260f305b3b8eb743b40d4f1973c353c3c393d424d49b01d",
   };
 
   it("is raised whenever a shipped choreography changes", async () => {

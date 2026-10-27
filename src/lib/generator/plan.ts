@@ -38,6 +38,29 @@ export const TARGET_ENERGY_RANGE: readonly [number, number] = [0.2, 0.8];
 
 export const beatMsOf = (bpm: number) => 60000 / bpm;
 
+/**
+ * Beat phase `phaseMs` folded into one beat, [0, beat), rounded to 0.1 ms; 0 for an invalid
+ * tempo or phase. Generated choreographies store it as `choreo.offsetMs` (Gerätetest 2026-10-27,
+ * B7): beat pulse, sync test and editor expect the beats on k · beat in choreography time.
+ */
+export function phaseWithinBeat(bpm: number, phaseMs: number): number {
+  const beatMs = beatMsOf(bpm);
+  if (!(beatMs > 0) || !Number.isFinite(beatMs) || !Number.isFinite(phaseMs)) return 0;
+  const p = Math.round((((phaseMs % beatMs) + beatMs) % beatMs) * 10) / 10;
+  return p >= beatMs ? 0 : p;
+}
+
+/** The curve as seen from `offsetMs` on: step i is the original step at i + offsetMs / hopMs. */
+export function shiftEnergy(curve: EnergyCurve, offsetMs: number): EnergyCurve {
+  const shift = Math.round(offsetMs / curve.hopMs);
+  if (!Number.isFinite(shift) || shift <= 0) return curve;
+  const values = Array.from(
+    { length: Math.max(0, curve.values.length - shift) },
+    (_, i) => curve.values[i + shift] ?? 0,
+  );
+  return { hopMs: curve.hopMs, values };
+}
+
 /** Mean of the finite curve values in [fromMs, toMs); null if there are none. */
 export function meanEnergy(curve: EnergyCurve, fromMs: number, toMs: number): number | null {
   if (!(curve.hopMs > 0)) return null;

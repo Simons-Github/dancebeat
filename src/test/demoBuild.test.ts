@@ -18,7 +18,9 @@ import {
 import { DemoManifestSchema, type DemoManifest, type SectionKind } from "@/lib/demoManifest";
 import { BLEND_BEATS, GROUP_PATTERN, TEMPO_TOLERANCE, stepBeats, type Plan } from "@/lib/generator";
 import { simulateScore } from "@/lib/generator/metrics";
+import { gameTimeMs } from "@/lib/audio/clock";
 import { frameAt } from "@/lib/pose";
+import { beatFlashLevel } from "@/lib/sync";
 import { CHOREO_VERSION, ChoreographySchema, MotionPackSchema } from "@/lib/schema";
 import type { AngleKey, Choreography, Frame, MotionPack } from "@/lib/types";
 import { SONG_PALETTES } from "@/theme";
@@ -64,6 +66,16 @@ const shipped = (slug: string): DemoManifest => {
 const beatMsOf = (m: DemoManifest) => 60_000 / m.bpm;
 /** Exact time of a beat of the manifest's grid. */
 const timeOf = (m: DemoManifest, beat: number) => m.beatPhaseMs + beat * beatMsOf(m);
+
+/**
+ * The choreography on the audio timeline: frame and move times plus `offsetMs`, where the demo
+ * build keeps the beat phase (B7). The manifest's beats (`timeOf`) are audio times.
+ */
+const atAudio = (c: Choreography): Choreography => ({
+  ...c,
+  frames: c.frames.map((f) => ({ ...f, timeMs: f.timeMs + c.offsetMs })),
+  moves: c.moves.map((mv) => ({ ...mv, timeMs: mv.timeMs + c.offsetMs })),
+});
 
 /** Independent re-derivation of the section start beats. */
 function startsOf(m: DemoManifest): number[] {
@@ -268,7 +280,13 @@ describe("buildDemoChoreo", () => {
     expect(c.version).toBe(2);
     expect(c.title).toBe(m.title);
     expect(c.bpm).toBe(m.bpm);
-    expect(c.offsetMs).toBe(0);
+    // The beat phase is the offset; the choreography starts at the first beat (B7).
+    expect(c.offsetMs).toBe(m.beatPhaseMs);
+    expect(c.frames[0]?.timeMs).toBe(0);
+    for (const mv of c.moves) {
+      const k = Math.round(mv.timeMs / beatMsOf(m));
+      expect(Math.abs(mv.timeMs - k * beatMsOf(m))).toBeLessThanOrEqual(1);
+    }
     expect(c.accentColor).toBe(SONG_PALETTES[m.palette]?.accent);
     expect(c.secondaryColor).toBe(SONG_PALETTES[m.palette]?.secondary);
     expect(c.createdAt).toBe(0);
@@ -287,7 +305,7 @@ describe("buildDemoChoreo", () => {
   it.each(SHIPPED.map((s) => [s.slug, s.manifest] as const))(
     "%s: moves on the beat grid, none in the intro",
     (_slug, m) => {
-      const c = choreoOf(m);
+      const c = atAudio(choreoOf(m));
       const beatMs = beatMsOf(m);
       for (const mv of c.moves) {
         const k = Math.round((mv.timeMs - m.beatPhaseMs) / beatMs);
@@ -303,7 +321,7 @@ describe("buildDemoChoreo", () => {
   it.each(SHIPPED.map((s) => [s.slug, s.manifest] as const))(
     "%s: gold moves exactly as in the manifest, closing pose not gold",
     (_slug, m) => {
-      const c = choreoOf(m);
+      const c = atAudio(choreoOf(m));
       const starts = startsOf(m);
       const expected = m.gold
         .map((g) => Math.round(timeOf(m, (starts[g.section] ?? NaN) + g.beat)))
@@ -318,7 +336,7 @@ describe("buildDemoChoreo", () => {
   it.each(SHIPPED.map((s) => [s.slug, s.manifest] as const))(
     "%s: repeated sections dance the same moves and poses",
     (_slug, m) => {
-      const c = choreoOf(m);
+      const c = atAudio(choreoOf(m));
       const starts = startsOf(m);
       const beatMs = beatMsOf(m);
       const clips = buildDemoClips(m, PACK);
@@ -382,6 +400,22 @@ describe("buildDemoChoreo", () => {
     },
   );
 
+  it.each(SHIPPED.map((s) => [s.slug, s.manifest] as const))(
+    "%s: das Beat-Licht des Sync-Tests blinkt auf dem Beat der Musik (Gerätetest B7)",
+    (_slug, m) => {
+      const c = choreoOf(m);
+      const offsets = { latencyMs: 0, syncOffsetMs: 0, choreoOffsetMs: c.offsetMs };
+      for (let k = 0; k < 32; k++) {
+        // 1 ms after the beat: exactly on it, float rounding may land just before.
+        const t = gameTimeMs(timeOf(m, k) + 1, offsets);
+        expect(beatFlashLevel(t, m.bpm, 1, 100), `beat ${k}`).toBeGreaterThan(0.98);
+      }
+      // Half a beat later it is dark.
+      const half = gameTimeMs(timeOf(m, 8.5), offsets);
+      expect(beatFlashLevel(half, m.bpm, 1, 100)).toBe(0);
+    },
+  );
+
   it("a perfect simulated player gets only PERFECT", () => {
     const c = choreoOf(shipped("gold-in-my-pocket"));
     const snap = simulateScore(c, { noiseDeg: 0, missRate: 0, seed: 1 });
@@ -427,7 +461,7 @@ describe("buildDemoClips with fixed phrases", () => {
 
     // The choreography shows the same sequence as labels.
     const labelOf = new Map(PACK.clips.map((cl) => [cl.id, cl.label]));
-    const c = buildDemoChoreo(m, PACK);
+    const c = atAudio(buildDemoChoreo(m, PACK));
     const t0 = timeOf(m, starts[2]!);
     const t1 = timeOf(m, starts[3]!);
     const labels = c.moves

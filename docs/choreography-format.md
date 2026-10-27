@@ -508,7 +508,12 @@ Ankern, mit `label` und `iconId` (sonst `id`) des Clips.
 `loadMotionPack()` (eigener Chunk, vom Service Worker vorab gecacht) und übergibt
 `buildNewSong` die Schwierigkeit des Formulars. Bei einer analysierten Audiodatei kommen
 Onset-Hüllkurve (Energie) und Beat-Phase (`estimateBeatPhaseMs` über die ersten 10 s) dazu, die
-Moves liegen dann auf den Beats der Musik; bei URL, YouTube und Spotify ist die Phase 0. Dev-Songs
+Moves liegen dann auf den Beats der Musik; bei URL, YouTube und Spotify ist die Phase 0.
+`autoChoreo` legt die Phase (auf einen Beat gefaltet, `phaseWithinBeat`) in `offsetMs` und
+erzeugt ab dort auf k · Beat, Energie verschoben (`shiftEnergy`); „Choreografie neu erzeugen“
+addiert sie zum behaltenen `offsetMs` (Gerätetest 2026-10-27, B7, wie beim Video-Import).
+Schon gespeicherte eigene Songs aus der Zeit davor behalten Phase 0 im Offset, bis man ihre
+Choreografie neu erzeugt. Dev-Songs
 (`?devsong=…`) nutzen Schwierigkeit 1. Die eingebauten Demo-Songs sind unverändert (Etappe 14).
 
 ### Messplatz
@@ -633,8 +638,13 @@ buildDemoChoreo(manifest, pack) → Choreography    // realizeFrames, ohne Moves
   App. Die Ausschlüsse an Phrasengrenzen kennen die festen Folgen nicht: An der Grenze
   zwischen fester Folge und `"auto"` kann ein Clip direkt auf sich selbst folgen.
 - **Choreo-Felder:** `id` ist eine aus der Song-ID abgeleitete UUID (v4-Form), die Farben kommen
-  aus `SONG_PALETTES[palette]`, `offsetMs` ist 0 und `createdAt`/`updatedAt` sind 0 (setzt erst
-  der Seed).
+  aus `SONG_PALETTES[palette]`, `offsetMs` ist die Beat-Phase des Manifests (`beatPhaseMs`,
+  seit `DEMO_CHOREO_VERSION` 4, Gerätetest 2026-10-27 B7) und `createdAt`/`updatedAt` sind 0
+  (setzt erst der Seed). Gebaut wird ab dem ersten Beat: Choreo-Zeit 0 = Audiozeit
+  `beatPhaseMs`, Moves auf k · Beat. Vorher war `offsetMs` 0 und die Moves lagen auf
+  `beatPhaseMs + k · Beat`; Beat-Licht, Beat-Puls und Sync-Vorschlag rechnen aber mit k · Beat in
+  Choreo-Zeit, das Licht blinkte daher bis zu einem halben Beat neben der Musik (bei „Gold in My
+  Pocket“ 310 ms bei 492 ms Beat).
 - **Seed (14a-2):** `seedDemos` (`src/data/demo.ts`) lädt die Choreografie per `import()`, prüft
   sie mit `ChoreographySchema` und setzt `createdAt` = `updatedAt` = jetzt. Titel, Interpret, BPM,
   Schwierigkeit und Audiodatei kommen aus dem Manifest; die Song-ID ist `demoSongId(<id>)`, eine
