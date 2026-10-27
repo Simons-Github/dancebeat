@@ -12,6 +12,13 @@ export function seededRandom(seed: number) {
   };
 }
 
+/** Standard normal random number (Box-Muller) from two draws of `random`. */
+export function gaussian(random: () => number) {
+  const u = Math.max(random(), 1e-12);
+  const v = random();
+  return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v);
+}
+
 /** 32-bit FNV-1a hash of a string (UTF-16 code units), e.g. a song id as generator seed. */
 export function hashSeed(text: string): number {
   let h = 0x811c9dc5;

@@ -533,7 +533,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       <DialogTrigger asChild>
         <Button
           variant="secondary"
-          className="h-11 gap-2 rounded-full border-2 border-white/70 bg-(--scrim-button) px-5 text-base text-white hover:bg-(--scrim-button) hover:brightness-125 focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5"
+          className="btn-pill h-12 min-w-0 flex-1 gap-2 px-5 text-base focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5"
         >
           <Plus aria-hidden />
           Song hinzufügen

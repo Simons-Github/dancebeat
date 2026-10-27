@@ -29,8 +29,8 @@ describe("Lizenztexte", () => {
     expect(urls).toEqual([`/app/${LICENSES_FILE}`]);
     expect(texts.apache).toContain("Apache License");
     expect(texts.apache).toContain("END OF TERMS AND CONDITIONS");
-    expect(texts.fredoka).toContain("Copyright 2016 The Fredoka Project Authors");
-    expect(texts.fredoka).toContain("SIL OPEN FONT LICENSE Version 1.1");
+    expect(texts.font).toContain("Copyright 2022 The Bricolage Grotesque Project Authors");
+    expect(texts.font).toContain("SIL OPEN FONT LICENSE Version 1.1");
     expect(texts.bundled?.map((p) => p.name)).toEqual(["react", "tailwindcss", "tw-animate-css"]);
     expect(texts.bundled?.[1]).toMatchObject({ version: CSS_ONLY, identifier: "MIT" });
     expect(texts.bundled?.[1]?.text).toContain("Copyright (c) Tailwind Labs, Inc.");

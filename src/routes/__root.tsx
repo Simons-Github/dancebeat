@@ -13,8 +13,8 @@ import { Button } from "@/components/ui/button";
 function NotFoundComponent() {
   return (
     <main className="safe-pad flex min-h-0 flex-1 flex-col items-center justify-center gap-3 text-center">
-      <div className="bg-(--scrim-banner) shadow-pop flex max-w-full flex-col items-center gap-3 rounded-3xl border border-white/15 px-8 py-6 text-white backdrop-blur-md">
-        <h1 className="font-title text-stroke text-7xl">404</h1>
+      <div className="glass flex max-w-full flex-col items-center gap-3 rounded-3xl px-8 py-6 text-white">
+        <h1 className="font-title text-7xl">404</h1>
         <h2 className="text-2xl font-bold">Seite nicht gefunden</h2>
         <p className="text-base text-white/90">
           Diese Seite gibt es nicht oder sie wurde verschoben.
@@ -38,8 +38,8 @@ function ErrorComponent({ error, reset }: ErrorComponentProps) {
   return (
     <div className="bg-party safe-pad flex h-dvh items-center justify-center">
       <div className="max-w-md text-center">
-        <h1 className="font-title text-stroke text-2xl">Die Seite konnte nicht geladen werden</h1>
-        <p className="mt-2 text-sm text-white/90">
+        <h1 className="font-title text-3xl text-paper">Die Seite konnte nicht geladen werden</h1>
+        <p className="mt-2 text-xl font-bold text-paper">
           Etwas ist schiefgelaufen. Lade die Seite neu oder geh zurück zur Startseite.
         </p>
         <div className="mt-6 flex flex-wrap justify-center gap-2">

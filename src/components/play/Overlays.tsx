@@ -13,8 +13,7 @@ import { SPRING } from "@/theme";
 
 export const GAME_BTN =
   "btn-pill h-14 gap-2 rounded-full px-8 text-lg focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
-const PANEL =
-  "bg-(--scrim-banner) shadow-pop flex max-w-md flex-col gap-4 rounded-3xl border border-white/15 p-6 text-white backdrop-blur-md";
+const PANEL = "glass flex max-w-md flex-col gap-4 rounded-3xl p-6 text-white";
 
 /** Dimmed full-screen layer with a centered panel. */
 function Layer({ children, label }: { children: ReactNode; label?: string }) {
@@ -159,7 +158,7 @@ export function PauseMenu({
   return (
     <Layer label="Pause">
       <div className={cn(PANEL, "max-h-full w-full overflow-y-auto")}>
-        <h2 className="font-title text-stroke text-3xl">Pause</h2>
+        <h2 className="font-title text-3xl">Pause</h2>
         {reason && PAUSE_TEXT[reason] && <p className="text-base">{PAUSE_TEXT[reason]}</p>}
         {cameraError && <CameraErrorPanel error={cameraError} onRetry={onRetryCamera} />}
         <div className="flex flex-col gap-3">

@@ -1,12 +1,13 @@
 import { useEffect, useRef } from "react";
 import { Link } from "@tanstack/react-router";
 import { animate, motion, useMotionValue, useReducedMotion, useTransform } from "framer-motion";
-import { Home, RotateCcw, Star, Trophy } from "lucide-react";
+import { Home, RotateCcw, Trophy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
+import { ChromeStar } from "@/components/Y2KIcons";
 import { rankTitle } from "@/lib/scoring";
 import type { GameResult, Rating } from "@/lib/types";
-import { CONFETTI, GOLD, ICON_OFF, RATING_COLORS, RESULT, SCRIM, SPRING } from "@/theme";
+import { CONFETTI, GOLD, RATING_COLORS, RESULT, SCRIM, SPRING } from "@/theme";
 
 const RATINGS: Rating[] = ["PERFECT", "SUPER", "GOOD", "OK", "X"];
 /** Spoken names where the short label would be unclear. */
@@ -31,16 +32,16 @@ export function ResultScreen({ result: r }: { result: GameResult }) {
   return (
     <main className="safe-pad flex min-h-0 flex-1 flex-col items-center justify-center">
       {party && <Confetti />}
-      <div className="bg-(--scrim-banner) shadow-pop flex max-h-full w-full max-w-md flex-col items-center gap-4 overflow-y-auto rounded-3xl border border-white/15 px-6 py-5 text-center text-white backdrop-blur-md landscape:grid landscape:max-w-3xl landscape:grid-cols-2 landscape:items-center landscape:gap-x-8 landscape:gap-y-3">
+      <div className="glass flex max-h-full w-full max-w-md flex-col items-center gap-4 overflow-y-auto rounded-3xl px-6 py-5 text-center text-white landscape:grid landscape:max-w-3xl landscape:grid-cols-2 landscape:items-center landscape:gap-x-8 landscape:gap-y-3">
         <section className="flex flex-col items-center gap-3" aria-label="Wertung">
           <h1
             ref={headingRef}
             tabIndex={-1}
-            className="font-title text-stroke text-4xl outline-none landscape:text-3xl"
+            className="font-title text-4xl outline-none landscape:text-3xl"
           >
             {rankTitle(r.stars, r.mega)}
           </h1>
-          <p className="font-title text-6xl leading-none tabular-nums landscape:text-5xl">
+          <p className="font-title chrome-text chrome-glow pb-[0.1em] text-7xl leading-none tabular-nums landscape:text-6xl">
             <span className="sr-only" data-testid="result-score">
               {fmt(r.score)} Punkte
             </span>
@@ -145,7 +146,6 @@ function PopStar({
   reduce: boolean;
   mega?: boolean;
 }) {
-  const color = on ? (mega ? GOLD : RESULT.starOn) : ICON_OFF;
   return (
     <motion.span
       aria-hidden
@@ -157,12 +157,12 @@ function PopStar({
         delay: reduce ? 0 : RESULT.starDelaySeconds + index * RESULT.starStaggerSeconds,
       }}
     >
-      <Star
-        className={mega ? "size-12 landscape:size-10" : "size-9 landscape:size-8"}
-        fill={on ? color : "transparent"}
-        color={color}
-        data-on={on}
-      />
+      <span data-on={on} className="block">
+        <ChromeStar
+          variant={on ? (mega ? "gold" : "chrome") : "off"}
+          className={mega ? "size-12 landscape:size-10" : "size-9 landscape:size-8"}
+        />
+      </span>
     </motion.span>
   );
 }

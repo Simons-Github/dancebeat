@@ -65,18 +65,19 @@ Beides ist im Produktions-Build nicht enthalten.
 
 ## Befehle
 
-| Befehl                 | Zweck                                                            |
-| ---------------------- | ---------------------------------------------------------------- |
-| `bun run dev`          | Dev-Server (HTTP, nur localhost)                                 |
-| `bun run dev:https`    | Dev-Server mit HTTPS, im LAN erreichbar                          |
-| `bun run build`        | Produktions-Build nach `dist/`                                   |
-| `bun run preview`      | Build lokal ansehen (mit Service Worker)                         |
-| `bun run typecheck`    | TypeScript-Prüfung (App und Service Worker)                      |
-| `bun run lint`         | ESLint                                                           |
-| `bun run test`         | Vitest                                                           |
-| `bun run format`       | Prettier                                                         |
-| `bun run fetch-models` | MediaPipe-Modelle laden (läuft vor `dev` und `build` von selbst) |
-| `bun run tune-video …` | Parametersuche für den Video-Import mit exportierten Pose-Spuren |
+| Befehl                 | Zweck                                                                    |
+| ---------------------- | ------------------------------------------------------------------------ |
+| `bun run dev`          | Dev-Server (HTTP, nur localhost)                                         |
+| `bun run dev:https`    | Dev-Server mit HTTPS, im LAN erreichbar                                  |
+| `bun run build`        | Produktions-Build nach `dist/`                                           |
+| `bun run preview`      | Build lokal ansehen (mit Service Worker)                                 |
+| `bun run typecheck`    | TypeScript-Prüfung (App und Service Worker)                              |
+| `bun run lint`         | ESLint                                                                   |
+| `bun run test`         | Vitest                                                                   |
+| `bun run format`       | Prettier                                                                 |
+| `bun run fetch-models` | MediaPipe-Modelle laden (läuft vor `dev` und `build` von selbst)         |
+| `bun run tune-video …` | Parametersuche für den Video-Import mit exportierten Pose-Spuren         |
+| `bun run eval-video …` | Messplatz für den Video-Import (Selbsttest, Verschiebung, fremdes Video) |
 
 Nach jeder Änderung müssen `typecheck`, `test`, `lint` und `build` sauber durchlaufen.
 

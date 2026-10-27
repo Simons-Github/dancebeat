@@ -8,7 +8,15 @@ import { Button } from "@/components/ui/button";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { SongThemeContext, useSongTheme, type SongTheme } from "@/hooks/useSongTheme";
 import { scrimCss } from "@/lib/contrast";
-import { DEFAULT_SONG_THEME, SCRIM, THEME_FADE_MS } from "@/theme";
+import {
+  APP_BACKGROUND,
+  CHROME,
+  DEFAULT_SONG_THEME,
+  GLOW,
+  PAPER,
+  SCRIM,
+  THEME_FADE_MS,
+} from "@/theme";
 
 /** Full-screen frame: song colors as CSS variables, animated background, header, content slot. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -32,21 +40,21 @@ function Frame({ children }: { children: ReactNode }) {
     "--song-2": theme.secondary,
     "--theme-fade": `${THEME_FADE_MS}ms`,
     "--ink": SCRIM.ink,
-    "--scrim-header": scrimCss(SCRIM.ink, SCRIM.header),
-    "--scrim-tile": scrimCss(SCRIM.ink, SCRIM.tile),
-    "--scrim-banner": scrimCss(SCRIM.ink, SCRIM.banner),
-    "--scrim-button": scrimCss(SCRIM.ink, SCRIM.button),
-    "--scrim-edge": scrimCss(SCRIM.ink, SCRIM.edge),
+    "--paper": PAPER,
+    "--night": APP_BACKGROUND,
+    "--glass-bg": scrimCss(APP_BACKGROUND, SCRIM.glass),
+    "--chrome-light": CHROME.light,
+    "--chrome-mid": CHROME.mid,
+    "--chrome-dark": CHROME.dark,
+    "--chrome-tint": `${CHROME.tint * 100}%`,
+    "--glow-song": `${GLOW.song * 100}%`,
+    "--glow-secondary": `${GLOW.secondary * 100}%`,
   } as CSSProperties;
   return (
     <div className="song-frame bg-party relative flex h-dvh flex-col overflow-hidden" style={style}>
       {!immersive && (
         <>
           <PartyBackground />
-          <div
-            aria-hidden
-            className="scrim-edge pointer-events-none absolute inset-x-0 bottom-0 h-1/4"
-          />
           <AppHeader />
           <UpdateBanner />
         </>
@@ -59,15 +67,14 @@ function Frame({ children }: { children: ReactNode }) {
 function AppHeader() {
   return (
     <header className="safe-pad relative z-20 flex items-center justify-between gap-3 !pb-1">
-      <div
-        aria-hidden
-        className="scrim-header pointer-events-none absolute inset-x-0 top-0 -z-10 h-[calc(100%+2.5rem)]"
-      />
+      {/* Chrome wordmark, slanted like a Y2K logo. */}
       <Link
         to="/"
-        className="font-title text-stroke rounded-full px-2 text-3xl leading-none focus-visible:ring-4 focus-visible:ring-gold focus-visible:outline-none"
+        className="rounded-lg px-1 focus-visible:ring-4 focus-visible:ring-gold focus-visible:outline-none"
       >
-        DanceBeat
+        <span className="font-title chrome-text chrome-glow inline-block -skew-x-8 text-3xl leading-tight">
+          DanceBeat
+        </span>
       </Link>
       <Button
         asChild

@@ -12,6 +12,7 @@
     "build-motion-pack": "bun scripts/build-motion-pack.ts",
     "eval-choreo": "bun scripts/eval-choreo.ts",
     "eval-demos": "bun scripts/eval-demos.ts",
+    "eval-video": "bun scripts/eval-video.ts",
     "aist-track": "bun scripts/aist/to-pose-track.ts",
     "aist-music": "bun scripts/aist/measure-music.ts",
     "measure-audio": "bun scripts/measure-audio.ts",
@@ -35,7 +36,7 @@
     "rolldown": "1.2.1"
   },
   "dependencies": {
-    "@fontsource/fredoka": "^5.3.0",
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
     "@mediapipe/tasks-vision": "1.1.1",
     "@radix-ui/react-alert-dialog": "^1.1.15",
     "@radix-ui/react-dialog": "^1.1.15",

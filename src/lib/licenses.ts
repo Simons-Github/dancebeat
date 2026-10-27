@@ -24,8 +24,8 @@ export function parseBundledLicenses(json: unknown): BundledLicense[] | null {
 export interface LicenseTexts {
   /** Apache License 2.0: MediaPipe Tasks Vision (JS, WASM) and the pose models. */
   apache: string;
-  /** SIL Open Font License 1.1 with the Fredoka copyright line. */
-  fredoka: string;
+  /** SIL Open Font License 1.1 with the Bricolage Grotesque copyright line. */
+  font: string;
   /** Bundled npm packages; null if the list is missing (dev server) or unreadable. */
   bundled: BundledLicense[] | null;
 }
@@ -45,9 +45,9 @@ export async function loadLicenseTexts(
   fetchFn: typeof fetch,
   base: string = import.meta.env.BASE_URL,
 ): Promise<LicenseTexts> {
-  const [apache, fredoka, tailwind, twAnimate, bundled] = await Promise.all([
+  const [apache, font, tailwind, twAnimate, bundled] = await Promise.all([
     import("@/data/licenses/Apache-2.0.txt?raw").then((m) => m.default),
-    import("@fontsource/fredoka/LICENSE?raw").then((m) => m.default),
+    import("@fontsource-variable/bricolage-grotesque/LICENSE?raw").then((m) => m.default),
     import("@/data/licenses/tailwindcss.txt?raw").then((m) => m.default),
     import("@/data/licenses/tw-animate-css.txt?raw").then((m) => m.default),
     fetchBundled(fetchFn, base),
@@ -60,7 +60,7 @@ export async function loadLicenseTexts(
   ];
   return {
     apache,
-    fredoka,
+    font,
     bundled: bundled && [...bundled, ...css].sort((a, b) => a.name.localeCompare(b.name)),
   };
 }

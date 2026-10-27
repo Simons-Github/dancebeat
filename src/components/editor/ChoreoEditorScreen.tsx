@@ -239,7 +239,9 @@ export function ChoreoEditorScreen({
       <div className="mx-auto flex w-full max-w-240 flex-col gap-4 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="min-w-0">
-            <h1 className="font-title text-stroke truncate text-3xl sm:text-4xl">{song.title}</h1>
+            <h1 className="font-title chrome-text chrome-glow truncate pb-[0.1em] text-4xl sm:text-5xl">
+              {song.title}
+            </h1>
             <p className="text-base text-white/90">Choreografie bearbeiten</p>
           </div>
           <div className="flex flex-wrap gap-2">

@@ -350,11 +350,13 @@ erneut. Für einen Server ist die Abfragefunktion `loadSongs` die einzige Stelle
   5, MP3 statt Synthese): der nächste Seed ersetzt bei vorhandenen Demos einmalig nur das Audio
   (`save` mit dem unveränderten gespeicherten Song), danach steht die Version in `localStorage`
   `dancebeat.demoAudioVersion`. Ändert sich eine vorgebaute Choreografie, wird
-  `DEMO_CHOREO_VERSION` erhöht (aktuell 2; ein Fingerprint-Test in `demoSeed.test.ts` erzwingt
+  `DEMO_CHOREO_VERSION` erhöht (aktuell 3; ein Fingerprint-Test in `demoSeed.test.ts` erzwingt
   das): Der nächste Seed ersetzt dann jede vorhandene, nicht gelöschte Demo einmalig komplett mit
   einem frischen Song. Highscore, Sterne, Umbenennung, Offsets, eigene Choreografie und ein
   angehängtes Tanzvideo gehen verloren. Erst entfernt `setVideo` das Video, dann überschreibt
-  `save` den Song in einer Transaktion, die Demo fehlt also nie. Das gespeicherte Audio bleibt,
+  `save` den Song in einer Transaktion, die Demo fehlt also nie. Nur `createdAt` bleibt erhalten,
+  weil die Bibliothek danach sortiert; sonst stünden ersetzte Demos hinter den eigenen Songs (seit
+  14h). Das gespeicherte Audio bleibt,
   solange es das aktuelle Demo-Audio ist; sonst wird die MP3 neu geladen. Entschieden am
   2026-10-23, weil die App nur zum Testen genutzt wird; vor einer Veröffentlichung neu bewerten.
   Die Choreo-Version steht pro Demo in `dancebeat.demoChoreoVersions` (ID → Version), weil der
@@ -517,15 +519,16 @@ api.spotify.com); jeweils mit dem Hinweis, dass die Gegenstelle die IP-Adresse s
 der Songquelle (YouTube, Host der Audio-URL bzw. Spotify, bei lokalen Dateien nichts). Ebenso
 die Vorschau im Choreografie-Editor (`/edit/$songId`, Etappe 8d-2b).
 
-**Schrift:** Fredoka (OFL-Lizenz) kommt aus dem Paket `@fontsource/fredoka` und wird mit dem Build
-selbst ausgeliefert (`latin`-Schnitte 400, 500, 700 in `src/styles.css`). Es gibt keine Anfrage an
+**Schrift:** Bricolage Grotesque (OFL-Lizenz) kommt aus dem Paket
+`@fontsource-variable/bricolage-grotesque` und wird mit dem Build selbst ausgeliefert (variable
+Datei mit Gewichts- und Breitenachse, `wdth.css` in `src/styles.css`). Es gibt keine Anfrage an
 Google Fonts oder ein anderes CDN.
 
 **Lizenzhinweise:** Die Credits in den Einstellungen (`src/data/credits.ts`) nennen DanceBeat
 (PolyForm Noncommercial 1.0.0, `LICENSE.md`), die Demo-Musik, AIST++ und die AIST Dance DB (seit Etappe 13i im Motion-Paket),
-MediaPipe mit Pose-Modellen (Apache 2.0), Fredoka (OFL 1.1) und die npm-Pakete. Darunter lädt
+MediaPipe mit Pose-Modellen (Apache 2.0), Bricolage Grotesque (OFL 1.1) und die npm-Pakete. Darunter lädt
 „Lizenztexte“ erst beim Aufklappen die vollständigen Texte (`src/lib/licenses.ts`): Apache 2.0
-aus `src/data/licenses/`, OFL aus `@fontsource/fredoka/LICENSE`, die Paketliste aus
+aus `src/data/licenses/`, OFL aus `@fontsource-variable/bricolage-grotesque/LICENSE`, die Paketliste aus
 `licenses.json`. Diese Datei schreibt Vite beim Build (`build.license` in `vite.config.ts`). Alles
 kommt vom eigenen Origin, es gibt also keinen externen Abruf. Die Links in den Credits rufen erst
 beim Tippen etwas ab.
@@ -611,9 +614,22 @@ geladenen, pausierten `<video>`; `src/hooks/useVideoAnalysis.ts` kapselt Zustand
   5 s); Listener, Timer und Callbacks werden auf jedem Weg entfernt.
 - Für versteckte oder nicht eingehängte Videos feuert der Bild-Callback nie; jeder Schritt kostet
   dann 120 ms. Der Import-Dialog (8c) muss das Video sichtbar im DOM halten.
-- Zeitstempel für `detect` steigen streng, auch wenn ein Estimator mehrere Analysen nacheinander
-  macht (der nächste Lauf wird hinter den letzten Zeitstempel verschoben). Der Hook nimmt ohnehin
-  pro Lauf einen neuen Estimator.
+- **Probenzeit = Bildzeit (Etappe 8i-2):** Bestätigt der Bild-Callback das Bild, ist die
+  Probenzeit dessen `mediaTime` (auf 1 µs gerundet), nicht das Rasterziel. Bei 30 fps und 50-ms-Raster
+  wird aus 50 also 33,333 ms; vorher lagen die Zeiten im Mittel 8,3 ms, höchstens 16,7 ms neben dem
+  analysierten Bild. Ein Bild, dessen Zeit nicht nach der vorigen Probe liegt (dasselbe Bild noch
+  einmal, Raster feiner als die Bilder), wird nicht erneut analysiert. Ohne bestätigtes Bild (kein
+  `requestVideoFrameCallback`, Callback nach 120 ms nicht da) bleibt das Rasterziel die Zeit, und
+  die Probe trägt `fallback: true`; die Dev-Diagnose zählt diese Proben, die Rohdaten-Datei
+  behält das Feld (optional, ohne neue Version).
+- **Grenze:** Bei Videos unter etwa 25 fps liegt das gezeigte Bild oft weiter als
+  `max(intervalMs/2, 40 ms)` vor dem Ziel und wird als verspätetes Bild verworfen; diese Proben
+  landen im Rückfall. Das Raster bleibt vorerst 50 ms (ob ein Raster nach Bilddauer besser ist,
+  entscheidet der Messplatz).
+- Zeitstempel für `detect` sind ganze Millisekunden (`Math.round` der Probenzeit, für
+  verschiedene Bilder bis 1000 fps eindeutig) und steigen streng, auch wenn ein Estimator mehrere
+  Analysen nacheinander macht (der nächste Lauf wird hinter den letzten Zeitstempel verschoben).
+  Der Hook nimmt ohnehin pro Lauf einen neuen Estimator.
 - Abbruch über `AbortSignal` (`AbortError`), Fehler als `VideoAnalysisError` mit `code`
   (`no-metadata`, `seek-timeout`, `video-error`, `empty-range`). Fortschritt höchstens alle
   250 ms; der Hook setzt nur dann State, nie pro Bild.
@@ -979,7 +995,7 @@ wird:
 
 `bun run tune-video <a.posetrack.json> [b.posetrack.json …]` (`scripts/tune-video-choreo.ts`,
 Logik in `scripts/tuning.ts`) rechnet für jede Datei ein Raster aus One-Euro-`minCutoff`
-(Standard 0,5/1/2/4/8), `beta` (2/10/20/40/80) und `maxGapMs` (150/250/400) durch und gibt je Video
+(Standard 0,5/1/2/4/8), `beta` (2/10/20/40/80) und `maxGapMs` (100/150/300; Standard `SHORT_GAP_MS` = 150 seit 8i-4) durch und gibt je Video
 eine Tabelle nach Holdout-Fehler aus (Zittern, Moves je Rasterpunkte, Parameter; die aktuellen
 Standardwerte sind markiert). Bei mehreren Dateien folgt die mittlere Wertung über alle Videos;
 Einstellungen, die an einem Video scheitern, fallen dort heraus. Raster per Komma-Liste
@@ -988,6 +1004,33 @@ Einstellungen, die an einem Video scheitern, fallen dort heraus. Raster per Komm
 zeigt `moveMotionDegPerS`; die Platzierung ändert den Holdout-Fehler nicht und wird über diese
 Spalte verglichen. Laufzeit etwa 2 s je
 Minute Video beim Standardraster. Neue Standardwerte vor dem Übernehmen im Spiel gegenprüfen.
+
+### Video-Messplatz (Etappe 8i-1)
+
+`bun run eval-video [a.posetrack.json …]` (`scripts/eval-video.ts`, Logik in
+`scripts/evalVideo.ts`) baut aus jeder Rohdaten-Datei die Choreografie wie der Dialog
+(`importOptions`) und bewertet sie mit dem echten `Scorer` gegen einen simulierten Spieler.
+Ohne Argumente liest es alle `*.posetrack.json` aus `$DANCEBEAT_POSETRACK_DIR` (Standard
+`Rohdaten/`, ignoriert).
+
+- **Spieler:** tanzt die Rohdaten (nicht die geglättete Referenz) mit 30 Bildern/s, linear
+  zwischen den Proben (nicht über Lücken > 150 ms), mit Gauß-Rauschen auf jeder Koordinate
+  (Standard 0,01 Bildhöhen), zufälligem Zeitfehler je Bild (σ 20 ms) und 5 % Aussetzern. Seiten
+  wie die gespeicherte Choreografie (`mirror`). Alles mit festen Seeds (Standard 5), die Eval ist
+  deterministisch. Optionen `--seeds`, `--noise`, `--jitter`, `--miss`, `--fps`, `--variant`,
+  `--out`.
+- **Szenarien:** „selbst“, „+¼ Beat“ und „+½ Beat“ (Spieler zu spät), „fremd“ (das nächste Video
+  der Liste ab seinem Bereichsanfang, wiederholt). Je Szenario Anteile PERFECT…X, Sterne, Quote,
+  Score. **Trennschärfe** = Quote „selbst“ − Quote „fremd“.
+- **Varianten:** „One-Euro“ (Standard) und „ohne One-Euro“ (Filter durchlässig): misst, was
+  die eigene Glättung zusätzlich zur Glättung von MediaPipe im VIDEO-Modus bringt.
+- **Determinismus:** zwei Builds aus derselben Datei, verglichen als JSON ohne `id`.
+- **Zeitstempel:** Mit `$DANCEBEAT_VIDEO_DIR` (etwa in `.env.local`, die bun liest und git
+  ignoriert) und `ffprobe` liest das Skript die Bildzeiten des Quellvideos. Der Spieler sieht
+  jede Probe dann zur Zeit des Bildes, das der Browser wirklich zeigte; die Referenz behält die
+  gespeicherten Zeiten. Die Tabelle „Zeitstempel“ nennt den Abstand. Die Videos bleiben außerhalb
+  des Repos.
+- Ausgabe als JSON in `eval-results/eval-video.json`.
 
 ## Choreografie-Editor (Etappe 8d-1)
 

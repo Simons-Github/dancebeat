@@ -16,6 +16,11 @@ export interface FakeVideoOptions {
   vfc?: "none" | "after-seeked" | "before-seeked" | "never" | "stale-first";
   /** Do not answer seeks (timeout tests). */
   stuck?: boolean;
+  /**
+   * Frame duration in ms: a seek shows the frame whose display interval contains the time, and
+   * the frame callback reports that frame's start as `mediaTime`. Default: every time is a frame.
+   */
+  frameMs?: number;
 }
 
 /**
@@ -69,7 +74,10 @@ export class FakeVideo extends EventTarget {
     this.seeks.push(s * 1000);
     if (this.o.stuck) return;
     const vfc = this.o.vfc ?? "none";
-    const fireFrames = (mediaMs = s * 1000) => {
+    const frameMs = this.o.frameMs;
+    // Small slack: 0.1 s · 1000 must land on frame 3 of a 30 fps video, not frame 2.
+    const shownAt = (ms: number) => (frameMs ? Math.floor(ms / frameMs + 1e-9) * frameMs : ms);
+    const fireFrames = (mediaMs = shownAt(s * 1000)) => {
       this.shownMs = mediaMs;
       const cbs = [...this.frameCallbacks.values()];
       this.frameCallbacks.clear();
@@ -78,7 +86,7 @@ export class FakeVideo extends EventTarget {
     };
     const previous = this.shownMs;
     setTimeout(() => {
-      if (vfc === "none" || vfc === "never") this.shownMs = s * 1000;
+      if (vfc === "none" || vfc === "never") this.shownMs = shownAt(s * 1000);
       if (vfc === "stale-first") fireFrames(previous);
       if (vfc === "before-seeked") fireFrames();
       this.dispatchEvent(new Event("seeked"));

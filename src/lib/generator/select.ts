@@ -11,8 +11,14 @@ import type { ClipRef, GenerationInput, Plan, PlannedPhrase } from "./types";
 export const MIN_MOVE_ENERGY = 0.1;
 /** Clips with their own tempo only within ±12 % of the song (else hurried or sluggish). */
 export const TEMPO_TOLERANCE = 0.12;
-/** Weight of every transition; observed transitions add their count on top. */
+/** Weight of every transition; observed transitions add OBSERVED_TRANSITION_WEIGHT per count. */
 export const BASE_TRANSITION_WEIGHT = 1;
+/**
+ * Weight per observed occurrence of a transition, added to BASE_TRANSITION_WEIGHT. At 1 the
+ * generator followed observed sequences in only 4–15 % of steps among dozens of candidates; 20
+ * follows them in roughly a quarter to half of the steps (measured in Etappe 13j).
+ */
+export const OBSERVED_TRANSITION_WEIGHT = 20;
 /** Standard deviation of the energy fit (clip energy vs. phrase target). */
 export const ENERGY_SIGMA = 0.25;
 /** The mirror partner of the previous clip is this much more likely (left, then right). */
@@ -67,7 +73,13 @@ function weightOf(ctx: Context, c: MotionClip, prev: Prev, target: number): numb
   // Prefer the mirror partner right after, but not back again (left, right, left).
   const mirror = prevClip?.mirrorOf === c.id && !prev.mirrored ? MIRROR_BONUS : 1;
   const level = c.difficulty === ctx.input.difficulty ? LEVEL_BONUS : 1;
-  return (BASE_TRANSITION_WEIGHT + count) * fit * mirror * level * c.playability;
+  return (
+    (BASE_TRANSITION_WEIGHT + OBSERVED_TRANSITION_WEIGHT * count) *
+    fit *
+    mirror *
+    level *
+    c.playability
+  );
 }
 
 /**

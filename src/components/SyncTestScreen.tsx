@@ -32,8 +32,7 @@ import { SYNC_PREVIEW } from "@/theme";
 import type { Song } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
-const CARD =
-  "bg-(--scrim-banner) shadow-pop flex flex-col gap-4 rounded-3xl border border-white/15 p-5 text-white backdrop-blur-md";
+const CARD = "glass flex flex-col gap-4 rounded-3xl p-5 text-white";
 const BTN =
   "btn-pill h-12 gap-2 rounded-full px-6 text-base focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
 const HINT = "text-sm text-white/85";
@@ -54,7 +53,7 @@ type Phase = "idle" | "starting" | "playing" | "ended";
 function Card({ title, children }: { title: string; children: ReactNode }) {
   return (
     <section className={CARD}>
-      <h2 className="font-title text-stroke text-2xl">{title}</h2>
+      <h2 className="font-title text-2xl">{title}</h2>
       {children}
     </section>
   );
@@ -316,7 +315,9 @@ export function SyncTestScreen({
     <main className="safe-pad flex min-h-0 flex-1 flex-col overflow-y-auto">
       <div className="mx-auto flex w-full max-w-240 flex-col gap-4 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="font-title text-stroke min-w-0 text-3xl sm:text-4xl">Sync-Test</h1>
+          <h1 className="font-title chrome-text chrome-glow min-w-0 pb-[0.1em] text-4xl sm:text-5xl">
+            Sync-Test
+          </h1>
           <Button asChild size="lg" variant="secondary" className={BTN}>
             <Link to="/">
               <ArrowLeft aria-hidden />
@@ -420,7 +421,7 @@ export function SyncTestScreen({
                 tap(e.timeStamp);
               }}
               className={cn(
-                "shadow-pop flex h-48 w-full touch-none select-none flex-col items-center justify-center gap-1 rounded-3xl border-4 bg-(--scrim-banner) text-white transition-[filter] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gold landscape:h-36",
+                "shadow-pop flex h-48 w-full touch-none select-none flex-col items-center justify-center gap-1 rounded-3xl border-4 bg-night/60 text-white transition-[filter] focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-gold landscape:h-36",
                 playing ? "border-song active:brightness-150" : "border-white/30 opacity-70",
               )}
             >

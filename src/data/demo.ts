@@ -202,9 +202,10 @@ const AUDIO_VERSION_KEY = "dancebeat.demoAudioVersion";
  * (a test compares their fingerprint): the next seed replaces every demo already in the library
  * once, completely (highscore, stars and the player's edits are lost; decided 2026-10-23 while
  * only the developer uses the app, to be revisited before a public release).
- * 1 – no marker yet (seeded before Etappe 14g) · 2 – AIST pack with smooth entries (14f)
+ * 1 – no marker yet (seeded before Etappe 14g) · 2 – AIST pack with smooth entries (14f) ·
+ * 3 – AIST sequences in the pack, observed transitions weighted (13j)
  */
-export const DEMO_CHOREO_VERSION = 2;
+export const DEMO_CHOREO_VERSION = 3;
 /**
  * Choreography version per demo id. Per demo, not global like the audio marker: the seed runs
  * again after every library write, and a retry must not wipe demos that were already replaced.
@@ -389,7 +390,9 @@ async function addDemo(repo: SongRepository, loadAudio: LoadDemoAudio, d: DemoEn
  * stored audio stays while it is the current demo audio; otherwise (older audio, or the player
  * chose another source) the MP3 is downloaded. An attached dance video is removed first, then
  * `save` overwrites the song (and the audio, if downloaded) in one transaction, so the demo is
- * never missing in between. Returns false if the replacement failed (logged).
+ * never missing in between. The song keeps its `createdAt`: the library sorts by it, and a new
+ * one would move every replaced demo behind the player's own songs. Returns false if the
+ * replacement failed (logged).
  */
 async function replaceDemo(
   repo: SongRepository,
@@ -411,7 +414,7 @@ async function replaceDemo(
     if (!current || getDeletedDemos().includes(d.id)) return true;
     if (current.videoBlobId) await repo.setVideo(d.id, undefined);
     if (getDeletedDemos().includes(d.id)) return true;
-    await repo.save(song, blob);
+    await repo.save({ ...song, createdAt: current.createdAt }, blob);
     markChoreoCurrent(d.id);
     return true;
   } catch (e) {

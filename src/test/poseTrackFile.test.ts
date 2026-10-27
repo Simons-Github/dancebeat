@@ -41,6 +41,21 @@ describe("poseTrackFile", () => {
     expect(parsePoseTrackFile(JSON.stringify(file))).toEqual(file);
   });
 
+  it("behält die Rückfall-Markierung je Probe, ältere Exporte ohne sie bleiben lesbar (8i-2)", () => {
+    const marked: PoseTrack = {
+      aspect: track.aspect,
+      samples: track.samples.map((s, i) => (i === 3 ? { ...s, fallback: true as const } : s)),
+    };
+    const file = parsePoseTrackFile(
+      JSON.stringify(buildPoseTrackFile({ ...input, track: marked })),
+    );
+    expect(file.track.samples[3]!.fallback).toBe(true);
+    expect(file.track.samples[2]!.fallback).toBeUndefined();
+    const bad = JSON.parse(JSON.stringify(file));
+    bad.track.samples[3].fallback = false;
+    expect(() => parsePoseTrackFile(JSON.stringify(bad))).toThrow();
+  });
+
   it("speichert das Modell der Analyse, ältere Exporte ohne Modell bleiben lesbar", () => {
     const withModel = buildPoseTrackFile({ ...input, model: "full" });
     expect(parsePoseTrackFile(JSON.stringify(withModel)).model).toBe("full");

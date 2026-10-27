@@ -31,8 +31,7 @@ import type { SourceSpec } from "@/lib/types";
 import { cn } from "@/lib/utils";
 import { getSettings, useSettings } from "@/lib/settings";
 
-const PANEL =
-  "bg-(--scrim-banner) shadow-pop flex flex-col gap-4 rounded-3xl border border-white/15 p-5 text-white backdrop-blur-md";
+const PANEL = "glass flex flex-col gap-4 rounded-3xl p-5 text-white";
 const BTN =
   "btn-pill h-14 gap-2 rounded-full px-8 text-lg focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
 
@@ -259,7 +258,7 @@ export function SetupScreen({
     >
       {!started ? (
         <div className={cn(PANEL, "my-auto w-full max-w-xl shrink-0 landscape:gap-3")}>
-          <h1 className="font-title text-stroke text-3xl landscape:text-2xl">Aufstellhilfe</h1>
+          <h1 className="font-title text-3xl landscape:text-2xl">Aufstellhilfe</h1>
           <p className="text-base text-white/90">
             Gleich tanzt du zu „{songTitle}“. Die Kamera sieht dich, damit DanceBeat deine
             Bewegungen bewerten kann.
@@ -324,7 +323,7 @@ export function SetupScreen({
               </>
             ) : (
               <>
-                <h1 className="font-title text-stroke text-2xl">Stell dich auf</h1>
+                <h1 className="font-title text-2xl">Stell dich auf</h1>
                 <BodyChecklist rows={rows} />
                 <p role="status" className="text-base font-bold">
                   {status === "ready"

@@ -307,7 +307,7 @@ export function EditSongDialog({
             variant="secondary"
             size="icon"
             aria-label="Song bearbeiten"
-            className="size-11 shrink-0 rounded-full border-2 border-white/70 bg-(--scrim-button) text-white hover:bg-(--scrim-button) hover:brightness-125 focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5"
+            className="btn-pill size-12 shrink-0 focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5"
           >
             <Pencil aria-hidden />
           </Button>

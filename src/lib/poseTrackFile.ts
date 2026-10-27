@@ -40,6 +40,8 @@ export const PoseTrackFileSchema = z
           landmarks: z.array(LandmarkSchema).max(33).nullable(),
           /** World landmarks of the same person (version 2 only). */
           world: z.array(Landmark3dSchema).max(33).nullable().optional(),
+          /** Seek target without a confirmed frame time (Etappe 8i-2; optional, older files lack it). */
+          fallback: z.literal(true).optional(),
         }),
       ),
     }),

@@ -231,6 +231,53 @@ describe("analyzeVideo", () => {
     expect(video.listeners).toBe(0);
   });
 
+  it("speichert die echte Bildzeit (mediaTime) statt des Rasters (8i-2)", async () => {
+    const frameMs = 1000 / 30;
+    const video = new FakeVideo({ durationMs: 230, vfc: "after-seeked", frameMs });
+    const est = fakeEstimator(() => someone);
+    const track = await analyzeVideo(video.asVideo(), est);
+    expect(video.seeks).toEqual([0, 50, 100, 150, 200]);
+    expect(track.samples.map((s) => s.timeMs)).toEqual([0, 33.333, 100, 133.333, 200]);
+    expect(track.samples.some((s) => s.fallback)).toBe(false);
+    // The estimator gets whole milliseconds, strictly increasing.
+    expect(est.timestamps).toEqual([0, 33, 100, 133, 200]);
+  });
+
+  it("analysiert dasselbe Bild nicht zweimal (Raster feiner als die Bilder)", async () => {
+    const frameMs = 1000 / 30;
+    const video = new FakeVideo({ durationMs: 140, vfc: "after-seeked", frameMs });
+    const est = fakeEstimator(() => someone);
+    const track = await analyzeVideo(video.asVideo(), est, { intervalMs: 20 });
+    expect(video.seeks).toEqual([0, 20, 40, 60, 80, 100, 120, 140]);
+    expect(track.samples.map((s) => s.timeMs)).toEqual([0, 33.333, 66.667, 100, 133.333]);
+    expect(est.seen).toHaveLength(5);
+    const ts = est.timestamps;
+    expect(ts.every((t, i) => i === 0 || t > ts[i - 1]!)).toBe(true);
+  });
+
+  it("markiert Bilder ohne bestätigte Bildzeit als Rückfall, mit der Zielzeit", async () => {
+    vi.useFakeTimers();
+    const never = new FakeVideo({ durationMs: 100, vfc: "never" });
+    const run = analyzeVideo(
+      never.asVideo(),
+      fakeEstimator(() => someone),
+    );
+    await vi.runAllTimersAsync();
+    const track = await run;
+    expect(track.samples.map((s) => [s.timeMs, s.fallback])).toEqual([
+      [0, true],
+      [50, true],
+      [100, true],
+    ]);
+    vi.useRealTimers();
+    // Without frame callbacks at all, every sample is a fallback as well.
+    const none = await analyzeVideo(
+      new FakeVideo({ durationMs: 50, vfc: "none" }).asVideo(),
+      fakeEstimator(() => someone),
+    );
+    expect(none.samples.every((s) => s.fallback)).toBe(true);
+  });
+
   it("drosselt Fortschrittsmeldungen und meldet zum Schluss 1", async () => {
     const video = new FakeVideo({ durationMs: 950 }); // 20 steps
     let clock = 0;

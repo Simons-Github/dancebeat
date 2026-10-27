@@ -112,6 +112,8 @@ describe("VideoChoreoPanel im Dialog „Song hinzufügen“", () => {
     const diag = await screen.findByRole("region", { name: "Diagnose (Dev)" }, { timeout: 4000 });
     expect(diag).toHaveTextContent(/Moves \d+ von \d+ Rasterpunkten/);
     expect(diag).toHaveTextContent("BPM 120, Beat-Phase 100 ms");
+    // jsdom has no frame callbacks: every sample is a fallback (Etappe 8i-2).
+    expect(diag).toHaveTextContent(/Ohne bestätigte Bildzeit \(Rückfall\) [1-9]\d* Proben/);
     await waitFor(() => expect(diag).toHaveTextContent(/Analyse \d+\.\d s/));
 
     createUrl.mockClear();

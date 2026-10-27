@@ -111,6 +111,17 @@ describe("trackTarget", () => {
   });
 });
 
+describe("trackTarget mit Rückfall-Markierung (8i-2)", () => {
+  it("übernimmt fallback je Probe, mit und ohne Person", () => {
+    const track = makeTrack((t) => (t === 100 ? [] : [left(t)]), 150);
+    track.samples[1]!.fallback = true;
+    track.samples[2]!.fallback = true;
+    const out = trackTarget(track, { sampleIndex: 0, poseIndex: 0 });
+    expect(out.samples.map((s) => s.fallback)).toEqual([undefined, true, true, undefined]);
+    expect(out.samples[2]!.landmarks).toBeNull();
+  });
+});
+
 describe("trackTarget mit Weltpunkten", () => {
   /** `makeTrack` plus world landmarks parallel to the poses (`worldOf`). */
   const withWorlds = (track: MultiPoseTrack): MultiPoseTrack => ({

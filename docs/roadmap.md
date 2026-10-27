@@ -21,8 +21,9 @@ Status: ✅ erledigt · 🔜 als Nächstes · ⏳ geplant
 | 10. Spotify                                  | ✅ (Gerätetest offen)                                                                   | Opus                                                                  |
 | 11. Nice-to-have                             | ⏳                                                                                      | je nach Punkt                                                         |
 | 12. Coach und Piktogramme                    | ✅ (Gerätetest offen)                                                                   | Sonnet                                                                |
-| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1, 13h-2, 13h-3, 13i ✅; Gerätetest offen)                             | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
+| 13. 3D-Kern und Choreo-Generator             | ⏳ (13a–13g, 13h-1, 13h-2, 13h-3, 13i, 13j ✅; Gerätetest offen)                        | Opus für Kern, Format, Generator und AIST++, Sonnet für den Rest      |
 | 14. Neue Demo-Songs                          | ✅ (Gerätetest offen)                                                                   | Opus für den Songaufbau, Sonnet für den Rest                          |
+| 15. Visuelle Überarbeitung                   | ✅ (Gerätetest offen)                                                                   | Opus                                                                  |
 
 ## Erledigt: Grundlagen
 
@@ -513,7 +514,7 @@ Gerätetest 7b-3 (offen):
       Hintergrund und nach über einer Stunde zurück → Hinweis erscheint, „Neu laden“ zeigt den
       neuen Build.
 
-### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1, 8h-2a, 8h-2b-1, 8h-2b-2a, 8h-2b-2b-1, 8h-2b-2b-2, 8h-2b-3 umgesetzt)
+### 8. „Tanz aus Video erstellen“ mit Editor ⏳ (8a, 8b, 8c, 8d-1, 8d-2a, 8d-2b, 8e, 8f, 8g-2, 8g-3, 8g-4a, 8g-4b, 8g-4c, 8g-4d, 8h-1, 8h-2a, 8h-2b-1, 8h-2b-2a, 8h-2b-2b-1, 8h-2b-2b-2, 8h-2b-3, 8i-1, 8i-2, 8i-4 umgesetzt)
 
 Aufteilung:
 
@@ -894,6 +895,66 @@ Aufteilung:
       - [ ] iPhone und Android, Hoch- und Querformat: großes Video verdeckt HUD und
             Piktoleiste nicht
       - [ ] Kamerabild und Spieler bleiben neben dem großen Video noch genug sichtbar
+
+- **8i Zuverlässiger Video-Import, erster Durchgang (2026-10-25) – 8i-1, 8i-2, 8i-4 umgesetzt,
+  8i-3 offen.** Ziel: aus einem lokalen Tanzvideo zuverlässig eine gut bewertbare Choreografie.
+  Bestandsaufnahme und priorisierte Lückenliste vorab; Spiegelung bleibt wie sie ist
+  (Spiegelraum: nur links und rechts tauschen, x unverändert; Entscheidung des Nutzers). Kein
+  Formatwechsel, kein Versionssprung (Downbeat und Wiederholungen erst, wenn klar ist, was
+  Editor und Generator brauchen). Worker, WebCodecs und „heavy“ in diesem Durchgang nicht.
+  - **8i-1 Video-Messplatz – umgesetzt.** `bun run eval-video` (`scripts/evalVideo.ts`): echter
+    `Scorer` gegen einen simulierten Spieler (Rohdaten mit 30 fps, Rauschen, Zeitfehler,
+    Aussetzer, feste Seeds), Szenarien selbst, +¼ und +½ Beat, fremdes Video; Trennschärfe,
+    Determinismus, Variante ohne One-Euro; Bildzeiten per `ffprobe` aus `$DANCEBEAT_VIDEO_DIR`
+    (`.env.local`, Videos bleiben außerhalb des Repos). Details:
+    [architecture.md](architecture.md#video-messplatz-etappe-8i-1).
+    - Befunde: Selbsttest überall 5 Sterne (BTS 0,93, TikTok 1,00). Eine Verschiebung um ¼ Beat
+      kostet fast nichts, ½ Beat wenig (das ±250-ms-Fenster deckt das ab; ein zusätzliches
+      Ausrichtungsfenster ist nicht nötig). Das fremde Video kommt noch auf 2–3 Sterne
+      (Trennschärfe 0,4–0,5): Das Scoring ist nachsichtig. Die eigene One-Euro-Glättung über der
+      von MediaPipe ändert kaum etwas (±0,02 Trennschärfe, je Video in andere Richtung).
+  - **8i-2 Exakte Zeitstempel – umgesetzt.** Probenzeit = `mediaTime` des bestätigten Bildes,
+    gleiches Bild nicht doppelt, Rückfall-Proben markiert (`fallback`) und in der Dev-Diagnose
+    gezählt. Gemessen im Browser (Playwright, GPU) an BTS und TikTok: Zeitfehler 8,3 ms im
+    Mittel / 16,7 ms höchstens → 0, dieselben Landmarks, je zwei Läufe bitgleich (vorher
+    ebenfalls), 0 Rückfälle; Bewertung unverändert. MediaPipe lieferte trotz anderer
+    Zeitstempel identische Landmarks. Grenze: Videos unter etwa 25 fps landen öfter im Rückfall
+    (Toleranz 40 ms), siehe [architecture.md](architecture.md#video-analyse-etappe-8b).
+  - **8i-3 Gelenke außerhalb des Bildes – gebaut, nicht übernommen (Entscheidung offen).**
+    Hysterese am Bildrand (aus bei < 2 %, wieder drin ab 5 % Abstand), markierte Gelenke
+    unsichtbar für Scoring und Coach. Gemessen an Zuschnitten auf die oberen 72 % (Füße
+    draußen): Die meisten Gelenke außerhalb meldet MediaPipe ohnehin mit visibility < 0,5, die
+    Schwelle fängt sie schon. Die Prüfung verbessert die Messläufe nicht eindeutig (BTS voll:
+    Selbsttest 0,926 → 0,937, aber Trennschärfe 0,489 → 0,431; TikTok-Zuschnitt Trennschärfe
+    0,472 → 0,436; sonst gleich), unabhängig vom Rand (0/3, 2/5, 5/8 %). Der Schaden beim
+    Zuschnitt liegt woanders: MediaPipe findet die Person seltener (171 von 690 Proben fehlen)
+    und auch die Armwinkel werden ungenauer. Code liegt als `git stash` („8i-3 Randpruefung“),
+    mit Messplatz-Erweiterung `x.player.posetrack.json` (Spieler tanzt eine andere Spur).
+  - **8i-4 Lücken – umgesetzt.** Eine Konstante `SHORT_GAP_MS` = 150 ms (statt 250 beim Filter
+    und 300 im Plan): kurze Lücken von Person und Gelenken vor dem Glätten linear füllen;
+    längere: Coach hält die letzte Pose statt zu gleiten (Alternative „Ausblenden“ gebaut,
+    blinkt bei kurzen langen Lücken); Moves prüfen die Pose wie der Scorer. Messung und
+    Begründung: [choreography-format.md](choreography-format.md#lücken-etappe-8i-4). Trennschärfe
+    BTS 0,489 → 0,491, TikTok 0,418 → 0,484, Zuschnitte 0,243 → 0,451 und 0,541 → 0,685.
+  - **Offen (nächste Durchgänge, priorisiert in der Bestandsaufnahme):** P2 Szenenschnitte,
+    Gold-Vorschlag nach Energie und Sichtbarkeit, Spectral Flux für die Beat-Schätzung;
+    P3 Downbeat/8er-Counts, Wiederholungen und Spiegelpaare, Worker, WebCodecs, „heavy“,
+    End-to-End mit Video als Fake-Kamera (Playwright-Konfiguration erst dann). Trennschärfe
+    des Scorings (fremdes Video 2–3 Sterne) als eigenes Thema prüfen.
+  - **Gerätetests 8i (offen):**
+    - [ ] iOS Safari: Bild-Callback nach dem Seek kommt, Dev-Diagnose „Ohne bestätigte Bildzeit
+          (Rückfall)“ bleibt bei 0 oder nahe 0; Zeitstempel in den Rohdaten auf Bildzeiten
+          (bei 30 fps …,33,333, 100, 133,333 …)
+    - [ ] Android Chrome: dasselbe; zwei Analysen desselben Videos ergeben dieselben Rohdaten
+    - [ ] Echte Kamera: importierten Tanz selbst nachtanzen; überwiegend PERFECT/SUPER, Sterne
+          nahe Maximum; einen anderen Tanz dazu tanzen gibt deutlich weniger
+    - [ ] Coach bei Lücken (Video, in dem der Tänzer kurz verdeckt ist oder aus dem Bild geht):
+          hält die letzte Pose, kein Gleiten, kein Blinken
+    - [ ] Langes Video (3 Minuten, Modell „Genau“): Analysedauer, Speicher, kein Absturz, Gerät
+          bleibt wach
+    - [ ] Wenig Speicher: „Video behalten“ mit 100–250 MB bei fast vollem Kontingent meldet
+          sich ohne halben Song; Anzeige des belegten Speichers stimmt
+    - [ ] Video unter 25 fps (z. B. 15 fps): Anteil Rückfall-Proben in der Diagnose
 
 Ursprüngliche Schritte:
 
@@ -1407,7 +1468,8 @@ mit dem `anchorBeat` des ersten Clips.
   Paket bleibt unverändert.
 - Gerätetest: Stören die Ellbogen-Schnapper beim Nachmachen, und sind die AIST++-Moves mit der
   Kamera erkennbar?
-- Übergänge: Zwischen behaltenen AIST++-Clips bleiben nur 8 Übergänge. Der Generator verbindet
+- ~~Übergänge~~ Erledigt in 13j (Folgen aus den Quellen, stärkeres Übergangsgewicht).
+  Befund vorher: Zwischen behaltenen AIST++-Clips bleiben nur 8 Übergänge. Der Generator verbindet
   die übrigen Clips mit dem Grundgewicht. Zwei Abhilfen gemessen (2026-10-23), beide verworfen:
   (1) Verworfene Clips auf den nächsten behaltenen gleichen Tempos abbilden (größter Abstand von
   Start- und Ankerpose): Median 74°, p10 54°. Bis 45° entstehen nur 19 Paare, ohne Schwelle
@@ -1416,6 +1478,52 @@ mit dem `anchorBeat` des ersten Clips.
   keinen Nachfolger innerhalb von 45°. Ein echter Gewinn bräuchte eine Auswahl, die ganze
   Folgen aus den Quellen behält, statt Einzelclips per Farthest-Point zu wählen.
 - ~~Neubau der Demos mit AIST++-Clips (siehe 14).~~ Erledigt in 14e.
+
+**13j Folgen aus den Quellen – umgesetzt (2026-10-23), Gerätetest offen.** Zwei Änderungen, die
+nur zusammen wirken:
+
+- `selectShippedClips` (`src/lib/motionPack.ts`) verlängert jeden per Farthest-Point gewählten
+  Startclip entlang seines häufigsten beobachteten Nachfolgers im selben Eimer, bis die Kette
+  `SHIP_CHAIN_CLIPS` (3) Clips hat. Mit Kettenlänge 1 entsteht byte-genau das alte Paket.
+  Ergebnis: gleiche 192 Clips und 0,75 MB, 65 statt 8 Übergänge zwischen AIST++-Clips (91 statt
+  34 Paare insgesamt). Länge 4 brachte nur 68, kostet aber Startclips und damit Posenvielfalt.
+- Der Generator gewichtet beobachtete Übergänge mit `OBSERVED_TRANSITION_WEIGHT` (20) statt 1
+  (`src/lib/generator/select.ts`). Das Paket allein änderte fast nichts: Bei Gewicht 1 folgte der
+  Generator auf Stufe 2 in 5,4 % statt 3,6 % der Schritte einem beobachteten Übergang.
+
+Gemessen (eigenes Skript, 4 Tempi × 20 Seeds): Anteil der Schritte auf beobachteten Übergängen
+je Stufe 15 / 4 / 13 % → 39 / 24 / 47 %. Gewicht 8 ergab 29 / 16 / 31 %, Gewicht 50 ergab
+50 / 35 / 62 %. Gewählt ist 20. Bei 50 sank p95 noch etwas weiter, aber das Übergangsgewicht
+überstimmt dann zunehmend Energiekurve und Spiegelpaare, und das misst der Messplatz nicht.
+
+`eval-choreo` (20 Seeds), vorher → nachher:
+
+- p95 der Winkelgeschwindigkeit sinkt in 11 von 12 Zellen, am stärksten auf Stufe 3 (90 BPM
+  543 → 428 °/s, 128 BPM 733 → 639, 150 BPM 636 → 534). Nur 90 BPM Stufe 2 steigt leicht
+  (453 → 463). Die Höchstwerte bleiben bei 1630–1799 °/s (Ellbogen-Schnapper
+  innerhalb der Clips, 13h-2).
+- mittlerer Winkelabstand aufeinanderfolgender Moves 38,6–45,8° → 35,9–45,1°
+- Abdeckung fast überall höher (z. B. 90 BPM Stufe 2 0,52 → 0,68; nur 150 BPM Stufe 1 0,64 → 0,63),
+  Wiederholungen weiter 0
+- Quote 1,000, schlechtester Lauf 0,998 (vorher 0,997)
+
+`eval-demos` (vier Demos neu gebaut, `DEMO_CHOREO_VERSION` 3): Quote und Sterne unverändert
+(überall 5 Sterne, schlechtester Lauf 0,995 bei Rise Until The Morning auf Stufe 2). p95 auf der
+Stufe des Manifests: Lemonade Skies 566 → 582 °/s, Gold on the Glass 494 → 603, Gold in My Pocket
+547 → 604, Rise Until The Morning 763 → 654. Der Bereich liegt damit bei 582–654 statt 494–763.
+Über alle Stufen sinkt p95 in 6 von 12 Zellen. Jede Demo ist ein einzelner Bau mit festem Seed,
+deshalb streuen diese Werte stärker als die Mittel aus `eval-choreo`. Größe 1,16–1,59 MB,
+gzip 191–252 kB je JSON.
+
+Bestehende Installationen bekommen die neuen Demos über `DEMO_CHOREO_VERSION` 3 (14g):
+Highscore, Sterne und eigene Änderungen gehen dabei verloren, wie am 2026-10-23 entschieden.
+Eigene Songs ändern sich erst beim Neu-Erzeugen. Tests: `motionPack.test.ts` (Ketten,
+Gleichstand, fremder Eimer, Obergrenze, Kettenlänge 1 wie vorher, Übergänge im ausgelieferten
+Paket), `generator.test.ts` (beobachteter Übergang bevorzugt), `demoSeed.test.ts`
+(Fingerprint). Doku: [choreography-format.md](choreography-format.md#aist-auswahl).
+
+Nur am Gerät prüfbar, nicht geprüft: ob der Coach mit den Quellfolgen flüssiger wirkt und ob die
+Folgen sich leichter nachtanzen lassen.
 
 ### 14. Neue Demo-Songs ✅ (Gerätetest offen)
 
@@ -1695,6 +1803,30 @@ Demos zeigt (erst nach dem Neuladen durch den Service Worker) und ob Safari das 
 nach dem Überschreiben weiter abspielt. Vor einer Veröffentlichung an andere Nutzer neu bewerten:
 dann nur unbearbeitete Demos ersetzen und Highscore und Sterne behalten.
 
+**14h Browserprüfung mit AIST-Paket – erledigt (2026-10-24), Gerätetest offen.** Erste
+Playwright-Prüfung seit 13i (14d lief noch ohne AIST-Clips). Projektlokaler Server, Flags per
+`ps` geprüft, Dev-Server, frisches Profil.
+
+- Seed: vier Demos, alle Marker in `dancebeat.demoChoreoVersions` auf 3, Audio-Marker 5.
+- Spiel mit `?sim=1&noise=10&miss=0.1`: Lemonade Skies mit Wechsel ins Querformat bis zum
+  Ergebnis (100× PERFECT, 2× SUPER, Megastar, neuer Highscore). Coach, Piktoleiste mit Pfeilen
+  und Skelett werden in beiden Formaten gezeichnet.
+- Ersatzpfad 14g: Marker einer Demo auf 2 gesetzt, neu geladen. Nur diese Choreografie wird
+  geladen, kein Audio; Highscore wieder 0, Marker wieder 3.
+- „Choreografie neu erzeugen“ (Generator mit AIST-Paket): gespeichert, spielbar.
+- Credits: AIST++ (CC BY 4.0) und AIST Dance DB mit der Bedingung „nur nicht-kommerziell“. Kein
+  Abruf an fremde Hosts. Bibliothek, Ergebnis und Einstellungen in 390×844 und 844×390 ohne
+  Überlauf; Konsole über die ganze Sitzung ohne Fehler und Warnungen.
+
+Befund, behoben: Eine ersetzte Demo bekam ein neues `createdAt` und rutschte ans Ende der
+Bibliothek, die danach sortiert. Bei einer neuen `DEMO_CHOREO_VERSION` wären alle vier Demos
+hinter die eigenen Songs gewandert, in der Reihenfolge, in der die Ersetzungen fertig werden.
+`replaceDemo` (`src/data/demo.ts`) behält jetzt das `createdAt` des vorhandenen Songs; alles
+andere wird wie entschieden ersetzt. Im Browser gegengeprüft (erste Demo bleibt nach dem Ersetzen
+vorne). Test: `demoSeed.test.ts` („keeps the library position of replaced demos“, schlägt ohne
+den Fix fehl). Doku: [architecture.md](architecture.md#speicher), dort auch die veraltete Angabe
+„aktuell 2“ auf 3 korrigiert.
+
 **Lizenzhinweise – umgesetzt (2026-10-23).** Bisher nannten die Credits nur die Musik. Jetzt
 kommen hinzu (Inhalt in `src/data/credits.ts`, Anzeige in „Über und Credits“):
 
@@ -1724,6 +1856,23 @@ Dev-Server hat die Datei nicht, dann erscheint ein Hinweis. Tests: `licenses.tes
 
 Offen: Die WASM-Laufzeit von MediaPipe enthält Fremdbibliotheken (z. B. TensorFlow Lite). Google
 liefert dafür im npm-Paket keine eigene Lizenzliste mit; genannt ist nur Apache 2.0 für das Paket.
+
+### 15. Visuelle Überarbeitung ✅ (Gerätetest offen)
+
+Y2K-Stil nach Moodboard des Nutzers, Details in [design.md](design.md#grundstil). Zwischenstand
+„Club-Flyer“ wurde verworfen.
+
+- Schrift Bricolage Grotesque statt Fredoka (Paket `@fontsource-variable/bricolage-grotesque`,
+  OFL, Credits und Lizenztext angepasst, `@fontsource/fredoka` entfernt).
+- Nacht-Hintergrund mit Glitzer und Songfarben-Glow, Mosaik-Stern und Funkelsterne statt
+  Verlauf mit Dreiecken und Kreisen; App-Hintergrund `#14061F` (Manifest, theme-color).
+- Chrom für Logo, Titel und Hauptbuttons; Liquid Glass für Kacheln, Panels und Nebenbuttons.
+- Menü: Titelblock im Daumenbereich; Kachelgröße per Container-Query aus Höhe und Breite;
+  schmale Kacheln kompakt; Neu-Zentrieren bei Größenwechsel; Titel während des Ladens leer.
+- Tests: contrast (Glas über Mosaik und Glow, Chrom auf Nacht, Nacht auf Chrom, Papier auf
+  Nacht), Lizenzen, Credits.
+- Offen am Gerät: Chrom-Text (`background-clip: text`, `1lh`) und `backdrop-filter` auf iOS
+  Safari, Leistung der Unschärfe auf älteren Android-Geräten, Glitzer bei hoher Pixeldichte.
 
 ## Offene Befunde
 

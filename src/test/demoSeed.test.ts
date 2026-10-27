@@ -495,6 +495,26 @@ describe("demo choreography upgrade", () => {
     expect(await repo.get(FIRST)).toMatchObject({ title: "Mein Demo", highscore: 9000 });
   });
 
+  it("keeps the library position of replaced demos", async () => {
+    await seedOldChoreos();
+    // Demos in reverse id order, then an own song: the library lists by createdAt.
+    for (const [i, id] of [...ALL].reverse().entries()) {
+      const song = await repo.get(id);
+      if (!song) throw new Error("demo missing");
+      await repo.save({ ...song, createdAt: 1000 + i });
+    }
+    const own = { ...makeSong(), createdAt: 2000 };
+    await repo.save(own);
+    const order = async () => (await repo.list()).map((s) => s.id);
+    const before = await order();
+    expect(before).toEqual([...[...ALL].reverse(), own.id]);
+
+    await demo.seedDemos(repo, loadAudio);
+    expect(await order()).toEqual(before);
+    for (const d of DEMOS) await expectFresh(d.id, d.title);
+    expect(storedChoreoMarker()).toEqual(choreoMarker(ALL));
+  });
+
   it("downloads the audio once when audio and choreography are both outdated", async () => {
     loadAudio.mockImplementation(() => Promise.resolve(audio("old")));
     await demo.seedDemos(repo, loadAudio);
@@ -600,8 +620,8 @@ describe("DEMO_CHOREO_VERSION", () => {
   // fails, the demos were rebuilt: raise DEMO_CHOREO_VERSION (src/data/demo.ts) so existing
   // libraries get them, then update both values here.
   const FINGERPRINT = {
-    version: 2,
-    sha256: "deace6ca696382c144a2b92f13585fa9c4ddfdc13b23fd0b0382bf1f58fb9a9c",
+    version: 3,
+    sha256: "5cd25a276adb205835452e1cd5862734b08b92a8955731e2a88069a745e3c1aa",
   };
 
   it("is raised whenever a shipped choreography changes", async () => {
