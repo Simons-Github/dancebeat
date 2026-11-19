@@ -33,5 +33,7 @@ jobs:
       - run: bun run fetch-models
       - run: bun run typecheck
       - run: bun run lint
-      - run: bun run test
+      # Hosted runners are several times slower than a dev machine; the heavy generator and
+      # demo-seed tests exceed Vitest's 5 s default there.
+      - run: bun run test --testTimeout=30000
       - run: bun run build

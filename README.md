@@ -267,14 +267,14 @@ Format reference: [docs/choreography-format.md](docs/choreography-format.md).
 GitHub Actions runs [`.github/workflows/ci.yml`](.github/workflows/ci.yml) on every push to `main`
 and on pull requests.
 
-| Step                          | Command                         |
-| ----------------------------- | ------------------------------- |
-| Install                       | `bun install --frozen-lockfile` |
-| MediaPipe models (cached)     | `bun run fetch-models`          |
-| Type check                    | `bun run typecheck`             |
-| Lint                          | `bun run lint`                  |
-| Tests (83 files, 1,513 tests) | `bun run test`                  |
-| Production build              | `bun run build`                 |
+| Step                          | Command                            |
+| ----------------------------- | ---------------------------------- |
+| Install                       | `bun install --frozen-lockfile`    |
+| MediaPipe models (cached)     | `bun run fetch-models`             |
+| Type check                    | `bun run typecheck`                |
+| Lint                          | `bun run lint`                     |
+| Tests (83 files, 1,513 tests) | `bun run test --testTimeout=30000` |
+| Production build              | `bun run build`                    |
 
 ## Project structure
 
