@@ -1,15 +1,17 @@
+import { localeOf, t } from "../i18n";
+
 /** Browser storage helpers: persistence request, usage estimate and quota errors. */
 
 export class StorageFullError extends Error {
   constructor() {
-    super("Der Speicher ist voll. Lösche Songs oder große Audiodateien und versuche es erneut.");
+    super(t("songs.storage.full"));
     this.name = "StorageFullError";
   }
 }
 
-/** Size for storage hints, in MB with one German decimal; never shows 0. */
+/** Size for storage hints, in MB with one decimal in the UI language; never shows 0. */
 export const formatMb = (bytes: number) =>
-  `${Math.max(0.1, bytes / 1024 / 1024).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MB`;
+  `${Math.max(0.1, bytes / 1024 / 1024).toLocaleString(localeOf(), { maximumFractionDigits: 1 })} MB`;
 
 export const isQuotaError = (e: unknown) =>
   e instanceof DOMException && (e.name === "QuotaExceededError" || e.code === 22);

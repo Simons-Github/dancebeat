@@ -4,6 +4,7 @@ import { SongSchema } from "../schema";
 import type { EnergyCurve } from "../generator";
 import type { ChoreoFile, Choreography, MotionPack, Song, SourceSpec } from "../types";
 import { songFromChoreoFile } from "./choreoFile";
+import { localeOf, t } from "../i18n";
 
 export const BPM_MIN = 30;
 export const BPM_MAX = 300;
@@ -12,9 +13,9 @@ export const DURATION_MAX_S = 600;
 export const TITLE_MAX = 120;
 export const ARTIST_MAX = 120;
 
-/** BPM for display, German style with at most one fraction digit ("123,4", "128"). */
+/** BPM for display, in the UI language's number style with at most one fraction digit ("123,4", "128"). */
 export function formatBpm(bpm: number): string {
-  return bpm.toLocaleString("de-DE", { maximumFractionDigits: 1 });
+  return bpm.toLocaleString(localeOf(), { maximumFractionDigits: 1 });
 }
 
 const VIDEO_ID = /^[\w-]{11}$/;
@@ -80,7 +81,7 @@ export function parseSpotifyTrackUri(input: string): string | null {
 
 const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
 
-/** Accepts https addresses (http only for localhost, for development). Returns the normalized URL or a German error. */
+/** Accepts https addresses (http only for localhost, for development). Returns the normalized URL or an error message in the UI language. */
 export function validateAudioUrl(
   input: string,
 ): { ok: true; url: string } | { ok: false; error: string } {
@@ -94,7 +95,7 @@ export function validateAudioUrl(
   } catch {
     // falls through to the error below
   }
-  return { ok: false, error: "Bitte eine https-Adresse verwenden." };
+  return { ok: false, error: t("songs.validate.urlHttps") };
 }
 
 export type NewSongSource =
@@ -236,20 +237,18 @@ export interface NewSongFields {
 
 export type FieldErrors = Partial<Record<"title" | "link" | "bpm" | "duration", string>>;
 
-/** Field-level German messages; an empty object means the form is valid. */
+/** Field-level messages in the UI language; an empty object means the form is valid. */
 export function validateNewSongFields(f: NewSongFields): FieldErrors {
   const errors: FieldErrors = {};
   const title = f.title.trim();
-  if (!title) errors.title = "Bitte einen Titel eingeben.";
+  if (!title) errors.title = t("songs.validate.titleRequired");
   else if (title.length > TITLE_MAX)
-    errors.title = `Der Titel darf höchstens ${TITLE_MAX} Zeichen haben.`;
+    errors.title = t("songs.validate.titleMax", { max: TITLE_MAX });
   if (f.kind === "youtube" && parseYouTubeId(f.link) === null) {
-    errors.link =
-      "Das ist kein gültiger YouTube-Link. Bitte Link oder 11-stellige Video-ID eingeben.";
+    errors.link = t("songs.validate.youtube");
   }
   if (f.kind === "spotify" && parseSpotifyTrackUri(f.link) === null) {
-    errors.link =
-      "Das ist kein gültiger Spotify-Song. Bitte einen Song-Link (open.spotify.com/track/…) oder eine Spotify-URI eingeben.";
+    errors.link = t("songs.validate.spotify");
   }
   if (f.kind === "url") {
     const r = validateAudioUrl(f.link);
@@ -257,7 +256,7 @@ export function validateNewSongFields(f: NewSongFields): FieldErrors {
   }
   if (!f.imported) {
     if (!Number.isFinite(f.bpm) || f.bpm < BPM_MIN || f.bpm > BPM_MAX) {
-      errors.bpm = `BPM muss zwischen ${BPM_MIN} und ${BPM_MAX} liegen.`;
+      errors.bpm = t("songs.validate.bpm", { min: BPM_MIN, max: BPM_MAX });
     }
     if (
       !f.video &&
@@ -265,7 +264,7 @@ export function validateNewSongFields(f: NewSongFields): FieldErrors {
         f.durationS < DURATION_MIN_S ||
         f.durationS > DURATION_MAX_S)
     ) {
-      errors.duration = `Die Länge muss zwischen ${DURATION_MIN_S} und ${DURATION_MAX_S} Sekunden liegen.`;
+      errors.duration = t("songs.validate.duration", { min: DURATION_MIN_S, max: DURATION_MAX_S });
     }
   }
   return errors;

@@ -14,6 +14,7 @@ import { isLowPrecision } from "@/lib/audio/sources";
 import { claimSharedElement } from "@/lib/audio/unlock";
 import { createVideoFollower } from "@/lib/game/videoFollower";
 import { videoTargetMs } from "@/lib/game/videoSync";
+import { useT } from "@/lib/i18n";
 import { StorageFullError } from "@/lib/library/storage";
 import { useSettings } from "@/lib/settings";
 import {
@@ -42,10 +43,10 @@ const ERROR =
 const SHOWN_TAPS = 8;
 /** Fine-tuning steps (ms) with their button labels. */
 const NUDGES = [
-  { delta: -10, label: "−10 ms", aria: "Offset um 10 ms verringern" },
-  { delta: -1, label: "−1 ms", aria: "Offset um 1 ms verringern" },
-  { delta: 1, label: "+1 ms", aria: "Offset um 1 ms erhöhen" },
-  { delta: 10, label: "+10 ms", aria: "Offset um 10 ms erhöhen" },
+  { delta: -10, label: "−10 ms" },
+  { delta: -1, label: "−1 ms" },
+  { delta: 1, label: "+1 ms" },
+  { delta: 10, label: "+10 ms" },
 ] as const;
 
 type Phase = "idle" | "starting" | "playing" | "ended";
@@ -81,6 +82,7 @@ export function SyncTestScreen({
   song: Song;
   onSave: (song: Song) => Promise<void>;
 }) {
+  const t = useT();
   const navigate = useNavigate();
   const [settings] = useSettings();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -161,8 +163,8 @@ export function SyncTestScreen({
           !(e instanceof PlayRefusedError) && e instanceof Error
             ? e.message
             : isYouTube
-              ? "Der Start wurde blockiert. Tippe direkt auf das Video."
-              : "Die Musik ließ sich nicht starten. Tippe noch einmal auf „Start“.",
+              ? t("settings.sync.startBlockedYoutube")
+              : t("settings.sync.startFailed"),
         );
       });
   };
@@ -288,11 +290,7 @@ export function SyncTestScreen({
       return true;
     } catch (e) {
       if (mountedRef.current)
-        setSaveError(
-          e instanceof StorageFullError
-            ? e.message
-            : "Speichern hat nicht geklappt. Versuch es noch einmal.",
-        );
+        setSaveError(e instanceof StorageFullError ? e.message : t("settings.sync.saveFailed"));
       return false;
     } finally {
       if (mountedRef.current) setBusy(false);
@@ -306,7 +304,7 @@ export function SyncTestScreen({
     if (busy) return;
     setCandidate(0);
     if (song.syncOffsetMs === 0) return; // already saved, only the working value changes
-    if ((await write(0)) && mountedRef.current) setNotice("Sync-Offset auf 0 ms gesetzt.");
+    if ((await write(0)) && mountedRef.current) setNotice(t("settings.sync.resetNotice"));
   };
 
   const audioError = audio.state === "error";
@@ -316,12 +314,12 @@ export function SyncTestScreen({
       <div className="mx-auto flex w-full max-w-240 flex-col gap-4 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-title chrome-text chrome-glow min-w-0 pb-[0.1em] text-4xl sm:text-5xl">
-            Sync-Test
+            {t("settings.sync.title")}
           </h1>
           <Button asChild size="lg" variant="secondary" className={BTN}>
             <Link to="/">
               <ArrowLeft aria-hidden />
-              Abbrechen
+              {t("common.cancel")}
             </Link>
           </Button>
         </div>
@@ -329,12 +327,13 @@ export function SyncTestScreen({
         <div className="grid gap-4 landscape:grid-cols-2">
           <Card title={song.title}>
             <p className="text-base">
-              Tippe im Takt der Musik auf die Fläche oder drücke die Leertaste, genau dann, wenn du
-              den Beat hörst. Nach {SYNC_MIN_TAPS + SYNC_DISCARD_TAPS} Taps schlägt DanceBeat einen
-              Sync-Offset vor; die ersten {SYNC_DISCARD_TAPS} zählen nicht.
+              {t("settings.sync.intro", {
+                total: SYNC_MIN_TAPS + SYNC_DISCARD_TAPS,
+                discard: SYNC_DISCARD_TAPS,
+              })}
             </p>
             <p className="text-base">
-              Gespeicherter Sync-Offset:{" "}
+              {t("settings.sync.savedOffset")}{" "}
               <strong data-testid="saved-offset" className="tabular-nums">
                 {formatOffsetMs(song.syncOffsetMs)}
               </strong>
@@ -343,29 +342,28 @@ export function SyncTestScreen({
               <p role="note" className="flex items-start gap-2 text-base font-medium">
                 <AlertTriangle aria-hidden className="mt-0.5 size-5 shrink-0 text-gold" />
                 <span>
-                  Bei {isYouTube ? "YouTube" : "Spotify"} ist die Zeitmessung ungenauer als bei
-                  einer Audiodatei. Der Wert kann um einige Millisekunden schwanken.
+                  {t("settings.sync.lowPrecision", { source: isYouTube ? "YouTube" : "Spotify" })}
                 </span>
               </p>
             )}
             {isYouTube && (
               <div
                 ref={ytHostRef}
-                aria-label="YouTube-Video"
+                aria-label={t("settings.sync.youtubeFrame")}
                 className="aspect-video w-full max-w-80 overflow-hidden rounded-2xl bg-black"
               />
             )}
             <PrivacyNote source={song.source} camera={false} />
             {audioError ? (
               <p role="alert" className={ERROR}>
-                Die Musik konnte nicht geladen werden. {audio.error}
+                {t("settings.sync.audioError", { error: audio.error ?? "" })}
               </p>
             ) : (
               <div className="flex flex-wrap gap-3">
                 {playing ? (
                   <Button size="lg" variant="secondary" onClick={stop} className={BTN}>
                     <Square aria-hidden />
-                    Stopp
+                    {t("settings.sync.stop")}
                   </Button>
                 ) : (
                   <Button
@@ -375,7 +373,9 @@ export function SyncTestScreen({
                     className={BTN}
                   >
                     <Play aria-hidden />
-                    {audio.state === "loading" ? "Musik lädt …" : "Start"}
+                    {audio.state === "loading"
+                      ? t("settings.sync.loadingMusic")
+                      : t("settings.sync.start")}
                   </Button>
                 )}
               </div>
@@ -390,11 +390,11 @@ export function SyncTestScreen({
               <Button asChild size="lg" variant="secondary" className={cn(BTN, "self-start")}>
                 <Link to="/settings">
                   <Settings aria-hidden />
-                  Zu den Einstellungen
+                  {t("settings.sync.toSettings")}
                 </Link>
               </Button>
             )}
-            {phase === "ended" && <p className="text-base">Der Song ist zu Ende.</p>}
+            {phase === "ended" && <p className="text-base">{t("settings.sync.ended")}</p>}
             {/* Below the controls, so "Start" and the tap area stay in view in landscape. */}
             {showVideo && (
               <video
@@ -403,7 +403,7 @@ export function SyncTestScreen({
                 muted
                 playsInline
                 preload="auto"
-                aria-label="Tanzvideo"
+                aria-label={t("settings.sync.danceVideo")}
                 // Broken or unplayable: hidden (one state change in useDanceVideo).
                 onError={danceVideo.onError}
                 className="aspect-video w-full max-w-80 rounded-2xl bg-black object-contain"
@@ -414,7 +414,7 @@ export function SyncTestScreen({
           <div className="flex flex-col gap-4">
             <button
               type="button"
-              aria-label="Im Takt tippen"
+              aria-label={t("settings.sync.tapArea")}
               aria-disabled={!playing}
               onPointerDown={(e) => {
                 e.preventDefault();
@@ -426,21 +426,22 @@ export function SyncTestScreen({
               )}
             >
               <span className="font-title text-stroke text-3xl">
-                {playing ? "Tipp!" : "Erst „Start“ drücken"}
+                {playing ? t("settings.sync.tapNow") : t("settings.sync.tapStartFirst")}
               </span>
               <span className="text-base tabular-nums" data-testid="tap-count">
-                {taps.length} Taps
-                {remaining > 0 ? ` · noch ${remaining}` : ""}
+                {t.tn("settings.sync.tapCount", taps.length)}
+                {remaining > 0 ? t("settings.sync.tapsLeft", { remaining }) : ""}
               </span>
             </button>
 
-            <Card title="Ergebnis">
+            <Card title={t("settings.sync.result")}>
               {deviations.length > 0 && (
                 <div className="flex flex-col gap-1">
-                  <p className={HINT}>
-                    Abweichung deiner letzten Taps vom Beat (mit eingestelltem Offset):
-                  </p>
-                  <ul aria-label="Abweichung pro Tap" className="flex flex-wrap gap-1.5">
+                  <p className={HINT}>{t("settings.sync.deviationIntro")}</p>
+                  <ul
+                    aria-label={t("settings.sync.deviationList")}
+                    className="flex flex-wrap gap-1.5"
+                  >
                     {deviations.map((d, i) => (
                       <li
                         key={taps.length - i}
@@ -455,26 +456,26 @@ export function SyncTestScreen({
               {proposal ? (
                 <div className="flex flex-col gap-1" role="status">
                   <p className="text-lg">
-                    Vorschlag:{" "}
+                    {t("settings.sync.proposal")}{" "}
                     <strong data-testid="proposed-offset" className="tabular-nums">
                       {formatOffsetMs(proposal.offsetMs)}
                     </strong>
                   </p>
                   <p className={HINT}>
-                    Streuung ±{proposal.spreadMs} ms aus {proposal.count} Taps
+                    {t.tn("settings.sync.spread", proposal.count, { spread: proposal.spreadMs })}
                   </p>
                   {isUneven(proposal) && (
                     <p className="flex items-start gap-2 text-base font-medium">
                       <AlertTriangle aria-hidden className="mt-0.5 size-5 shrink-0 text-gold" />
-                      Ungleichmäßig, nochmal versuchen.
+                      {t("settings.sync.uneven")}
                     </p>
                   )}
                 </div>
               ) : (
                 <p className="text-base">
                   {taps.length === 0
-                    ? "Noch keine Taps."
-                    : `Noch ${remaining} Taps bis zum Vorschlag.`}
+                    ? t("settings.sync.noTaps")
+                    : t.tn("settings.sync.untilProposal", remaining)}
                 </p>
               )}
               <div className="flex flex-wrap gap-3">
@@ -485,7 +486,7 @@ export function SyncTestScreen({
                   className={BTN}
                 >
                   <Check aria-hidden />
-                  Vorschlag übernehmen
+                  {t("settings.sync.acceptProposal")}
                 </Button>
                 <Button
                   size="lg"
@@ -495,12 +496,12 @@ export function SyncTestScreen({
                   className={BTN}
                 >
                   <RotateCcw aria-hidden />
-                  Nochmal
+                  {t("settings.sync.again")}
                 </Button>
               </div>
             </Card>
 
-            <Card title="Feinjustierung">
+            <Card title={t("settings.sync.fineTune")}>
               <div className="flex items-center gap-4">
                 <div
                   aria-hidden
@@ -514,23 +515,25 @@ export function SyncTestScreen({
                   />
                 </div>
                 <p className="text-lg">
-                  Offset:{" "}
+                  {t("settings.sync.offset")}{" "}
                   <strong data-testid="candidate-offset" className="tabular-nums">
                     {formatOffsetMs(candidate)}
                   </strong>
                 </p>
               </div>
-              <p className={HINT}>
-                Das Licht blinkt im Takt mit dem eingestellten Offset. Passt es zum Beat, den du
-                hörst, speichere.
-              </p>
+              <p className={HINT}>{t("settings.sync.lightHint")}</p>
               <div className="flex flex-wrap gap-2">
                 {NUDGES.map((n) => (
                   <Button
                     key={n.delta}
                     size="lg"
                     variant="secondary"
-                    aria-label={n.aria}
+                    aria-label={t(
+                      n.delta < 0 ? "settings.sync.nudgeDec" : "settings.sync.nudgeInc",
+                      {
+                        ms: Math.abs(n.delta),
+                      },
+                    )}
                     onClick={() => setCandidate((c) => nudgeSyncOffset(c, n.delta))}
                     className={cn(BTN, "px-4 tabular-nums")}
                   >
@@ -555,7 +558,7 @@ export function SyncTestScreen({
                   onClick={() => void saveCandidate()}
                   className={BTN}
                 >
-                  Speichern
+                  {t("common.save")}
                 </Button>
                 <Button
                   size="lg"
@@ -564,7 +567,7 @@ export function SyncTestScreen({
                   onClick={() => void resetToZero()}
                   className={BTN}
                 >
-                  Auf 0 zurücksetzen
+                  {t("settings.sync.resetToZero")}
                 </Button>
               </div>
             </Card>

@@ -4,6 +4,7 @@ import { buildChoreoFile, parseChoreoFile, songFromChoreoFile } from "./choreoFi
 import { migrateSong } from "./migrations";
 import type { SongRepository } from "./repository";
 import { StorageFullError, isQuotaError } from "./storage";
+import { t } from "../i18n";
 
 const DB_NAME = "dancebeat";
 /**
@@ -61,8 +62,7 @@ function openDb(): Promise<IDBDatabase> {
       resolve(db);
     };
     req.onerror = () => reject(req.error);
-    req.onblocked = () =>
-      reject(new Error("Die Datenbank ist in einem anderen Tab geöffnet. Bitte diesen schließen."));
+    req.onblocked = () => reject(new Error(t("songs.db.otherTab")));
   }).catch((e: unknown) => {
     dbPromise = null; // allow a retry instead of caching the failure
     throw e;
@@ -116,9 +116,8 @@ export class IndexedDbSongRepository implements SongRepository {
 
   async save(song: Song, audio?: Blob, video?: Blob) {
     const next = SongSchema.parse({ ...song, updatedAt: Date.now() });
-    if (audio && next.source.type !== "local")
-      throw new Error("Audiodaten gehören nur zu lokalen Songs.");
-    if (video && !next.videoBlobId) throw new Error("Das Tanzvideo braucht eine videoBlobId.");
+    if (audio && next.source.type !== "local") throw new Error(t("songs.db.audioLocalOnly"));
+    if (video && !next.videoBlobId) throw new Error(t("songs.db.videoNeedsBlobId"));
     const blobId = next.source.type === "local" ? next.source.blobId : null;
     await run([SONGS, BLOBS], "readwrite", (tx) => {
       if (audio && blobId) tx.objectStore(BLOBS).put(audio, blobId);
@@ -153,8 +152,8 @@ export class IndexedDbSongRepository implements SongRepository {
         saved = next;
       };
     });
-    if (!found) throw new Error("Song nicht gefunden.");
-    if (!saved) throw new Error("Der Song ist beschädigt und kann nicht geändert werden.");
+    if (!found) throw new Error(t("songs.db.notFound"));
+    if (!saved) throw new Error(t("songs.db.corrupt"));
     return saved;
   }
 
@@ -184,7 +183,7 @@ export class IndexedDbSongRepository implements SongRepository {
 
   async export(id: string) {
     const song = await this.get(id);
-    if (!song) throw new Error("Song nicht gefunden.");
+    if (!song) throw new Error(t("songs.db.notFound"));
     return JSON.stringify(buildChoreoFile(song), null, 2);
   }
 

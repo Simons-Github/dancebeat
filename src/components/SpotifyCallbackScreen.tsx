@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { SpotifyAuthError, spotifyExchange } from "@/lib/audio/spotifyAuth";
+import { t as tr, useT } from "@/lib/i18n";
 import { getSettings } from "@/lib/settings";
 
 /**
@@ -13,6 +14,7 @@ import { getSettings } from "@/lib/settings";
 export function SpotifyCallbackScreen() {
   const searchStr = useLocation({ select: (l) => l.searchStr });
   const navigate = useNavigate();
+  const t = useT();
   const [error, setError] = useState("");
   // The code is single-use and the verifier is deleted on the first try (StrictMode runs twice).
   const started = useRef(false);
@@ -23,7 +25,7 @@ export function SpotifyCallbackScreen() {
     spotifyExchange(getSettings().spotifyClientId, new URLSearchParams(searchStr))
       .then(() => navigate({ to: "/settings", replace: true }))
       .catch((e: unknown) =>
-        setError(e instanceof SpotifyAuthError ? e.message : "Spotify-Anmeldung fehlgeschlagen."),
+        setError(e instanceof SpotifyAuthError ? e.message : tr("shell.spotify.failed")),
       );
   }, [searchStr, navigate]);
 
@@ -32,7 +34,7 @@ export function SpotifyCallbackScreen() {
       <div className="glass flex max-w-full flex-col items-center gap-4 rounded-3xl px-8 py-6 text-white">
         <h1 className="font-title text-4xl">Spotify</h1>
         <p role={error ? "alert" : "status"} className="text-lg text-white/90">
-          {error || "Verbindung wird hergestellt …"}
+          {error || t("shell.spotify.connecting")}
         </p>
         {error && (
           <Button
@@ -42,7 +44,7 @@ export function SpotifyCallbackScreen() {
           >
             <Link to="/settings" replace>
               <ArrowLeft aria-hidden />
-              Zu den Einstellungen
+              {t("shell.spotify.toSettings")}
             </Link>
           </Button>
         )}

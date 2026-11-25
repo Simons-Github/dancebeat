@@ -21,6 +21,7 @@ import {
   estimateBeatPhaseMs,
   type OnsetEnvelope,
 } from "@/lib/beat";
+import { t as translate, useT, type MessageKey } from "@/lib/i18n";
 import { BPM_MAX, BPM_MIN } from "@/lib/library/newSong";
 import {
   VIDEO_RANGE_MAX_MS,
@@ -70,15 +71,16 @@ export const VIDEO_BEAT_MAX_MS = 15 * 60_000;
 /** Longer side of the person-picker still (canvas pixels). */
 const STILL_MAX_PX = 640;
 
-const BEAT_HAND_HINT = "Bitte die Beat-Phase von Hand eintragen.";
-
 /** Pose models offered for the analysis; live camera tracking always uses "lite". */
 const MODEL_CHOICES = ["lite", "full"] as const satisfies readonly PoseModel[];
-const MODEL_LABELS: Record<PoseModel, string> = { lite: "Schnell", full: "Genau" };
+const MODEL_LABELS: Record<PoseModel, MessageKey> = {
+  lite: "songs.video.model.lite",
+  full: "songs.video.model.full",
+};
 /** Move placement; rebuilt from the existing analysis, like the target person. */
-const PLACEMENT_LABELS: Record<MovePlacement, string> = {
-  grid: "Fester Takt",
-  holds: "Haltepunkte",
+const PLACEMENT_LABELS: Record<MovePlacement, MessageKey> = {
+  grid: "songs.video.placement.grid",
+  holds: "songs.video.placement.holds",
 };
 
 /** Where the automatic beat phase comes from; null = typed by hand. */
@@ -143,6 +145,7 @@ export function VideoChoreoPanel({
   keepVideo = false,
   createEstimator,
 }: VideoChoreoPanelProps) {
+  const t = useT();
   const id = useId();
   const videoRef = useRef<HTMLVideoElement>(null);
   const [url, setUrl] = useState<string | null>(null);
@@ -192,7 +195,7 @@ export function VideoChoreoPanel({
     ? null
     : range
       ? validateVideoRange(range, durationMs)
-      : "Bitte Start und Ende in Sekunden angeben, z. B. 12,5.";
+      : t("songs.video.range.typeBoth");
   const bpmValid = Number.isFinite(bpm) && bpm >= BPM_MIN && bpm <= BPM_MAX;
   const beatEnvelope = beatSource?.kind === "music" ? musicBeat : (beatSource?.envelope ?? null);
   // The detected phase follows BPM and range changes until the player types a value.
@@ -250,7 +253,7 @@ export function VideoChoreoPanel({
       });
       return { ok: true as const, result };
     } catch (e) {
-      const message = e instanceof Error ? e.message : "Aus dem Video ließ sich kein Tanz bauen.";
+      const message = e instanceof Error ? e.message : translate("songs.video.build.failed");
       return { ok: false as const, message };
     }
   }, [target, analyzed, stale, bpmValid, phaseMs, bpm, selfie, placement, durationMs]);
@@ -405,7 +408,7 @@ export function VideoChoreoPanel({
     if (!video) return;
     const d = video.duration * 1000;
     if (!Number.isFinite(d) || d <= 0) {
-      setVideoError("Die Länge des Videos ist unbekannt. Bitte eine andere Datei wählen.");
+      setVideoError(translate("songs.video.unknownLength"));
       return;
     }
     setDurationMs(d);
@@ -449,7 +452,9 @@ export function VideoChoreoPanel({
       if (bpmValid && phaseInRange(musicBeat, bpm, range) === null) {
         setBeatStatus({
           status: "error",
-          message: `Im Abschnitt ist kein Takt erkennbar. ${BEAT_HAND_HINT}`,
+          message: translate("songs.video.beat.noneInRange", {
+            hint: translate("songs.video.beatHand"),
+          }),
         });
         return;
       }
@@ -461,14 +466,20 @@ export function VideoChoreoPanel({
     if (videoFile.size > VIDEO_BEAT_MAX_BYTES) {
       setBeatStatus({
         status: "error",
-        message: `Das Video ist zu groß für die Takterkennung (höchstens ${VIDEO_BEAT_MAX_BYTES / 1024 / 1024} MB). ${BEAT_HAND_HINT}`,
+        message: translate("songs.video.beat.fileTooBig", {
+          max: VIDEO_BEAT_MAX_BYTES / 1024 / 1024,
+          hint: translate("songs.video.beatHand"),
+        }),
       });
       return;
     }
     if (durationMs !== null && durationMs > VIDEO_BEAT_MAX_MS) {
       setBeatStatus({
         status: "error",
-        message: `Das Video ist zu lang für die Takterkennung (höchstens ${VIDEO_BEAT_MAX_MS / 60_000} Minuten). ${BEAT_HAND_HINT}`,
+        message: translate("songs.video.beat.tooLong", {
+          minutes: VIDEO_BEAT_MAX_MS / 60_000,
+          hint: translate("songs.video.beatHand"),
+        }),
       });
       return;
     }
@@ -480,7 +491,9 @@ export function VideoChoreoPanel({
       if (phaseInRange(audio.envelope, audio.bpm, range) === null) {
         setBeatStatus({
           status: "error",
-          message: `Im Ton des Videos ist kein Takt erkennbar. ${BEAT_HAND_HINT}`,
+          message: translate("songs.video.beat.noneInAudio", {
+            hint: translate("songs.video.beatHand"),
+          }),
         });
         return;
       }
@@ -491,7 +504,9 @@ export function VideoChoreoPanel({
       if (token !== beatToken.current) return;
       setBeatStatus({
         status: "error",
-        message: `Der Ton des Videos lässt sich nicht auswerten. ${BEAT_HAND_HINT}`,
+        message: translate("songs.video.beat.audioFailed", {
+          hint: translate("songs.video.beatHand"),
+        }),
       });
     }
   };
@@ -535,7 +550,7 @@ export function VideoChoreoPanel({
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <Label htmlFor={`${id}-video`} className="text-base">
-          Tanzvideo
+          {t("songs.video.file.label")}
         </Label>
         <Input
           id={`${id}-video`}
@@ -548,10 +563,10 @@ export function VideoChoreoPanel({
         />
         <p id={`${id}-video-hint`} className={HINT}>
           {musicFromVideo
-            ? "MP4 oder MOV mit der Musik als Ton. Das Video bleibt auf diesem Gerät und wird als Musik des Songs gespeichert; die Erkennung läuft im Browser ohne externe Abrufe."
+            ? t("songs.video.file.hintMusic")
             : keepVideo
-              ? "MP4 oder MOV, gleiche Aufnahme wie die Musik (ab Sekunde 0). Das Video bleibt auf diesem Gerät und wird mit dem Song gespeichert; die Erkennung läuft im Browser ohne externe Abrufe."
-              : "MP4 oder MOV, gleiche Aufnahme wie die Musik (ab Sekunde 0). Das Video bleibt auf diesem Gerät und wird nach dem Hinzufügen verworfen; die Erkennung läuft im Browser ohne externe Abrufe."}
+              ? t("songs.video.file.hintKeep")
+              : t("songs.video.file.hintDiscard")}
         </p>
       </div>
 
@@ -570,10 +585,10 @@ export function VideoChoreoPanel({
             muted
             controls={!busy}
             preload="auto"
-            aria-label="Videovorschau"
+            aria-label={t("songs.video.preview")}
             onLoadedMetadata={onMetadata}
             onError={() => {
-              if (!busy) setVideoError("Das Video kann nicht gelesen werden. Bitte MP4 oder MOV.");
+              if (!busy) setVideoError(translate("songs.video.unreadable"));
             }}
             className={`${busy ? "max-h-[35dvh]" : "max-h-[40dvh]"} w-full rounded-xl bg-black object-contain`}
           />
@@ -581,15 +596,17 @@ export function VideoChoreoPanel({
             <div className="flex flex-col gap-2" aria-live="polite">
               <div className="flex items-center justify-between gap-3">
                 <p className="text-base">
-                  {state.status === "loading" ? "Lade Pose-Modell …" : `Analysiere … ${progress} %`}
+                  {state.status === "loading"
+                    ? t("songs.video.loadingModel")
+                    : t("songs.video.analyzing", { progress })}
                 </p>
                 <Button type="button" variant="secondary" onClick={cancel} className={BTN}>
-                  Abbrechen
+                  {t("songs.video.cancel")}
                 </Button>
               </div>
               <Progress
                 value={progress}
-                aria-label="Analysefortschritt"
+                aria-label={t("songs.video.progress")}
                 aria-valuenow={progress}
                 aria-valuemin={0}
                 aria-valuemax={100}
@@ -607,8 +624,13 @@ export function VideoChoreoPanel({
       {ready && (
         <>
           <div className="grid grid-cols-2 gap-3">
-            {rangeField("start", "Start (Sekunden)", startText, "Ab hier")}
-            {rangeField("end", "Ende (Sekunden)", endText, "Bis hier")}
+            {rangeField(
+              "start",
+              t("songs.video.start.label"),
+              startText,
+              t("songs.video.start.button"),
+            )}
+            {rangeField("end", t("songs.video.end.label"), endText, t("songs.video.end.button"))}
           </div>
           {rangeError && (
             <p id={`${id}-range-err`} className={FIELD_ERROR}>
@@ -619,7 +641,7 @@ export function VideoChoreoPanel({
           <div className="flex flex-col gap-1">
             <div className="flex min-h-11 items-center justify-between gap-3">
               <Label htmlFor={`${id}-selfie`} className="text-base">
-                Video ist gespiegelt (Selfie-Aufnahme)
+                {t("songs.video.selfie.label")}
               </Label>
               <Switch
                 id={`${id}-selfie`}
@@ -633,17 +655,14 @@ export function VideoChoreoPanel({
               />
             </div>
             <p id={`${id}-selfie-hint`} className={HINT}>
-              {selfieFromName
-                ? "Eingeschaltet, weil der Dateiname auf ein gespiegeltes Video hinweist. "
-                : ""}
-              Einschalten bei Selfie-Aufnahmen und Dance-Practice-Videos mit „Mirrored“ im Titel:
-              Dort sind links und rechts schon vertauscht.
+              {selfieFromName ? t("songs.video.selfie.fromName") : ""}
+              {t("songs.video.selfie.hint")}
             </p>
           </div>
 
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-phase`} className="text-base">
-              Beat-Phase (ms)
+              {t("songs.video.phase.label")}
             </Label>
             <Input
               id={`${id}-phase`}
@@ -657,15 +676,15 @@ export function VideoChoreoPanel({
             />
             {phaseMs === null ? (
               <p id={`${id}-phase-err`} className={FIELD_ERROR}>
-                {phaseLost
-                  ? "Der erkannte Takt lässt sich gerade nicht berechnen (BPM, Bereich oder Musikdatei fehlen). Bitte neu erkennen oder von Hand eintragen."
-                  : "Bitte ganze Millisekunden eingeben, z. B. 0 oder 250."}
+                {phaseLost ? t("songs.video.phase.lost") : t("songs.video.phase.invalid")}
               </p>
             ) : (
               <p id={`${id}-phase-hint`} className={HINT}>
                 {phaseAuto
-                  ? `Erster Beat ab Start, erkannt aus ${beatSource?.kind === "music" && !musicFromVideo ? "der Musikdatei" : "dem Ton des Videos"}. Bitte im Sync-Test prüfen.`
-                  : "Zeitpunkt eines Beats im Video. Die Feinabstimmung folgt später im Sync-Test."}
+                  ? beatSource?.kind === "music" && !musicFromVideo
+                    ? t("songs.video.phase.autoMusic")
+                    : t("songs.video.phase.autoVideo")
+                  : t("songs.video.phase.manual")}
               </p>
             )}
             <Button
@@ -675,7 +694,9 @@ export function VideoChoreoPanel({
               onClick={() => void detectBeat()}
               className={BTN}
             >
-              {beatStatus.status === "busy" ? "Werte den Ton aus …" : "Takt erkennen"}
+              {beatStatus.status === "busy"
+                ? t("songs.video.beat.detecting")
+                : t("songs.video.beat.detect")}
             </Button>
             <div aria-live="polite">
               {beatStatus.status === "error" && (
@@ -688,7 +709,7 @@ export function VideoChoreoPanel({
 
           <div className="flex flex-col gap-2">
             <span id={`${id}-model`} className="text-base font-medium">
-              Modell
+              {t("songs.video.model.label")}
             </span>
             <div role="group" aria-labelledby={`${id}-model`} className="flex gap-2">
               {MODEL_CHOICES.map((m) => (
@@ -701,19 +722,16 @@ export function VideoChoreoPanel({
                   onClick={() => setModel(m)}
                   className={`${BTN} flex-1 px-2`}
                 >
-                  {MODEL_LABELS[m]}
+                  {t(MODEL_LABELS[m])}
                 </Button>
               ))}
             </div>
-            <p className={HINT}>
-              Genau erkennt Posen zuverlässiger, die Analyse dauert aber länger. Beim ersten Mal
-              werden ca. 9 MB geladen.
-            </p>
+            <p className={HINT}>{t("songs.video.model.hint")}</p>
           </div>
 
           <div className="flex flex-col gap-2">
             <span id={`${id}-placement`} className="text-base font-medium">
-              Moves
+              {t("songs.video.placement.label")}
             </span>
             <div role="group" aria-labelledby={`${id}-placement`} className="flex gap-2">
               {MOVE_PLACEMENTS.map((p) => (
@@ -726,13 +744,11 @@ export function VideoChoreoPanel({
                   onClick={() => setPlacement(p)}
                   className={`${BTN} flex-1 px-2`}
                 >
-                  {PLACEMENT_LABELS[p]}
+                  {t(PLACEMENT_LABELS[p])}
                 </Button>
               ))}
             </div>
-            <p className={HINT}>
-              Haltepunkte: Moves auf Beats, an denen die Pose kurz steht (etwa gleich viele Moves).
-            </p>
+            <p className={HINT}>{t("songs.video.placement.hint")}</p>
           </div>
 
           <div className="flex flex-col gap-3" aria-live="polite">
@@ -744,7 +760,7 @@ export function VideoChoreoPanel({
                 onClick={analyze}
                 className={BTN}
               >
-                {track ? "Neu analysieren" : "Video analysieren"}
+                {track ? t("songs.video.reanalyze") : t("songs.video.analyze")}
               </Button>
             )}
             {state.status === "error" && (
@@ -752,20 +768,18 @@ export function VideoChoreoPanel({
                 {state.message}
               </p>
             )}
-            {state.status === "aborted" && <p className={HINT}>Analyse abgebrochen.</p>}
+            {state.status === "aborted" && <p className={HINT}>{t("songs.video.aborted")}</p>}
             {stale && (
               <p role="status" className={FIELD_ERROR}>
                 {rangeStale && modelStale
-                  ? "Zeitbereich und Modell haben sich geändert."
+                  ? t("songs.video.stale.both")
                   : rangeStale
-                    ? "Der Zeitbereich hat sich geändert."
-                    : "Das Modell hat sich geändert."}{" "}
-                Bitte das Video neu analysieren.
+                    ? t("songs.video.stale.range")
+                    : t("songs.video.stale.model")}{" "}
+                {t("songs.video.stale.rerun")}
               </p>
             )}
-            {track && !stale && !bpmValid && (
-              <p className={HINT}>Bitte gültige BPM eintragen, dann entstehen die Moves.</p>
-            )}
+            {track && !stale && !bpmValid && <p className={HINT}>{t("songs.video.needBpm")}</p>}
             {built && !built.ok && (
               <p role="alert" className={FIELD_ERROR}>
                 {built.message}
@@ -773,11 +787,16 @@ export function VideoChoreoPanel({
             )}
             {result && (
               <p className={HINT}>
-                {selected && `Person ${selected.number} von ${people.length}: `}
-                {result.stats.moves} Moves, davon {result.stats.gold} Gold Moves, Person in{" "}
-                {Math.round(result.stats.detectionRatio * 100)} % der Bilder erkannt.
-                {analyzedModel && ` Modell: ${MODEL_LABELS[analyzedModel]}.`}
-                {` Moves: ${PLACEMENT_LABELS[placement]}.`}
+                {selected &&
+                  t("songs.video.result.person", { number: selected.number, total: people.length })}
+                {t("songs.video.result.summary", {
+                  moves: result.stats.moves,
+                  gold: result.stats.gold,
+                  percent: Math.round(result.stats.detectionRatio * 100),
+                })}
+                {analyzedModel &&
+                  t("songs.video.result.model", { model: t(MODEL_LABELS[analyzedModel]) })}
+                {t("songs.video.result.placement", { placement: t(PLACEMENT_LABELS[placement]) })}
               </p>
             )}
             {import.meta.env.DEV && diagnosticsFile && (
@@ -788,9 +807,9 @@ export function VideoChoreoPanel({
           {stillSample && (
             <section aria-labelledby={`${id}-persons`} className="flex flex-col gap-3">
               <h3 id={`${id}-persons`} className="text-base font-medium">
-                Mehrere Personen erkannt
+                {t("songs.video.persons.title")}
               </h3>
-              <p className={HINT}>Tippe auf die Person, deren Bewegungen du übernehmen willst.</p>
+              <p className={HINT}>{t("songs.video.persons.tap")}</p>
               <canvas
                 ref={canvasRef}
                 width={stillW}
@@ -799,7 +818,11 @@ export function VideoChoreoPanel({
                 onClick={tapStill}
                 className="mx-auto block h-auto max-h-[40dvh] w-auto max-w-full cursor-pointer rounded-xl bg-black"
               />
-              <div role="group" aria-label="Zielperson" className="flex flex-wrap gap-2">
+              <div
+                role="group"
+                aria-label={t("songs.video.persons.group")}
+                className="flex flex-wrap gap-2"
+              >
                 {people.map((p) => (
                   <Button
                     key={p.index}
@@ -809,23 +832,15 @@ export function VideoChoreoPanel({
                     onClick={() => choosePerson(p.index)}
                     className={BTN}
                   >
-                    Person {p.number}
+                    {t("songs.video.persons.person", { number: p.number })}
                   </Button>
                 ))}
               </div>
-              {!selected && (
-                <p className={HINT}>
-                  Die gewählte Person ist in diesem Bild nicht erkannt. Wähle eine Person oder ein
-                  anderes Bild.
-                </p>
-              )}
+              {!selected && <p className={HINT}>{t("songs.video.persons.notFound")}</p>}
               <Button type="button" variant="secondary" onClick={showCurrentFrame} className={BTN}>
-                Aktuelles Bild
+                {t("songs.video.persons.currentFrame")}
               </Button>
-              <p className={HINT}>
-                Zeigt das Bild an der Stelle der Videovorschau, z. B. wo die Personen gut getrennt
-                stehen.
-              </p>
+              <p className={HINT}>{t("songs.video.persons.currentFrameHint")}</p>
             </section>
           )}
         </>

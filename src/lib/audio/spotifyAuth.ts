@@ -1,3 +1,6 @@
+import { t as translate } from "../i18n";
+import { deSongs } from "../i18n/de/songs";
+
 /**
  * Spotify login via Authorization Code with PKCE (no client secret, no backend).
  *
@@ -93,10 +96,11 @@ export async function spotifyLogin(clientId: string) {
   if (!check.ok)
     throw new SpotifyAuthError(
       check.reason === "localhost"
-        ? "Spotify erlaubt „localhost“ nicht. Öffne die App über 127.0.0.1."
-        : "Spotify verlangt eine HTTPS-Adresse.",
+        ? translate("songs.spotify.noLocalhost")
+        : translate("songs.spotify.needsHttps"),
     );
-  if (!isSpotifyClientId(clientId)) throw new SpotifyAuthError("Die Client-ID ist ungültig.");
+  if (!isSpotifyClientId(clientId))
+    throw new SpotifyAuthError(translate("songs.spotify.badClientId"));
   const verifier = randomString(48);
   const state = randomString(16);
   sessionStorage.setItem(VERIFIER_KEY, verifier);
@@ -133,9 +137,9 @@ async function requestToken(body: Record<string, string>, fetchFn: typeof fetch)
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams(body),
   });
-  if (!r.ok) throw new SpotifyAuthError("Spotify-Anmeldung fehlgeschlagen.");
+  if (!r.ok) throw new SpotifyAuthError(translate("songs.spotify.loginFailed"));
   const j: unknown = await r.json();
-  if (!isTokenResponse(j)) throw new SpotifyAuthError("Spotify-Anmeldung fehlgeschlagen.");
+  if (!isTokenResponse(j)) throw new SpotifyAuthError(translate("songs.spotify.loginFailed"));
   return j;
 }
 
@@ -168,12 +172,11 @@ export async function spotifyExchange(
   sessionStorage.removeItem(VERIFIER_KEY);
   sessionStorage.removeItem(STATE_KEY);
   if (params.get("error") === "access_denied")
-    throw new SpotifyAuthError("Du hast die Verbindung mit Spotify abgelehnt.");
+    throw new SpotifyAuthError(translate("songs.spotify.denied"));
   const code = params.get("code");
-  if (params.get("error") || !code)
-    throw new SpotifyAuthError("Spotify hat keine Anmeldung zurückgegeben.");
+  if (params.get("error") || !code) throw new SpotifyAuthError(translate("songs.spotify.noLogin"));
   if (!verifier || !state || params.get("state") !== state)
-    throw new SpotifyAuthError("Die Anmeldung passt nicht zu dieser Sitzung. Bitte neu verbinden.");
+    throw new SpotifyAuthError(translate("songs.spotify.stateMismatch"));
   const j = await requestToken(
     {
       client_id: clientId.trim(),
@@ -225,9 +228,11 @@ export function spotifyLogout() {
   sessionStorage.removeItem(STATE_KEY);
 }
 
-/** Message for an expired session that could not be refreshed. */
-export const SPOTIFY_EXPIRED_MESSAGE =
-  "Die Spotify-Anmeldung ist abgelaufen. Bitte in den Einstellungen neu verbinden.";
+/**
+ * German reference text of the message for an expired session that could not be refreshed (the
+ * thrown error uses `t("songs.spotify.expired")` in the current UI language).
+ */
+export const SPOTIFY_EXPIRED_MESSAGE = deSongs["songs.spotify.expired"];
 
 let refreshing: Promise<string> | null = null;
 
@@ -238,9 +243,9 @@ let refreshing: Promise<string> | null = null;
  */
 export async function getSpotifyToken(fetchFn: typeof fetch = fetch, now = Date.now()) {
   const t = readToken();
-  if (!t) throw new SpotifyAuthError("Bitte zuerst in den Einstellungen mit Spotify verbinden.");
+  if (!t) throw new SpotifyAuthError(translate("songs.spotify.connectFirst"));
   if (t.expiresAt - SPOTIFY_REFRESH_MARGIN_MS > now) return t.accessToken;
-  if (!t.refreshToken) throw new SpotifyAuthError(SPOTIFY_EXPIRED_MESSAGE);
+  if (!t.refreshToken) throw new SpotifyAuthError(translate("songs.spotify.expired"));
   const refreshToken = t.refreshToken;
   refreshing ??= requestToken(
     { client_id: t.clientId, grant_type: "refresh_token", refresh_token: refreshToken },
@@ -253,7 +258,7 @@ export async function getSpotifyToken(fetchFn: typeof fetch = fetch, now = Date.
     })
     .catch(() => {
       sessionStorage.removeItem(TOKEN_KEY);
-      throw new SpotifyAuthError(SPOTIFY_EXPIRED_MESSAGE);
+      throw new SpotifyAuthError(translate("songs.spotify.expired"));
     })
     .finally(() => {
       refreshing = null;

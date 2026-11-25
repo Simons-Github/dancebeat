@@ -5,17 +5,18 @@ import { Home, RotateCcw, Trophy } from "lucide-react";
 
 import { Button } from "@/components/ui/button";
 import { ChromeStar } from "@/components/Y2KIcons";
+import { localeOf, useT, type MessageKey } from "@/lib/i18n";
 import { rankTitle } from "@/lib/scoring";
 import type { GameResult, Rating } from "@/lib/types";
 import { CONFETTI, GOLD, RATING_COLORS, RESULT, SCRIM, SPRING } from "@/theme";
 
 const RATINGS: Rating[] = ["PERFECT", "SUPER", "GOOD", "OK", "X"];
 /** Spoken names where the short label would be unclear. */
-const SPOKEN: Partial<Record<Rating, string>> = { X: "Verpasst" };
+const SPOKEN: Partial<Record<Rating, MessageKey>> = { X: "shell.result.missed" };
 const BTN =
   "btn-pill h-14 gap-2 rounded-full px-8 text-lg focus-visible:ring-4 focus-visible:ring-gold landscape:h-12 landscape:px-6 [&_svg]:size-5";
 
-const fmt = (n: number) => Math.round(n).toLocaleString("de-DE");
+const fmt = (n: number) => Math.round(n).toLocaleString(localeOf());
 
 /**
  * Final result: rank, score counting up, stars popping in one by one, ratings, longest combo and
@@ -23,17 +24,18 @@ const fmt = (n: number) => Math.round(n).toLocaleString("de-DE");
  * everything is shown at once and there is no confetti.
  */
 export function ResultScreen({ result: r }: { result: GameResult }) {
+  const t = useT();
   const reduce = useReducedMotion() ?? false;
   const headingRef = useRef<HTMLHeadingElement>(null);
   // Cue for screen readers (and keyboard users) after the route change from the game.
   useEffect(() => headingRef.current?.focus(), []);
   const party = !reduce && (r.stars >= 5 || r.mega);
-  const starsLabel = r.mega ? "Megastar, 5 von 5 Sternen" : `${r.stars} von 5 Sternen`;
+  const starsLabel = r.mega ? t("shell.result.mega") : t("shell.stars.label", { count: r.stars });
   return (
     <main className="safe-pad flex min-h-0 flex-1 flex-col items-center justify-center">
       {party && <Confetti />}
       <div className="glass flex max-h-full w-full max-w-md flex-col items-center gap-4 overflow-y-auto rounded-3xl px-6 py-5 text-center text-white landscape:grid landscape:max-w-3xl landscape:grid-cols-2 landscape:items-center landscape:gap-x-8 landscape:gap-y-3">
-        <section className="flex flex-col items-center gap-3" aria-label="Wertung">
+        <section className="flex flex-col items-center gap-3" aria-label={t("shell.result.score")}>
           <h1
             ref={headingRef}
             tabIndex={-1}
@@ -43,7 +45,7 @@ export function ResultScreen({ result: r }: { result: GameResult }) {
           </h1>
           <p className="font-title chrome-text chrome-glow pb-[0.1em] text-7xl leading-none tabular-nums landscape:text-6xl">
             <span className="sr-only" data-testid="result-score">
-              {fmt(r.score)} Punkte
+              {t("shell.result.points", { score: fmt(r.score) })}
             </span>
             <ScoreCounter score={r.score} reduce={reduce} />
           </p>
@@ -63,47 +65,54 @@ export function ResultScreen({ result: r }: { result: GameResult }) {
               transition={{ ...SPRING, delay: reduce ? 0 : RESULT.countUpSeconds }}
             >
               <Trophy aria-hidden className="size-5" />
-              Neuer Highscore!
+              {t("shell.result.newHighscore")}
             </motion.p>
           )}
         </section>
-        <section className="flex flex-col items-center gap-4" aria-label="Details">
+        <section
+          className="flex flex-col items-center gap-4"
+          aria-label={t("shell.result.details")}
+        >
           <dl className="grid w-full grid-cols-5 gap-2 text-base">
-            {RATINGS.map((k) => (
-              <div key={k} className="flex min-w-0 flex-col">
-                <dt className="flex flex-col items-center gap-1 text-xs font-bold">
-                  <span
-                    aria-hidden
-                    className="h-1.5 w-full max-w-10 rounded-full"
-                    style={{ background: RATING_COLORS[k] }}
-                  />
-                  {SPOKEN[k] ? (
-                    <>
-                      <span aria-hidden>{k}</span>
-                      <span className="sr-only">{SPOKEN[k]}</span>
-                    </>
-                  ) : (
-                    k
-                  )}
-                </dt>
-                <dd className="text-xl font-bold tabular-nums">{r.counts[k]}</dd>
-              </div>
-            ))}
+            {RATINGS.map((k) => {
+              const spoken = SPOKEN[k];
+              return (
+                <div key={k} className="flex min-w-0 flex-col">
+                  <dt className="flex flex-col items-center gap-1 text-xs font-bold">
+                    <span
+                      aria-hidden
+                      className="h-1.5 w-full max-w-10 rounded-full"
+                      style={{ background: RATING_COLORS[k] }}
+                    />
+                    {spoken ? (
+                      <>
+                        <span aria-hidden>{k}</span>
+                        <span className="sr-only">{t(spoken)}</span>
+                      </>
+                    ) : (
+                      k
+                    )}
+                  </dt>
+                  <dd className="text-xl font-bold tabular-nums">{r.counts[k]}</dd>
+                </div>
+              );
+            })}
           </dl>
           <p className="text-lg">
-            Längste Combo <span className="font-bold tabular-nums">{r.maxCombo}</span>
+            {t("shell.result.maxCombo")}{" "}
+            <span className="font-bold tabular-nums">{r.maxCombo}</span>
           </p>
           <div className="flex flex-wrap justify-center gap-3">
             <Button asChild size="lg" className={BTN}>
               <Link to="/setup/$songId" params={{ songId: r.songId }}>
                 <RotateCcw aria-hidden />
-                Nochmal
+                {t("shell.result.again")}
               </Link>
             </Button>
             <Button asChild size="lg" variant="secondary" className={BTN}>
               <Link to="/">
                 <Home aria-hidden />
-                Anderer Song
+                {t("shell.result.other")}
               </Link>
             </Button>
           </div>

@@ -16,13 +16,14 @@ import {
 } from "@/components/ui/select";
 import { usePoseTracking, type FrameInfo } from "@/hooks/usePoseTracking";
 import {
-  LIGHT_HINT,
+  lightHint,
   createBodyTracker,
   createStatusSmoother,
   statusKey,
   statusRows,
   type BodyStatus,
 } from "@/lib/bodyTracker";
+import { useT, type MessageKey } from "@/lib/i18n";
 import { unlockAudio } from "@/lib/audio/unlock";
 import { isAutoStartArmed, rearmAutoStart } from "@/lib/game/session";
 import { probeMotionSensor, requestMotionPermission, type MotionPermission } from "@/lib/motion";
@@ -35,10 +36,9 @@ const PANEL = "glass flex flex-col gap-4 rounded-3xl p-5 text-white";
 const BTN =
   "btn-pill h-14 gap-2 rounded-full px-8 text-lg focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
 
-const MOTION_REFUSED: Record<Exclude<MotionPermission, "granted">, string> = {
-  denied:
-    "Bewegungssensor nicht erlaubt. Erlaube den Zugriff in den Browser-Einstellungen und versuche es noch einmal.",
-  unsupported: "Dieses Gerät hat keinen Bewegungssensor.",
+const MOTION_REFUSED: Record<Exclude<MotionPermission, "granted">, MessageKey> = {
+  denied: "settings.setup.motionDenied",
+  unsupported: "settings.setup.motionUnsupported",
 };
 
 /** No frame for this long means the detection stalled (background, lock, ended track). */
@@ -66,6 +66,7 @@ export function SetupScreen({
   songTitle: string;
   songSource: SourceSpec;
 }) {
+  const t = useT();
   const navigate = useNavigate();
   const [settings, saveSettings] = useSettings();
   const [started, setStarted] = useState(false);
@@ -75,7 +76,7 @@ export function SetupScreen({
   const [body, setBody] = useState<BodyStatus | null>(null);
   const [reached, setReached] = useState(false);
   const [autoStart] = useState(() => getSettings().autoStart && isAutoStartArmed(songId));
-  const [motionError, setMotionError] = useState<string | null>(null);
+  const [motionError, setMotionError] = useState<MessageKey | null>(null);
   const [motionChecking, setMotionChecking] = useState(false);
   // The sensor check takes up to a second; leaving meanwhile must not navigate afterwards.
   const mounted = useRef(true);
@@ -214,10 +215,7 @@ export function SetupScreen({
   };
   const withoutCamera = (
     <div className="flex flex-col gap-2">
-      <p className="text-base text-white/90">
-        Ohne Kamera: Halte das Handy fest in der Hand und beweg dich im Takt. Bewertet wird, wie
-        kräftig du dich bewegst.
-      </p>
+      <p className="text-base text-white/90">{t("settings.setup.motionIntro")}</p>
       <Button
         size="lg"
         variant="secondary"
@@ -226,16 +224,16 @@ export function SetupScreen({
         className={cn(BTN, "self-start")}
       >
         <Smartphone aria-hidden />
-        Ohne Kamera spielen
+        {t("settings.setup.playWithoutCamera")}
       </Button>
       {motionChecking && (
         <p role="status" className="text-base">
-          Bewegungssensor wird geprüft …
+          {t("settings.setup.motionChecking")}
         </p>
       )}
       {motionError && (
         <p role="alert" className="text-base font-bold">
-          {motionError}
+          {t(motionError)}
         </p>
       )}
     </div>
@@ -258,26 +256,25 @@ export function SetupScreen({
     >
       {!started ? (
         <div className={cn(PANEL, "my-auto w-full max-w-xl shrink-0 landscape:gap-3")}>
-          <h1 className="font-title text-3xl landscape:text-2xl">Aufstellhilfe</h1>
+          <h1 className="font-title text-3xl landscape:text-2xl">{t("settings.setup.title")}</h1>
           <p className="text-base text-white/90">
-            Gleich tanzt du zu „{songTitle}“. Die Kamera sieht dich, damit DanceBeat deine
-            Bewegungen bewerten kann.
+            {t("settings.setup.intro", { title: songTitle })}
           </p>
           <ol className="list-decimal space-y-1 pl-5 text-base">
-            <li>Stell das Handy fest auf, zum Beispiel angelehnt an eine Wand.</li>
-            <li>Geh zwei bis drei Schritte zurück, bis du von Kopf bis Fuß im Bild bist.</li>
-            <li>Sorge für genug Licht, am besten von vorne.</li>
+            <li>{t("settings.setup.step1")}</li>
+            <li>{t("settings.setup.step2")}</li>
+            <li>{t("settings.setup.step3")}</li>
           </ol>
           <PrivacyNote source={songSource} />
           <div className="flex flex-wrap gap-3">
             <Button size="lg" onClick={start} className={BTN}>
               <Camera aria-hidden />
-              Kamera starten
+              {t("settings.setup.startCamera")}
             </Button>
             <Button asChild size="lg" variant="secondary" className={BTN}>
               <Link to="/">
                 <ArrowLeft aria-hidden />
-                Zurück
+                {t("common.back")}
               </Link>
             </Button>
           </div>
@@ -295,7 +292,7 @@ export function SetupScreen({
                   ref={videoRef}
                   muted
                   playsInline
-                  aria-label="Live-Bild deiner Kamera"
+                  aria-label={t("settings.setup.liveVideo")}
                   className="size-full object-cover"
                 />
                 <canvas ref={canvasRef} aria-hidden className="absolute inset-0 size-full" />
@@ -306,8 +303,8 @@ export function SetupScreen({
                   className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/60 p-4 text-center text-white"
                 >
                   <Loader2 aria-hidden className="size-8 motion-safe:animate-spin" />
-                  <p className="text-base font-medium">Kamera und Erkennung werden gestartet …</p>
-                  <p className="text-sm text-white/90">Beim ersten Mal kann das etwas dauern.</p>
+                  <p className="text-base font-medium">{t("settings.setup.loading")}</p>
+                  <p className="text-sm text-white/90">{t("settings.setup.loadingSlow")}</p>
                 </div>
               )}
             </div>
@@ -323,28 +320,21 @@ export function SetupScreen({
               </>
             ) : (
               <>
-                <h1 className="font-title text-2xl">Stell dich auf</h1>
+                <h1 className="font-title text-2xl">{t("settings.setup.standUp")}</h1>
                 <BodyChecklist rows={rows} />
                 <p role="status" className="text-base font-bold">
                   {status === "ready"
-                    ? (body?.hint ?? "Stell dich vor die Kamera.")
-                    : "Einen Moment, die Kamera startet."}
+                    ? (body?.hint ?? t("settings.setup.standInFront"))
+                    : t("settings.setup.cameraStarting")}
                 </p>
-                {lowLight && <p className="text-base">{LIGHT_HINT}</p>}
-                {fallback && (
-                  <p className="text-base">
-                    Die gespeicherte Kamera ist nicht erreichbar, es läuft die Standardkamera.
-                  </p>
-                )}
+                {lowLight && <p className="text-base">{lightHint()}</p>}
+                {fallback && <p className="text-base">{t("settings.setup.fallbackCamera")}</p>}
                 {autoStart ? (
-                  <p className="text-base">Sobald alles passt, geht es von selbst los.</p>
+                  <p className="text-base">{t("settings.setup.autoStartOn")}</p>
                 ) : settings.autoStart ? (
-                  <p className="text-base">
-                    Automatischer Start ist aus, weil du abgebrochen hast. Tippe auf „Los
-                    geht&apos;s“, wenn du bereit bist.
-                  </p>
+                  <p className="text-base">{t("settings.setup.autoStartCancelled")}</p>
                 ) : (
-                  <p className="text-base">Tippe auf „Los geht&apos;s“, wenn du bereit bist.</p>
+                  <p className="text-base">{t("settings.setup.tapWhenReady")}</p>
                 )}
               </>
             )}
@@ -352,11 +342,11 @@ export function SetupScreen({
             {cameras.length > 1 && (
               <div className="flex flex-col gap-1">
                 <label htmlFor="camera-select" className="text-sm text-white/90">
-                  Kamera
+                  {t("settings.setup.cameraLabel")}
                 </label>
                 <Select value={activeDeviceId} onValueChange={pickCamera}>
                   <SelectTrigger id="camera-select" className="h-12 bg-white/10 text-base">
-                    <SelectValue placeholder="Kamera wählen" />
+                    <SelectValue placeholder={t("settings.setup.cameraPlaceholder")} />
                   </SelectTrigger>
                   <SelectContent>
                     {cameras.map((c) => (
@@ -375,19 +365,19 @@ export function SetupScreen({
             <div className="flex flex-wrap items-center gap-3">
               <Button size="lg" disabled={!ready} onClick={playNow} className={BTN}>
                 <Play aria-hidden />
-                Los geht&apos;s
+                {t("settings.setup.go")}
               </Button>
               <Button asChild size="lg" variant="secondary" className={BTN}>
                 <Link to="/">
                   <ArrowLeft aria-hidden />
-                  Zurück
+                  {t("common.back")}
                 </Link>
               </Button>
               <Button
                 variant="ghost"
                 size="icon"
                 aria-pressed={showDiag}
-                aria-label="Diagnose ein- oder ausblenden"
+                aria-label={t("settings.setup.diagToggle")}
                 onClick={() => setShowDiag((v) => !v)}
                 className="size-12 rounded-full text-white hover:bg-white/15 focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-6"
               >

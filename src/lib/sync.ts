@@ -1,5 +1,6 @@
 import { gameTimeMs, type ClockOffsets } from "@/lib/audio/clock";
 import { MAX_PULSE_HZ } from "@/lib/game/beat";
+import { getLanguage } from "@/lib/i18n";
 
 /**
  * Per-song sync test: the player taps along to the beat, the taps (audio positions from
@@ -183,8 +184,8 @@ export function parseStartOffsetSeconds(text: string): number | null {
   return Number.isFinite(ms) && ms <= START_OFFSET_MAX_MS ? ms : null;
 }
 
-/** Start offset in seconds, German style: "12,5", "12", "0" (at most one decimal). */
+/** Start offset in seconds, decimal comma in German, point in English: "12,5", "12", "0" (at most one decimal). */
 export function formatStartOffsetSeconds(ms: number): string {
   if (!Number.isFinite(ms) || ms <= 0) return "0";
-  return String(Math.round(ms / 100) / 10).replace(".", ",");
+  return String(Math.round(ms / 100) / 10).replace(".", getLanguage() === "de" ? "," : ".");
 }

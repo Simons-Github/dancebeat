@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { BONE_IDS, type BoneId, type Skeleton3D } from "./skeleton/types";
+import { t } from "./i18n";
 
 /**
  * Persisted and exchanged data formats. These zod schemas are the single source of truth for the
@@ -10,7 +11,11 @@ export const CHOREO_VERSION = 2;
 export const EXPORT_FORMAT = "dancebeat-choreo";
 
 const time = z.number().finite().nonnegative();
-const hexColor = z.string().regex(/^#[0-9a-fA-F]{6}$/, "Farbe als #RRGGBB");
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+const hexColor = z.string().refine(
+  (v) => HEX_COLOR.test(v),
+  () => ({ message: t("songs.schema.color") }),
+);
 const timestamp = z.number().int().nonnegative();
 
 export const LandmarkSchema = z.union([
@@ -99,8 +104,12 @@ export const ChoreographySchema = z.object({
   offsetMs: z.number().finite(),
   accentColor: hexColor,
   secondaryColor: hexColor,
-  frames: z.array(FrameSchema).refine(sortedByTime, "Frames müssen nach timeMs sortiert sein"),
-  moves: z.array(MoveSchema).refine(sortedByTime, "Moves müssen nach timeMs sortiert sein"),
+  frames: z
+    .array(FrameSchema)
+    .refine(sortedByTime, () => ({ message: t("songs.schema.framesSorted") })),
+  moves: z
+    .array(MoveSchema)
+    .refine(sortedByTime, () => ({ message: t("songs.schema.movesSorted") })),
   createdAt: timestamp,
   updatedAt: timestamp,
 });

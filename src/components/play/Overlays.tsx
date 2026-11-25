@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import type { PauseReason } from "@/lib/game/controller";
 import type { CameraError } from "@/lib/cameraErrors";
 import { cn } from "@/lib/utils";
+import { useT, type MessageKey } from "@/lib/i18n";
 import { SPRING } from "@/theme";
 
 export const GAME_BTN =
@@ -27,21 +28,16 @@ function Layer({ children, label }: { children: ReactNode; label?: string }) {
   );
 }
 
-export function PreparingOverlay({
-  onCancel,
-  label = "Kamera und Musik werden vorbereitet …",
-}: {
-  onCancel: () => void;
-  label?: string;
-}) {
+export function PreparingOverlay({ onCancel, label }: { onCancel: () => void; label?: string }) {
+  const t = useT();
   return (
     <Layer>
       <div className={cn(PANEL, "items-center text-center")} role="status">
         <Loader2 aria-hidden className="size-10 motion-safe:animate-spin" />
-        <p className="text-lg font-bold">{label}</p>
+        <p className="text-lg font-bold">{label ?? t("shell.play.preparing")}</p>
         <Button size="lg" variant="secondary" onClick={onCancel} className={GAME_BTN}>
           <X aria-hidden />
-          Abbrechen
+          {t("common.cancel")}
         </Button>
       </div>
     </Layer>
@@ -50,6 +46,7 @@ export function PreparingOverlay({
 
 /** 3-2-1 (count 0 = lead-in). Cancelable; the number only scales without reduced motion. */
 export function CountdownOverlay({ count, onCancel }: { count: number; onCancel: () => void }) {
+  const t = useT();
   return (
     <div className="safe-pad absolute inset-0 z-30 flex flex-col items-center justify-center gap-6">
       <div
@@ -58,7 +55,7 @@ export function CountdownOverlay({ count, onCancel }: { count: number; onCancel:
         className="bg-(--hud-scrim) grid size-44 place-items-center rounded-full border border-white/20 text-white shadow-pop landscape:size-36"
       >
         {count === 0 ? (
-          <p className="font-title px-4 text-center text-2xl">Bereit machen!</p>
+          <p className="font-title px-4 text-center text-2xl">{t("shell.play.getReady")}</p>
         ) : (
           <motion.span
             key={count}
@@ -73,7 +70,7 @@ export function CountdownOverlay({ count, onCancel }: { count: number; onCancel:
       </div>
       <Button size="lg" variant="secondary" onClick={onCancel} className={GAME_BTN}>
         <X aria-hidden />
-        Abbrechen
+        {t("common.cancel")}
       </Button>
     </div>
   );
@@ -86,17 +83,18 @@ export function CountdownOverlay({ count, onCancel }: { count: number; onCancel:
  * and keyboard.
  */
 export function BlockedOverlay({ onTap, video = false }: { onTap: () => void; video?: boolean }) {
+  const t = useT();
   const ref = useRef<HTMLButtonElement>(null);
   useEffect(() => ref.current?.focus(), []);
   if (video) {
     return (
       <div className="safe-pad absolute inset-0 z-30 flex flex-col items-center justify-between bg-black/60">
         <p role="status" className="font-title text-center text-2xl landscape:text-xl">
-          Tippe auf das Video, um zu starten.
+          {t("shell.play.tapVideo")}
         </p>
         <Button ref={ref} size="lg" variant="secondary" onClick={onTap} className={GAME_BTN}>
           <Play aria-hidden />
-          Zum Starten tippen
+          {t("shell.play.tapToStart")}
         </Button>
       </div>
     );
@@ -105,16 +103,16 @@ export function BlockedOverlay({ onTap, video = false }: { onTap: () => void; vi
     <Layer>
       <Button ref={ref} size="lg" onClick={onTap} className={cn(GAME_BTN, "h-20 px-10 text-2xl")}>
         <Play aria-hidden />
-        Zum Starten tippen
+        {t("shell.play.tapToStart")}
       </Button>
     </Layer>
   );
 }
 
-const PAUSE_TEXT: Record<PauseReason, string> = {
-  user: "",
-  hidden: "Pausiert, weil DanceBeat im Hintergrund war.",
-  camera: "Die Kamera wurde unterbrochen. Sobald sie wieder läuft, kannst du weitermachen.",
+const PAUSE_TEXT: Record<PauseReason, MessageKey | null> = {
+  user: null,
+  hidden: "shell.pause.hidden",
+  camera: "shell.pause.camera",
 };
 
 export function PauseMenu({
@@ -153,13 +151,15 @@ export function PauseMenu({
   onDanceVideo?: (v: boolean) => void;
   onDanceVideoLarge?: (v: boolean) => void;
 }) {
+  const t = useT();
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => first.current?.focus(), []);
+  const reasonKey = reason ? PAUSE_TEXT[reason] : null;
   return (
-    <Layer label="Pause">
+    <Layer label={t("shell.pause.title")}>
       <div className={cn(PANEL, "max-h-full w-full overflow-y-auto")}>
-        <h2 className="font-title text-3xl">Pause</h2>
-        {reason && PAUSE_TEXT[reason] && <p className="text-base">{PAUSE_TEXT[reason]}</p>}
+        <h2 className="font-title text-3xl">{t("shell.pause.title")}</h2>
+        {reasonKey && <p className="text-base">{t(reasonKey)}</p>}
         {cameraError && <CameraErrorPanel error={cameraError} onRetry={onRetryCamera} />}
         <div className="flex flex-col gap-3">
           <Button
@@ -170,7 +170,7 @@ export function PauseMenu({
             className={GAME_BTN}
           >
             <Play aria-hidden />
-            Weiter
+            {t("shell.pause.resume")}
           </Button>
           <Button
             size="lg"
@@ -180,32 +180,32 @@ export function PauseMenu({
             className={GAME_BTN}
           >
             <RotateCcw aria-hidden />
-            Neustart
+            {t("shell.pause.restart")}
           </Button>
           <Button size="lg" variant="secondary" onClick={onQuit} className={GAME_BTN}>
             <Home aria-hidden />
-            Beenden
+            {t("shell.pause.quit")}
           </Button>
         </div>
         <div className="flex flex-col gap-3 border-t border-white/20 pt-4">
           {skeleton !== null && (
             <div className="flex items-center justify-between gap-3">
               <Label htmlFor="toggle-skeleton" className="text-base">
-                Skelett anzeigen
+                {t("shell.pause.skeleton")}
               </Label>
               <Switch id="toggle-skeleton" checked={skeleton} onCheckedChange={onSkeleton} />
             </div>
           )}
           <div className="flex items-center justify-between gap-3">
             <Label htmlFor="toggle-pulse" className="text-base">
-              Beat-Puls am Rand
+              {t("shell.pause.pulse")}
             </Label>
             <Switch id="toggle-pulse" checked={beatPulse} onCheckedChange={onBeatPulse} />
           </div>
           {danceVideo !== null && onDanceVideo && (
             <div className="flex items-center justify-between gap-3">
               <Label htmlFor="toggle-dance-video" className="text-base">
-                Tanzvideo zeigen
+                {t("shell.pause.danceVideo")}
               </Label>
               <Switch id="toggle-dance-video" checked={danceVideo} onCheckedChange={onDanceVideo} />
             </div>
@@ -213,7 +213,7 @@ export function PauseMenu({
           {danceVideoLarge !== null && onDanceVideoLarge && (
             <div className="flex items-center justify-between gap-3">
               <Label htmlFor="toggle-dance-video-large" className="text-base">
-                Tanzvideo groß
+                {t("shell.pause.danceVideoLarge")}
               </Label>
               <Switch
                 id="toggle-dance-video-large"

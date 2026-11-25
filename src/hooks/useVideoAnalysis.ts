@@ -5,6 +5,7 @@ import { createMediaPipeEstimator } from "@/lib/mediapipePoseEstimator";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import { VIDEO_MAX_POSES, type MultiPoseTrack } from "@/lib/targetPerson";
 import { analyzeVideo, VideoAnalysisError, type AnalyzeVideoOptions } from "@/lib/videoAnalysis";
+import { t, type MessageKey } from "@/lib/i18n";
 
 export type VideoAnalysisState =
   | { status: "idle" }
@@ -27,27 +28,28 @@ export interface VideoAnalysisHookOptions {
   createEstimator?: (model: PoseModel) => PoseEstimator;
 }
 
+/** Message keys, translated when the error happens (never frozen at import). */
 const MESSAGES = {
-  model: "Das Pose-Modell konnte nicht geladen werden.",
-  video: "Das Video kann nicht gelesen werden.",
-  timeout: "Das Video reagiert nicht mehr (Zeitüberschreitung beim Spulen).",
-  range: "Der gewählte Abschnitt liegt außerhalb des Videos.",
-  unexpected: "Die Analyse wurde unerwartet abgebrochen.",
-} as const;
+  model: "songs.video.err.model",
+  video: "songs.video.err.video",
+  timeout: "songs.video.err.timeout",
+  range: "songs.video.err.range",
+  unexpected: "songs.video.err.unexpected",
+} as const satisfies Record<string, MessageKey>;
 
 function analysisMessage(e: unknown): string {
   if (e instanceof VideoAnalysisError) {
     switch (e.code) {
       case "no-metadata":
       case "video-error":
-        return MESSAGES.video;
+        return t(MESSAGES.video);
       case "seek-timeout":
-        return MESSAGES.timeout;
+        return t(MESSAGES.timeout);
       case "empty-range":
-        return MESSAGES.range;
+        return t(MESSAGES.range);
     }
   }
-  return MESSAGES.unexpected;
+  return t(MESSAGES.unexpected);
 }
 
 interface Run {
@@ -114,7 +116,7 @@ export function useVideoAnalysis(hookOpts: VideoAnalysisHookOptions = {}) {
         await run.estimator.init();
       } catch {
         // A stale run was already released by stop(); finish() ignores it.
-        finish({ status: "error", message: MESSAGES.model });
+        finish({ status: "error", message: t(MESSAGES.model) });
         return;
       }
       const estimator = run.estimator;

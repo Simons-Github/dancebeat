@@ -3,6 +3,7 @@ import { Star } from "lucide-react";
 import { comboMultiplier, MEGA_THRESHOLD, STAR_THRESHOLDS } from "@/lib/scoring";
 import { cn } from "@/lib/utils";
 import { GOLD, ICON_OFF } from "@/theme";
+import { useT } from "@/lib/i18n";
 
 export const HUD_PILL =
   "bg-(--hud-scrim) rounded-full border border-white/15 px-4 py-1.5 text-white shadow-pop backdrop-blur-sm";
@@ -21,21 +22,25 @@ export function Hud({
   mega: boolean;
   ratio: number;
 }) {
+  const t = useT();
   const mult = comboMultiplier(combo);
   const progress = Math.min(1, ratio / MEGA_THRESHOLD);
   return (
     <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2">
       <div className={cn(HUD_PILL, "flex items-baseline gap-2")}>
-        <span className="sr-only">Punkte</span>
+        <span className="sr-only">{t("shell.hud.points")}</span>
         <span className="font-title text-2xl tabular-nums" data-testid="score">
-          {score.toLocaleString("de-DE")}
+          {score.toLocaleString(t.locale)}
         </span>
       </div>
-      <div className={cn(HUD_PILL, "flex items-baseline gap-1.5")} aria-label={`Combo ${combo}`}>
+      <div
+        className={cn(HUD_PILL, "flex items-baseline gap-1.5")}
+        aria-label={t("shell.hud.combo", { combo })}
+      >
         <span className="text-lg font-bold tabular-nums" data-testid="combo">
           {combo}
         </span>
-        <span className="text-sm font-medium">Combo</span>
+        <span className="text-sm font-medium">{t("shell.hud.comboLabel")}</span>
         {mult > 1 && (
           <span className="text-sm font-bold" style={{ color: GOLD }}>
             ×{mult}
@@ -45,7 +50,7 @@ export function Hud({
       <div
         className={cn(HUD_PILL, "flex flex-col gap-1 py-1.5")}
         role="img"
-        aria-label={mega ? "Megastar" : `${stars} von 5 Sternen`}
+        aria-label={mega ? t("shell.hud.mega") : t("shell.stars.label", { count: stars })}
       >
         <div className="flex items-center gap-0.5">
           {[0, 1, 2, 3, 4].map((i) => (

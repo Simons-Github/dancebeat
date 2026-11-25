@@ -7,6 +7,7 @@
 import { ChoreographySchema } from "../schema";
 import type { Choreography } from "../types";
 import { choreoFromPoseTrack, type MovePlacement, type PoseTrack } from "../videoChoreo";
+import { t } from "../i18n";
 
 /** Shortest usable section. Shorter ones rarely give the two moves a choreography needs. */
 export const VIDEO_RANGE_MIN_MS = 2000;
@@ -43,21 +44,21 @@ export interface VideoRange {
   endMs: number;
 }
 
-/** German message for an unusable range, null if it is fine. `durationMs` null = not known yet. */
+/** Message (UI language) for an unusable range, null if it is fine. `durationMs` null = not known yet. */
 export function validateVideoRange(range: VideoRange, durationMs: number | null): string | null {
   const { startMs, endMs } = range;
   if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || startMs < 0) {
-    return "Bitte Start und Ende in Sekunden angeben.";
+    return t("songs.video.range.invalid");
   }
-  if (endMs <= startMs) return "Das Ende muss nach dem Start liegen.";
+  if (endMs <= startMs) return t("songs.video.range.endAfterStart");
   if (durationMs !== null && endMs > durationMs + END_TOLERANCE_MS) {
-    return "Das Ende liegt hinter dem Videoende.";
+    return t("songs.video.range.beyondEnd");
   }
   if (endMs - startMs < VIDEO_RANGE_MIN_MS) {
-    return `Der Abschnitt muss mindestens ${VIDEO_RANGE_MIN_MS / 1000} Sekunden lang sein.`;
+    return t("songs.video.range.tooShort", { seconds: VIDEO_RANGE_MIN_MS / 1000 });
   }
   if (endMs - startMs > VIDEO_RANGE_MAX_MS) {
-    return `Der Abschnitt darf höchstens ${VIDEO_RANGE_MAX_MS / 60_000} Minuten lang sein. Bitte Start oder Ende anpassen.`;
+    return t("songs.video.range.tooLong", { minutes: VIDEO_RANGE_MAX_MS / 60_000 });
   }
   return null;
 }
@@ -123,13 +124,13 @@ const round1 = (v: number) => Math.round(v * 10) / 10 + 0;
  * choreography time 0; `choreoFromPoseTrack` moves the beat phase into `offsetMs`. Adding the
  * range start to `offsetMs` puts every move back on its original video time, which (by the
  * timeline assumption) is its audio time: play time = audio − offsetMs. The song starts its audio
- * at the range start (`startOffsetMs`). Throws an Error with a German message if unusable.
+ * at the range start (`startOffsetMs`). Throws an Error with a message in the UI language if unusable.
  */
 export function buildVideoChoreo(opts: VideoImportOptions): VideoImportResult {
   const { track, range } = opts;
   const rangeError = validateVideoRange(range, opts.durationMs ?? null);
   if (rangeError) throw new Error(rangeError);
-  if (!Number.isFinite(opts.beatPhaseMs)) throw new Error("Ungültige Beat-Phase.");
+  if (!Number.isFinite(opts.beatPhaseMs)) throw new Error(t("songs.video.beatPhase.invalid"));
 
   const base = choreoFromPoseTrack(track, {
     title: opts.title,
