@@ -1,4 +1,5 @@
 import { appliesPlaybackRate } from "./audio/rate";
+import { t } from "./i18n";
 import type { Choreography, Move, Song } from "./types";
 import { MIN_MOVE_GAP_MS, poseUsableAt, suggestGoldMoves } from "./videoChoreo";
 
@@ -212,13 +213,13 @@ export const prepareSave = (working: Song, now: number): Song => ({
   choreo: { ...working.choreo, updatedAt: now },
 });
 
-/** Audio position label "mm:ss,s" (one decimal, German comma, minus sign when negative). */
+/** Audio position label "mm:ss,s" (one decimal, decimal sign of the UI language, minus when negative). */
 export function formatMoveTime(ms: number): string {
   const tenths = Math.round(Math.abs(ms) / 100);
   const sign = ms < 0 && tenths > 0 ? "−" : "";
   const min = Math.floor(tenths / 600);
   const sec = Math.floor((tenths % 600) / 10);
-  return `${sign}${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")},${tenths % 10}`;
+  return `${sign}${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}${t("editor.time.decimal")}${tenths % 10}`;
 }
 
 /** Audio position of a move: choreography time plus `offsetMs` (without latency and sync). */

@@ -18,6 +18,7 @@ import {
   type SpotifyStatus,
 } from "@/lib/audio/spotifyAuth";
 import { CREDITS, type Credit } from "@/data/credits";
+import { LANGUAGES, useT, type MessageKey } from "@/lib/i18n";
 import { mediaVolumeIgnored } from "@/lib/audio/unlock";
 import { getStorageUsage, type StorageUsage } from "@/lib/library/storage";
 import { loadLicenseTexts, type LicenseTexts as Texts } from "@/lib/licenses";
@@ -31,14 +32,14 @@ const BTN =
   "btn-pill h-12 gap-2 rounded-full px-6 text-base focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5";
 const HINT = "text-sm text-white/85";
 
-const DIFFICULTY_LABELS: Record<Difficulty, string> = {
-  leicht: "Leicht",
-  normal: "Normal",
-  schwer: "Schwer",
+const DIFFICULTY_LABELS: Record<Difficulty, MessageKey> = {
+  leicht: "settings.game.difficulty.leicht",
+  normal: "settings.game.difficulty.normal",
+  schwer: "settings.game.difficulty.schwer",
 };
 
-const formatMb = (bytes: number) =>
-  `${(bytes / (1024 * 1024)).toLocaleString("de-DE", { maximumFractionDigits: 1 })} MB`;
+const formatMb = (bytes: number, locale: string) =>
+  `${(bytes / (1024 * 1024)).toLocaleString(locale, { maximumFractionDigits: 1 })} MB`;
 
 function Section({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -77,10 +78,10 @@ function SwitchRow({
   );
 }
 
-const SPOTIFY_STATUS_LABELS: Record<SpotifyStatus, string> = {
-  disconnected: "Nicht verbunden",
-  connected: "Verbunden",
-  expired: "Anmeldung abgelaufen, bitte neu verbinden",
+const SPOTIFY_STATUS_LABELS: Record<SpotifyStatus, MessageKey> = {
+  disconnected: "settings.spotify.status.disconnected",
+  connected: "settings.spotify.status.connected",
+  expired: "settings.spotify.status.expired",
 };
 
 /**
@@ -94,6 +95,7 @@ function SpotifySettings({
   clientId: string;
   save: (p: Partial<Settings>) => void;
 }) {
+  const t = useT();
   // Read in an effect: location and sessionStorage are browser APIs.
   const [env, setEnv] = useState<{
     status: SpotifyStatus;
@@ -128,20 +130,15 @@ function SpotifySettings({
 
   return (
     <Section title="Spotify">
-      <p className={HINT}>
-        Für Spotify-Songs brauchst du Spotify Premium und eine eigene App im
-        Spotify-Developer-Dashboard. Beim Verbinden und Abspielen spricht dein Gerät direkt mit
-        Spotify (accounts.spotify.com, api.spotify.com, sdk.scdn.co); Spotify sieht dabei deine
-        IP-Adresse. Die Anmeldung gilt nur, bis du den Tab schließt.
-      </p>
+      <p className={HINT}>{t("settings.spotify.intro")}</p>
       <div className="flex flex-col gap-2">
         <Label htmlFor="spotify-client-id" className="text-base">
-          Client-ID
+          {t("settings.spotify.clientId")}
         </Label>
         <Input
           id="spotify-client-id"
           value={clientId}
-          placeholder="32 Zeichen aus dem Dashboard"
+          placeholder={t("settings.spotify.clientIdPlaceholder")}
           autoComplete="off"
           autoCapitalize="off"
           spellCheck={false}
@@ -152,27 +149,27 @@ function SpotifySettings({
         />
         {showIdError && (
           <p id="spotify-client-id-err" className="text-sm font-medium text-white">
-            Die Client-ID besteht aus 32 Zeichen (0–9, a–f).
+            {t("settings.spotify.clientIdError")}
           </p>
         )}
       </div>
       {env && (
         <>
           <div className="flex flex-col gap-1">
-            <span className="text-base font-medium">Redirect-URI für das Dashboard</span>
+            <span className="text-base font-medium">{t("settings.spotify.redirectLabel")}</span>
             <code className="break-all rounded-lg bg-black/30 px-3 py-2 text-sm">
               {env.redirectUri}
             </code>
             {!env.redirect.ok && (
               <p className="text-sm font-medium text-white">
                 {env.redirect.reason === "localhost"
-                  ? "Spotify erlaubt „localhost“ nicht. Öffne die App über 127.0.0.1 statt localhost."
-                  : "Spotify verlangt eine HTTPS-Adresse. Auf dem Handy die App über HTTPS öffnen."}
+                  ? t("settings.spotify.redirectLocalhost")
+                  : t("settings.spotify.redirectHttps")}
               </p>
             )}
           </div>
           <p role="status" className="text-base">
-            Status: {SPOTIFY_STATUS_LABELS[env.status]}
+            {t("settings.spotify.status", { status: t(SPOTIFY_STATUS_LABELS[env.status]) })}
           </p>
           <div className="flex flex-wrap gap-2">
             <Button
@@ -181,11 +178,13 @@ function SpotifySettings({
               onClick={connect}
               className={BTN}
             >
-              {env.status === "disconnected" ? "Mit Spotify verbinden" : "Neu verbinden"}
+              {env.status === "disconnected"
+                ? t("settings.spotify.connect")
+                : t("settings.spotify.reconnect")}
             </Button>
             {env.status !== "disconnected" && (
               <Button type="button" variant="secondary" onClick={disconnect} className={BTN}>
-                Trennen
+                {t("settings.spotify.disconnect")}
               </Button>
             )}
           </div>
@@ -202,6 +201,7 @@ function SpotifySettings({
 
 /** Credits with their links; a link names its host and opens only on tap (no fetch on render). */
 export function CreditList({ credits }: { credits: readonly Credit[] }) {
+  const t = useT();
   return (
     <>
       {credits.map((c) => (
@@ -230,7 +230,7 @@ export function CreditList({ credits }: { credits: readonly Credit[] }) {
         </div>
       ))}
       {credits.some((c) => c.links.length > 0) && (
-        <p className={HINT}>Links öffnen sich erst beim Tippen in einem neuen Tab.</p>
+        <p className={HINT}>{t("settings.credits.linksNote")}</p>
       )}
     </>
   );
@@ -240,6 +240,7 @@ const LICENSE_PRE = "whitespace-pre-wrap break-words rounded-lg bg-black/30 p-3 
 
 /** Full license texts, loaded on first open (lazy chunks plus licenses.json from our origin). */
 export function LicenseTexts() {
+  const t = useT();
   const [texts, setTexts] = useState<Texts | null>(null);
   const [started, setStarted] = useState(false);
 
@@ -252,19 +253,19 @@ export function LicenseTexts() {
   return (
     <details onToggle={(e) => onToggle(e.currentTarget.open)} className="flex flex-col gap-2">
       <summary className="min-h-12 cursor-pointer content-center text-base font-medium">
-        Lizenztexte
+        {t("settings.licenses.summary")}
       </summary>
       {!texts ? (
-        <p className={HINT}>Wird geladen …</p>
+        <p className={HINT}>{t("settings.licenses.loading")}</p>
       ) : (
         <div className="flex flex-col gap-3">
-          <h3 className="text-base font-medium">Apache License 2.0 (MediaPipe, Pose-Modelle)</h3>
+          <h3 className="text-base font-medium">{t("settings.licenses.apache")}</h3>
           <pre className={LICENSE_PRE}>{texts.apache}</pre>
-          <h3 className="text-base font-medium">SIL Open Font License 1.1 (Bricolage Grotesque)</h3>
+          <h3 className="text-base font-medium">{t("settings.licenses.font")}</h3>
           <pre className={LICENSE_PRE}>{texts.font}</pre>
-          <h3 className="text-base font-medium">Mitgelieferte npm-Pakete</h3>
+          <h3 className="text-base font-medium">{t("settings.licenses.bundled")}</h3>
           {texts.bundled === null ? (
-            <p className={HINT}>Die Paketliste entsteht erst beim Produktions-Build.</p>
+            <p className={HINT}>{t("settings.licenses.bundledNone")}</p>
           ) : (
             texts.bundled.map((p) => (
               <div key={`${p.name}@${p.version}`} className="flex flex-col gap-1">
@@ -284,6 +285,7 @@ export function LicenseTexts() {
 
 /** Settings screen: all values persist immediately through `useSettings` (localStorage). */
 export function SettingsScreen() {
+  const t = useT();
   const [settings, save] = useSettings();
   // Sliders show their live value while dragging and write only on release.
   const [volume, setVolume] = useState<number | null>(null);
@@ -321,20 +323,38 @@ export function SettingsScreen() {
       <div className="mx-auto flex w-full max-w-160 flex-col gap-4 pb-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="font-title chrome-text chrome-glow min-w-0 pb-[0.1em] text-4xl sm:text-5xl">
-            Einstellungen
+            {t("settings.title")}
           </h1>
           <Button asChild size="lg" variant="secondary" className={BTN}>
             <Link to="/">
               <ArrowLeft aria-hidden />
-              Zurück
+              {t("common.back")}
             </Link>
           </Button>
         </div>
 
-        <Section title="Spiel">
+        <Section title={t("common.language")}>
+          <div role="group" aria-label={t("common.language")} className="flex gap-2">
+            {LANGUAGES.map((l) => (
+              <Button
+                key={l}
+                type="button"
+                lang={l}
+                aria-pressed={settings.language === l}
+                variant={settings.language === l ? "default" : "secondary"}
+                onClick={() => save({ language: l })}
+                className={cn(BTN, "flex-1 px-2")}
+              >
+                {t(`common.language.${l}`)}
+              </Button>
+            ))}
+          </div>
+        </Section>
+
+        <Section title={t("settings.game.title")}>
           <div className="flex flex-col gap-2">
             <span id="difficulty-label" className="text-base font-medium">
-              Schwierigkeit
+              {t("settings.game.difficulty")}
             </span>
             <div role="group" aria-labelledby="difficulty-label" className="flex gap-2">
               {DIFFICULTIES.map((d) => (
@@ -346,42 +366,39 @@ export function SettingsScreen() {
                   onClick={() => save({ difficulty: d })}
                   className={cn(BTN, "flex-1 px-2")}
                 >
-                  {DIFFICULTY_LABELS[d]}
+                  {t(DIFFICULTY_LABELS[d])}
                 </Button>
               ))}
             </div>
-            <p className={HINT}>
-              Verändert, wie genau deine Bewegung zur Vorlage passen muss: leicht verzeiht mehr,
-              schwer weniger.
-            </p>
+            <p className={HINT}>{t("settings.game.difficultyHint")}</p>
           </div>
           <SwitchRow
             id="auto-start"
-            label="Automatisch starten"
-            hint="Die Aufstellhilfe startet das Spiel, sobald du erkannt wirst."
+            label={t("settings.game.autoStart.label")}
+            hint={t("settings.game.autoStart.hint")}
             checked={settings.autoStart}
             onChange={(autoStart) => save({ autoStart })}
           />
           <SwitchRow
             id="haptics"
-            label="Vibration"
-            hint="Kurzes Vibrieren bei PERFECT und getroffenen Gold Moves. Nicht auf dem iPhone verfügbar."
+            label={t("settings.game.haptics.label")}
+            hint={t("settings.game.haptics.hint")}
             checked={settings.haptics}
             onChange={(haptics) => save({ haptics })}
           />
         </Section>
 
-        <Section title="Ton">
+        <Section title={t("settings.audio.title")}>
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-base font-medium">Lautstärke</span>
+              <span className="text-base font-medium">{t("settings.audio.volume")}</span>
               <span aria-hidden className="text-base tabular-nums">
-                {shownVolume} %
+                {t("settings.audio.percent", { value: shownVolume })}
               </span>
             </div>
             <Slider
-              aria-label="Lautstärke"
-              aria-valuetext={`${shownVolume} %`}
+              aria-label={t("settings.audio.volume")}
+              aria-valuetext={t("settings.audio.percent", { value: shownVolume })}
               min={0}
               max={100}
               step={5}
@@ -394,22 +411,17 @@ export function SettingsScreen() {
                 setVolume(null);
               }}
             />
-            {volumeIgnored && (
-              <p className={HINT}>
-                Auf diesem Gerät regelt der Regler nur eigene Audiodateien. Bei Audio-URLs und
-                YouTube gelten die Lautstärketasten.
-              </p>
-            )}
+            {volumeIgnored && <p className={HINT}>{t("settings.audio.volumeIgnoredHint")}</p>}
           </div>
           <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between gap-3">
-              <span className="text-base font-medium">Latenz-Ausgleich</span>
+              <span className="text-base font-medium">{t("settings.audio.latency")}</span>
               <span aria-hidden className="text-base tabular-nums">
                 {formatOffsetMs(shownLatency)}
               </span>
             </div>
             <Slider
-              aria-label="Latenz-Ausgleich"
+              aria-label={t("settings.audio.latency")}
               aria-valuetext={formatOffsetMs(shownLatency)}
               min={LATENCY_MIN}
               max={LATENCY_MAX}
@@ -423,10 +435,7 @@ export function SettingsScreen() {
                 setLatency(null);
               }}
             />
-            <p className={HINT}>
-              Positiv: die Piktogramme kommen später. Das hilft, wenn Bluetooth-Kopfhörer den Ton
-              verzögern. Ein Sync-Test, der den Wert misst, folgt später.
-            </p>
+            <p className={HINT}>{t("settings.audio.latencyHint")}</p>
             <Button
               type="button"
               variant="secondary"
@@ -437,40 +446,40 @@ export function SettingsScreen() {
               }}
               className={cn(BTN, "self-start")}
             >
-              Zurücksetzen
+              {t("settings.audio.latencyReset")}
             </Button>
           </div>
         </Section>
 
-        <Section title="Anzeige">
+        <Section title={t("settings.display.title")}>
           <SwitchRow
             id="skeleton"
-            label="Skelett anzeigen"
-            hint="Zeichnet deine erkannten Gelenke über das Kamerabild."
+            label={t("settings.display.skeleton.label")}
+            hint={t("settings.display.skeleton.hint")}
             checked={settings.skeleton}
             onChange={(skeleton) => save({ skeleton })}
           />
           <SwitchRow
             id="beat-pulse"
-            label="Beat-Puls am Rand"
-            hint="Der Bildschirmrand pulsiert im Takt der Musik."
+            label={t("settings.display.beatPulse.label")}
+            hint={t("settings.display.beatPulse.hint")}
             checked={settings.beatPulse}
             onChange={(beatPulse) => save({ beatPulse })}
           />
           <SwitchRow
             id="dance-video"
-            label="Tanzvideo zeigen"
-            hint="Bei Songs mit Tanzvideo läuft das Video stumm statt der Strichfigur mit."
+            label={t("settings.display.danceVideo.label")}
+            hint={t("settings.display.danceVideo.hint")}
             checked={settings.danceVideo}
             onChange={(danceVideo) => save({ danceVideo })}
           />
           <SwitchRow
             id="dance-video-large"
-            label="Tanzvideo groß"
+            label={t("settings.display.danceVideoLarge.label")}
             hint={
               settings.danceVideo
-                ? "Zeigt das Tanzvideo im Spiel größer; es verdeckt dann mehr vom Kamerabild."
-                : "Nur mit „Tanzvideo zeigen“."
+                ? t("settings.display.danceVideoLarge.hint")
+                : t("settings.display.danceVideoLarge.hintOff")
             }
             checked={settings.danceVideoLarge}
             onChange={(danceVideoLarge) => save({ danceVideoLarge })}
@@ -478,17 +487,15 @@ export function SettingsScreen() {
           />
           <SwitchRow
             id="mirror"
-            label="Kamerabild spiegeln"
-            hint="Nur die Anzeige wird gespiegelt, die Bewertung ändert sich nicht."
+            label={t("settings.display.mirror.label")}
+            hint={t("settings.display.mirror.hint")}
             checked={settings.mirror}
             onChange={(mirror) => save({ mirror })}
           />
         </Section>
 
-        <Section title="Kamera">
-          <p className="text-base">
-            Die Kamera wählst du in der Aufstellhilfe, bevor ein Song startet.
-          </p>
+        <Section title={t("settings.camera.title")}>
+          <p className="text-base">{t("settings.camera.hint")}</p>
           {settings.cameraId && (
             <Button
               type="button"
@@ -496,25 +503,28 @@ export function SettingsScreen() {
               onClick={() => save({ cameraId: "" })}
               className={cn(BTN, "self-start")}
             >
-              Gespeicherte Kamera vergessen
+              {t("settings.camera.forget")}
             </Button>
           )}
         </Section>
 
         <SpotifySettings clientId={settings.spotifyClientId} save={save} />
 
-        <Section title="Speicher">
+        <Section title={t("settings.storage.title")}>
           <p className="text-base">
             {usage === undefined
-              ? "Wird ermittelt …"
+              ? t("settings.storage.loading")
               : usage === null
-                ? "Nicht verfügbar"
-                : `${formatMb(usage.usageBytes)} belegt von ${formatMb(usage.quotaBytes)}`}
+                ? t("settings.storage.unavailable")
+                : t("settings.storage.usage", {
+                    used: formatMb(usage.usageBytes, t.locale),
+                    quota: formatMb(usage.quotaBytes, t.locale),
+                  })}
           </p>
-          <p className={HINT}>Songs und Audiodateien liegen nur auf diesem Gerät.</p>
+          <p className={HINT}>{t("settings.storage.hint")}</p>
         </Section>
 
-        <Section title="Über und Credits">
+        <Section title={t("settings.about.title")}>
           <CreditList credits={CREDITS} />
           <LicenseTexts />
         </Section>

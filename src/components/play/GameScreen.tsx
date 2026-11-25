@@ -46,6 +46,7 @@ import {
   type PlayMode,
 } from "@/lib/motion";
 import { vibrateFor } from "@/lib/haptics";
+import { useT } from "@/lib/i18n";
 import { MOVE_WINDOW_MS } from "@/lib/scorer";
 import { computeAngles } from "@/lib/pose";
 import { getSettings, useSettings } from "@/lib/settings";
@@ -91,6 +92,7 @@ export function GameScreen({
   sim: SimOptions | null;
   mode?: PlayMode;
 }) {
+  const t = useT();
   const motion = mode === "motion";
   const sim = motion ? null : simOption;
   const noCamera = motion || !!sim;
@@ -414,7 +416,7 @@ export function GameScreen({
     <Button asChild size="lg" className={GAME_BTN}>
       <Link to="/setup/$songId" params={{ songId: song.id }}>
         <ArrowLeft aria-hidden />
-        Zur Aufstellhilfe
+        {t("shell.game.toSetup")}
       </Link>
     </Button>
   );
@@ -422,7 +424,7 @@ export function GameScreen({
     <Button asChild size="lg" variant="secondary" className={GAME_BTN}>
       <Link to="/">
         <Home aria-hidden />
-        Zur Bibliothek
+        {t("shell.game.toLibrary")}
       </Link>
     </Button>
   );
@@ -433,10 +435,10 @@ export function GameScreen({
       <MessageOverlay
         title={
           startFailedRef.current
-            ? "Die Musik startet nicht"
+            ? t("shell.game.musicFailedStart")
             : startedRef.current
-              ? "Die Musik ist abgebrochen"
-              : "Die Musik konnte nicht geladen werden"
+              ? t("shell.game.musicAborted")
+              : t("shell.game.musicFailedLoad")
         }
         actions={
           song.source.type === "spotify" ? (
@@ -445,7 +447,7 @@ export function GameScreen({
               <Button asChild size="lg" className={GAME_BTN}>
                 <Link to="/settings">
                   <Settings aria-hidden />
-                  Zu den Einstellungen
+                  {t("shell.spotify.toSettings")}
                 </Link>
               </Button>
               {toLibrary}
@@ -460,7 +462,7 @@ export function GameScreen({
     );
   } else if (!noCamera && camera.error && phase !== "paused") {
     overlay = (
-      <MessageOverlay title="Ohne Kamera geht es nicht" actions={backToSetup}>
+      <MessageOverlay title={t("shell.game.cameraRequired")} actions={backToSetup}>
         <CameraErrorPanel error={camera.error} onRetry={() => setRetryKey((k) => k + 1)} />
       </MessageOverlay>
     );
@@ -468,7 +470,7 @@ export function GameScreen({
     overlay = (
       <PreparingOverlay
         onCancel={cancel}
-        {...(motion ? { label: "Musik wird vorbereitet …" } : {})}
+        {...(motion ? { label: t("shell.play.preparingMotion") } : {})}
       />
     );
   } else if (phase === "countdown" && game.count !== null) {
@@ -511,7 +513,7 @@ export function GameScreen({
     <main
       className="fixed inset-0 z-50 select-none overflow-hidden bg-ink text-white"
       style={style}
-      aria-label={`Spiel: ${song.title}`}
+      aria-label={t("shell.game.aria", { title: song.title })}
     >
       {/* Camera picture (mirrored like a mirror) with skeleton. */}
       <div className={cn("absolute inset-0", settings.mirror && "-scale-x-100")}>
@@ -520,7 +522,7 @@ export function GameScreen({
             ref={camera.videoRef}
             muted
             playsInline
-            aria-label="Live-Bild deiner Kamera"
+            aria-label={t("shell.game.cameraFeed")}
             className="size-full object-cover"
           />
         )}
@@ -563,7 +565,7 @@ export function GameScreen({
           <Button
             size="icon"
             variant="secondary"
-            aria-label="Pause"
+            aria-label={t("shell.game.pause")}
             disabled={phase !== "playing" && phase !== "countdown"}
             onClick={() => controllerRef.current?.pause("user")}
             className="bg-(--hud-scrim) size-12 shrink-0 rounded-full border border-white/15 text-white shadow-pop focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-6"
@@ -582,7 +584,7 @@ export function GameScreen({
               muted
               playsInline
               preload="auto"
-              aria-label="Tanzvideo"
+              aria-label={t("shell.game.danceVideo")}
               // Broken or unplayable: back to the coach (one state change).
               onError={onVideoError}
               // Large (setting): full width in portrait, about the full area height in landscape.
@@ -596,7 +598,7 @@ export function GameScreen({
           ) : (
             <canvas
               ref={coachRef}
-              aria-label="Coach"
+              aria-label={t("shell.game.coach")}
               role="img"
               style={COACH_SIZE_VARS}
               className="absolute bottom-0 left-0 size-(--coach-size) landscape:size-(--coach-size-landscape)"
@@ -607,16 +609,14 @@ export function GameScreen({
               role="status"
               className="bg-(--hud-scrim) absolute inset-x-0 top-8 mx-auto w-fit max-w-full rounded-2xl px-4 py-2 text-center text-base font-bold"
             >
-              {motion
-                ? "Keine Bewegung erkannt – Handy in der Hand halten."
-                : "Wir sehen dich nicht. Stell dich wieder ganz ins Bild."}
+              {motion ? t("shell.game.bodyMissingMotion") : t("shell.game.bodyMissingCamera")}
             </p>
           )}
           <RatingPopup judgement={scoring.last} />
           {isYouTube && (
             <div
               ref={ytHostRef}
-              aria-label="YouTube-Video"
+              aria-label={t("shell.game.youtube")}
               className={cn(
                 "overflow-hidden rounded-2xl",
                 // Blocked: large in the middle of the screen, above the layer and tappable; the tap
@@ -637,7 +637,7 @@ export function GameScreen({
       )}
       {motion && (
         <p className="absolute bottom-2 right-3 z-20 rounded-full bg-black/50 px-3 py-1 text-xs font-bold text-white/90">
-          Bewegungsmodus
+          {t("shell.game.motionMode")}
         </p>
       )}
       {overlay}

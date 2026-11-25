@@ -20,6 +20,7 @@ import {
 } from "@/lib/editorPreview";
 import { createVideoFollower } from "@/lib/game/videoFollower";
 import { videoTargetMs } from "@/lib/game/videoSync";
+import { t as tr, useT } from "@/lib/i18n";
 import { useSettings } from "@/lib/settings";
 import { resumeSfx, setSfxVolume, sfx } from "@/lib/sfx";
 import type { Song } from "@/lib/types";
@@ -27,9 +28,6 @@ import { cn } from "@/lib/utils";
 import { BTN, Card, ERROR, HINT } from "./parts";
 
 type Phase = "idle" | "starting" | "playing";
-
-/** Shown before the first playback. */
-const NO_TIME = "--:--,-";
 
 /**
  * Audio preview of the editor (stage 8d-2b). Plays the working copy's song from its start offset
@@ -69,6 +67,7 @@ export function EditorPreview({
   /** The video failed to load or play; the parent drops the URL. */
   onVideoError: () => void;
 }) {
+  const t = useT();
   const id = useId();
   const [settings] = useSettings();
   const [phase, setPhase] = useState<Phase>("idle");
@@ -122,7 +121,7 @@ export function EditorPreview({
 
   useEffect(() => {
     mountedRef.current = true;
-    if (timeRef.current) timeRef.current.textContent = NO_TIME;
+    if (timeRef.current) timeRef.current.textContent = tr("editor.preview.noTime");
     return () => {
       mountedRef.current = false;
     };
@@ -238,8 +237,8 @@ export function EditorPreview({
           !(e instanceof PlayRefusedError) && e instanceof Error
             ? e.message
             : isYouTube
-              ? "Der Start wurde blockiert. Tippe direkt auf das Video."
-              : "Die Musik ließ sich nicht starten. Tippe noch einmal auf „Abspielen“.",
+              ? tr("editor.preview.startBlockedYoutube")
+              : tr("editor.preview.startFailed"),
         );
       });
   };
@@ -252,11 +251,11 @@ export function EditorPreview({
 
   const busy = phase === "starting";
   return (
-    <Card title="Vorschau">
+    <Card title={t("editor.preview.title")}>
       {isYouTube && (
         <div
           ref={ytHostRef}
-          aria-label="YouTube-Video"
+          aria-label={t("editor.preview.youtube")}
           className="aspect-video min-h-50 w-full min-w-50 max-w-90 overflow-hidden rounded-2xl bg-black"
         />
       )}
@@ -267,7 +266,7 @@ export function EditorPreview({
           muted
           playsInline
           preload="auto"
-          aria-label="Tanzvideo"
+          aria-label={t("editor.preview.video")}
           // Broken or unplayable: hidden (one state change in the parent).
           onError={onVideoError}
           className="aspect-video min-h-50 w-full min-w-50 max-w-90 rounded-2xl bg-black object-contain"
@@ -276,19 +275,19 @@ export function EditorPreview({
       <PrivacyNote source={song.source} camera={false} />
       {audio.state === "error" && (
         <p role="alert" className={ERROR}>
-          Die Musik konnte nicht geladen werden. {audio.error}
+          {t("editor.preview.loadError", { error: audio.error })}
         </p>
       )}
       <div className="flex flex-wrap items-center gap-3">
         {phase !== "idle" ? (
           <Button size="lg" variant="secondary" onClick={stop} className={BTN}>
             <Square aria-hidden />
-            Stopp
+            {t("editor.preview.stop")}
           </Button>
         ) : (
           <Button size="lg" disabled={!ready || busy} onClick={() => start()} className={BTN}>
             <Play aria-hidden />
-            {audio.state === "loading" ? "Musik lädt …" : "Abspielen"}
+            {audio.state === "loading" ? t("editor.preview.loading") : t("editor.preview.play")}
           </Button>
         )}
         <Button
@@ -299,10 +298,10 @@ export function EditorPreview({
           className={BTN}
         >
           <SkipForward aria-hidden />
-          Ab Move {selected + 1} abspielen
+          {t("editor.preview.playFrom", { n: selected + 1 })}
         </Button>
         <p className="text-lg">
-          Musikzeit:{" "}
+          {t("editor.preview.musicTime")}{" "}
           <span ref={timeRef} data-testid="preview-time" className="font-medium tabular-nums" />
         </p>
       </div>
@@ -316,22 +315,18 @@ export function EditorPreview({
         <Button asChild size="lg" variant="secondary" className={cn(BTN, "self-start")}>
           <Link to="/settings">
             <Settings aria-hidden />
-            Zu den Einstellungen
+            {t("editor.preview.toSettings")}
           </Link>
         </Button>
       )}
-      {ended && <p className="text-base">Der Song ist zu Ende.</p>}
+      {ended && <p className="text-base">{t("editor.preview.ended")}</p>}
       <div className="flex items-center justify-between gap-4">
         <label htmlFor={`${id}-click`} className="text-lg font-medium">
-          Klick bei jedem Move
+          {t("editor.preview.click")}
         </label>
         <Switch id={`${id}-click`} checked={click} onCheckedChange={onClickChange} />
       </div>
-      <p className={HINT}>
-        Die Markierung kommt wie im Spiel, mit deiner Verzögerung und dem Sync-Offset; der Klick
-        sitzt direkt auf der Musik. Die Musikzeit entspricht den Zeiten der Moves. „Ab Move“ startet
-        zwei Beats vorher.
-      </p>
+      <p className={HINT}>{t("editor.preview.hint")}</p>
     </Card>
   );
 }

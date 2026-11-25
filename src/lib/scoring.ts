@@ -1,8 +1,10 @@
 import type { AngleKey, Angles, Rating } from "./types";
 import { ARM_KEYS, angleDiff } from "./pose";
 
-export const DIFFICULTIES = ["leicht", "normal", "schwer"] as const;
-export type Difficulty = (typeof DIFFICULTIES)[number];
+import { DIFFICULTIES, type Difficulty } from "./difficulty";
+import { t } from "./i18n";
+
+export { DIFFICULTIES, type Difficulty };
 export const TOLERANCE: Record<Difficulty, number> = { leicht: 1.3, normal: 1, schwer: 0.8 };
 export const POINTS: Record<Rating, number> = {
   PERFECT: 1000,
@@ -93,7 +95,18 @@ export function starsFor(accuracy: number, refMax: number) {
   return { stars, mega: r >= MEGA_THRESHOLD, ratio: r };
 }
 
+/** Rank headline of the result screen, in the current language (call at render time). */
 export function rankTitle(stars: number, mega: boolean) {
-  if (mega) return "MEGASTAR";
-  return ["NOCH ÜBEN", "ANFÄNGER", "GROOVER", "TÄNZER", "PROFI", "SUPERSTAR"][stars];
+  if (mega) return t("shell.rank.mega");
+  const key = (
+    [
+      "shell.rank.0",
+      "shell.rank.1",
+      "shell.rank.2",
+      "shell.rank.3",
+      "shell.rank.4",
+      "shell.rank.5",
+    ] as const
+  )[stars];
+  return key ? t(key) : undefined;
 }

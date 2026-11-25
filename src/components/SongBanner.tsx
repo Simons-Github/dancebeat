@@ -9,6 +9,7 @@ import type { SongDetailsPatch } from "@/hooks/useSongLibrary";
 import { Sparkle } from "@/components/Sparkle";
 import type { Song } from "@/lib/types";
 import { SPRING } from "@/theme";
+import { useT } from "@/lib/i18n";
 
 interface SongBannerProps {
   song: Song | undefined;
@@ -36,6 +37,7 @@ export function SongBanner({
   onAdded,
   loading = false,
 }: SongBannerProps) {
+  const t = useT();
   const sectionRef = useRef<HTMLElement>(null);
   const [refocus, setRefocus] = useState(0);
 
@@ -54,7 +56,7 @@ export function SongBanner({
   return (
     <section
       ref={sectionRef}
-      aria-label="Ausgewählter Song"
+      aria-label={t("shell.banner.aria")}
       className="flex shrink-0 flex-col gap-3 text-paper landscape:w-[clamp(15rem,34vw,30rem)] landscape:justify-end"
     >
       <div aria-live="polite" className="min-w-0 pb-1">
@@ -69,7 +71,7 @@ export function SongBanner({
           >
             {/* Chrome title; bottom and right padding keep descenders inside the clamp's clip box. */}
             <p className="font-title chrome-text chrome-glow line-clamp-2 pr-[0.1em] pb-[0.14em] text-[clamp(2.5rem,12vw,5.5rem)] leading-[1.02] break-words landscape:text-[clamp(2rem,5.5vw,5.5rem)]">
-              {loading ? "\u00a0" : (song?.title ?? "Kein Song gewählt")}
+              {loading ? "\u00a0" : (song?.title ?? t("shell.banner.noSong"))}
             </p>
             {/* The one ambient motion: a glint on the title's top left corner. */}
             {!loading && song && (
@@ -86,12 +88,12 @@ export function SongBanner({
           className="btn-pill h-16 rounded-full px-10 text-2xl focus-visible:ring-4 focus-visible:ring-gold"
         >
           <Link to="/setup/$songId" params={{ songId: song.id }}>
-            Los geht's
+            {t("shell.banner.go")}
           </Link>
         </Button>
       ) : (
         <Button size="lg" disabled className="btn-pill h-16 rounded-full px-10 text-2xl">
-          Los geht's
+          {t("shell.banner.go")}
         </Button>
       )}
       <div className="flex items-center gap-3">

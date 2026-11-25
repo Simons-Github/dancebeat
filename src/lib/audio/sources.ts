@@ -4,6 +4,7 @@ import { getSpotifyToken, SpotifyAuthError } from "./spotifyAuth";
 import { effectivePlaybackRate } from "./rate";
 import { musicGainFor, sharedAudioContext } from "./unlock";
 import type { Song } from "../types";
+import { t, type MessageKey } from "../i18n";
 
 export { PlayRefusedError };
 
@@ -118,9 +119,7 @@ class ElementSource implements AudioSource {
     this.clock.setRate(rate);
   }
   private errorMessage() {
-    return this.type === "url"
-      ? "Die Audio-URL konnte nicht geladen werden. Prüfe den Link und ob die Datei öffentlich erreichbar ist."
-      : "Die Audiodatei konnte nicht dekodiert werden. Bitte MP3, M4A, WAV oder OGG verwenden.";
+    return this.type === "url" ? t("songs.audio.urlLoadFailed") : t("songs.audio.decodeFailed");
   }
   async load() {
     const url = await this.getUrl();
@@ -163,9 +162,7 @@ class ElementSource implements AudioSource {
       if (this.destroyed) return;
       clearInterval(this.timer);
       this.clock.sync(el.currentTime * 1000, false, true);
-      this.errorCb(
-        this.type === "url" ? "Die Verbindung zur Musik ist abgebrochen." : this.errorMessage(),
-      );
+      this.errorCb(this.type === "url" ? t("songs.audio.connectionLost") : this.errorMessage());
     };
     // Buffering: `paused` stays false, so the clock must be held explicitly.
     el.onwaiting = () => {
@@ -298,7 +295,7 @@ function loadYT() {
       // Do not cache the failure: the next attempt starts with a fresh script tag.
       ytReady = null;
       s.remove();
-      rej(new Error("YouTube konnte nicht geladen werden. Bist du online?"));
+      rej(new Error(t("songs.audio.youtube.loadOffline")));
     };
     window.onYouTubeIframeAPIReady = () => {
       clearTimeout(timeout);
@@ -393,8 +390,8 @@ class YouTubeSource implements AudioSource {
   private errorText(api: typeof YT, code: YT.PlayerError) {
     return code === api.PlayerError.EmbeddingNotAllowed ||
       code === api.PlayerError.EmbeddingNotAllowed2
-      ? "Dieses Video darf nicht eingebettet werden."
-      : "YouTube-Video nicht verfügbar.";
+      ? t("songs.audio.youtube.noEmbed")
+      : t("songs.audio.youtube.unavailable");
   }
   async load() {
     await loadYT();
@@ -402,8 +399,7 @@ class YouTubeSource implements AudioSource {
     if (this.destroyed) return;
     const api = window.YT;
     const el = this.host.firstChild;
-    if (!api || !(el instanceof HTMLElement))
-      throw new Error("YouTube konnte nicht geladen werden.");
+    if (!api || !(el instanceof HTMLElement)) throw new Error(t("songs.audio.youtube.load"));
     this.api = api;
     await new Promise<void>((res, rej) => {
       const settle = () => {
@@ -417,7 +413,7 @@ class YouTubeSource implements AudioSource {
       };
       this.loadTimer = window.setTimeout(() => {
         settle();
-        rej(new Error("YouTube-Video lädt nicht. Prüfe Link und Verbindung."));
+        rej(new Error(t("songs.audio.youtube.videoTimeout")));
       }, YT_LOAD_TIMEOUT_MS);
       this.player = new api.Player(el, {
         videoId: this.videoId,
@@ -466,7 +462,7 @@ class YouTubeSource implements AudioSource {
   }
   private rateErrorText() {
     const shown = String(this.rate).replace(".", ",");
-    return `Dieses Video lässt sich nicht im Tempo ${shown}× abspielen. Stelle im Editor 1× ein.`;
+    return t("songs.audio.youtube.rate", { rate: shown });
   }
   /**
    * The player confirms rate changes asynchronously (`getPlaybackRate()` is cached). A different
@@ -564,7 +560,7 @@ class YouTubeSource implements AudioSource {
     const api = this.api;
     if (this.destroyed || !player || !api || !this.ready)
       // Transient (not ready yet): a later tap may start it, so it counts as refused.
-      return Promise.reject(new PlayRefusedError("YouTube-Player ist noch nicht geladen."));
+      return Promise.reject(new PlayRefusedError(t("songs.audio.youtube.notLoaded")));
     if (this.rateFailed) return Promise.reject(new Error(this.rateErrorText()));
     if (this.pending) return this.pending.promise;
     if (this.ytState === api.PlayerState.PLAYING) {
@@ -597,9 +593,7 @@ class YouTubeSource implements AudioSource {
           // Buffering keeps going: should it start after all, stateChanged reports an external
           // start and the game leaves "blocked" by itself.
           if (s !== api.PlayerState.BUFFERING) player.pauseVideo();
-          this.settlePlay(
-            new PlayRefusedError("YouTube hat den Start blockiert. Tippe zum Starten."),
-          );
+          this.settlePlay(new PlayRefusedError(t("songs.audio.youtube.blocked")));
         }, YT_PLAY_TIMEOUT_MS),
       );
     }
@@ -608,7 +602,7 @@ class YouTubeSource implements AudioSource {
   pause() {
     this.active = false;
     clearInterval(this.resync);
-    this.settlePlay(new Error("Wiedergabe angehalten."));
+    this.settlePlay(new Error(t("songs.audio.pausedPlay")));
     if (!this.player) return;
     this.player.pauseVideo();
     this.clock.sync(this.currentMs(), false, true);
@@ -657,7 +651,7 @@ class YouTubeSource implements AudioSource {
   destroy() {
     this.destroyed = true;
     clearInterval(this.resync);
-    this.settlePlay(new Error("Wiedergabe beendet."));
+    this.settlePlay(new Error(t("songs.audio.endedPlay")));
     this.settleLoad?.();
     try {
       this.player?.destroy();
@@ -696,7 +690,7 @@ function loadSpotifySdk() {
       // Do not cache the failure: the next attempt starts with a fresh script tag.
       spotifyReady = null;
       s.remove();
-      rej(new Error("Spotify konnte nicht geladen werden. Bist du online?"));
+      rej(new Error(t("songs.audio.spotify.loadOffline")));
     };
     window.onSpotifyWebPlaybackSDKReady = () => {
       clearTimeout(timeout);
@@ -710,14 +704,12 @@ function loadSpotifySdk() {
   return spotifyReady;
 }
 
-const SPOTIFY_ERRORS: Record<Spotify.ErrorTypes, string> = {
-  account_error: "Spotify Premium wird benötigt, um im Browser abzuspielen.",
-  authentication_error: "Spotify-Anmeldung abgelaufen. Bitte in den Einstellungen neu verbinden.",
-  initialization_error: "Dein Browser unterstützt Spotify-Wiedergabe nicht.",
-  playback_error: "Spotify konnte den Song nicht abspielen.",
+const SPOTIFY_ERRORS: Record<Spotify.ErrorTypes, MessageKey> = {
+  account_error: "songs.audio.spotify.accountError",
+  authentication_error: "songs.audio.spotify.authError",
+  initialization_error: "songs.audio.spotify.initError",
+  playback_error: "songs.audio.spotify.playbackError",
 };
-
-const SPOTIFY_REFUSED = "Spotify hat den Start blockiert. Tippe zum Starten.";
 
 /**
  * Position of a player state now: `timestamp` is the wall-clock time (epoch ms) of `position`,
@@ -785,7 +777,7 @@ class SharedSpotifyPlayer {
   private async connect(volume: number) {
     await loadSpotifySdk();
     const sdk = window.Spotify;
-    if (!sdk?.Player) throw new Error("Spotify konnte nicht geladen werden.");
+    if (!sdk?.Player) throw new Error(t("songs.audio.spotify.load"));
     const player = new sdk.Player({
       name: "DanceBeat",
       // The SDK asks again before the token expires; a failed refresh surfaces as
@@ -805,7 +797,7 @@ class SharedSpotifyPlayer {
         rej(new Error(message));
       };
       timer = window.setTimeout(
-        () => reject("Spotify-Player lädt nicht. Prüfe deine Verbindung."),
+        () => reject(t("songs.audio.spotify.playerTimeout")),
         SPOTIFY_READY_TIMEOUT_MS,
       );
       player.addListener("ready", ({ device_id }: Spotify.WebPlaybackInstance) => {
@@ -828,7 +820,7 @@ class SharedSpotifyPlayer {
       (Object.keys(SPOTIFY_ERRORS) as Spotify.ErrorTypes[]).forEach((type) => {
         player.addListener(type, () => {
           if (this.player !== player) return;
-          if (!loaded) reject(SPOTIFY_ERRORS[type]);
+          if (!loaded) reject(t(SPOTIFY_ERRORS[type]));
           else this.owner?.playerError(type);
         });
       });
@@ -838,7 +830,7 @@ class SharedSpotifyPlayer {
       player.addListener("player_state_changed", (s: Spotify.PlaybackState | null) => {
         if (this.player === player) this.owner?.stateChanged(s);
       });
-      const notConnected = () => reject("Spotify-Player konnte sich nicht verbinden.");
+      const notConnected = () => reject(t("songs.audio.spotify.connectFailed"));
       player.connect().then((ok) => {
         if (!ok) notConnected();
       }, notConnected);
@@ -939,10 +931,10 @@ class SpotifySource implements AudioSource, SpotifyOwner {
   playerNotReady() {
     if (this.destroyed || !this.ready) return;
     this.ready = false;
-    this.fail("Die Verbindung zu Spotify ist abgebrochen.");
+    this.fail(t("songs.audio.spotify.connectionLost"));
   }
   playerError(type: Spotify.ErrorTypes) {
-    if (!this.destroyed) this.fail(SPOTIFY_ERRORS[type]);
+    if (!this.destroyed) this.fail(t(SPOTIFY_ERRORS[type]));
   }
   /**
    * The browser refused to start audio without a gesture: a tap can retry it. Without a pending
@@ -955,7 +947,7 @@ class SpotifySource implements AudioSource, SpotifyOwner {
     this.active = false;
     clearInterval(this.poll);
     this.clock.sync(this.clock.get(), false, true);
-    this.settlePlay(new PlayRefusedError(SPOTIFY_REFUSED));
+    this.settlePlay(new PlayRefusedError(t("songs.audio.spotify.blocked")));
     if (wasActive) this.externalPauseCb();
   }
   /**
@@ -1067,8 +1059,8 @@ class SpotifySource implements AudioSource, SpotifyOwner {
       // (never loaded, load failed, connection lost) tapping cannot help: a real error.
       return Promise.reject(
         this.loading
-          ? new PlayRefusedError("Spotify-Player ist noch nicht geladen.")
-          : new Error("Spotify-Player ist nicht bereit."),
+          ? new PlayRefusedError(t("songs.audio.spotify.notLoaded"))
+          : new Error(t("songs.audio.spotify.notReady")),
       );
     if (this.pending) return this.pending.promise;
     this.silent = false;
@@ -1087,7 +1079,7 @@ class SpotifySource implements AudioSource, SpotifyOwner {
         if (this.pending !== pending) return;
         this.active = false;
         void this.player?.pause().catch(() => {});
-        this.settlePlay(new PlayRefusedError(SPOTIFY_REFUSED));
+        this.settlePlay(new PlayRefusedError(t("songs.audio.spotify.blocked")));
       }, SPOTIFY_PLAY_TIMEOUT_MS),
     );
     if (this.started) {
@@ -1100,7 +1092,7 @@ class SpotifySource implements AudioSource, SpotifyOwner {
       };
       resume().catch(() => {
         if (this.pending === pending)
-          this.settlePlay(new Error("Spotify konnte nicht weiterspielen."));
+          this.settlePlay(new Error(t("songs.audio.spotify.resumeFailed")));
       });
     } else void this.startTrack(pending);
     // Resolves on the first state that is not paused (stateChanged).
@@ -1129,9 +1121,7 @@ class SpotifySource implements AudioSource, SpotifyOwner {
     } catch (e: unknown) {
       if (this.pending !== pending) return;
       this.settlePlay(
-        e instanceof SpotifyAuthError
-          ? e
-          : new Error("Spotify ist nicht erreichbar. Bist du online?"),
+        e instanceof SpotifyAuthError ? e : new Error(t("songs.audio.spotify.unreachable")),
       );
       return;
     }
@@ -1143,12 +1133,12 @@ class SpotifySource implements AudioSource, SpotifyOwner {
       return;
     }
     // The status tells the cases apart (401 login, 403 Premium/restriction, 404 device unknown).
-    if (!ok) this.settlePlay(new Error(`Spotify konnte den Song nicht starten (HTTP ${status}).`));
+    if (!ok) this.settlePlay(new Error(t("songs.audio.spotify.startFailed", { status })));
   }
   pause() {
     this.active = false;
     clearInterval(this.poll);
-    this.settlePlay(new Error("Wiedergabe angehalten."));
+    this.settlePlay(new Error(t("songs.audio.pausedPlay")));
     if (!this.player || !this.ready) return;
     // Also when the Web API accepted a start whose first playing state is still on its way.
     if (this.started || this.trackSent) void this.player.pause().catch(() => {});
@@ -1193,7 +1183,7 @@ class SpotifySource implements AudioSource, SpotifyOwner {
     this.destroyed = true;
     this.active = false;
     clearInterval(this.poll);
-    this.settlePlay(new Error("Wiedergabe beendet."));
+    this.settlePlay(new Error(t("songs.audio.endedPlay")));
     this.settleLoad?.();
     sharedSpotify?.release(this);
     this.player = null;
@@ -1208,7 +1198,7 @@ export function createSource(song: Song, opts: SourceOptions = {}): AudioSource 
         "local",
         async () => {
           const b = await songRepository.getAudio(s.blobId);
-          if (!b) throw new Error("Audiodatei nicht gefunden.");
+          if (!b) throw new Error(t("songs.audio.fileMissing"));
           return URL.createObjectURL(b);
         },
         effectivePlaybackRate(song),

@@ -2,6 +2,7 @@ import type { Ref } from "react";
 
 import { PIKTO } from "@/lib/game/pikto";
 import { GAME } from "@/theme";
+import { useT } from "@/lib/i18n";
 
 /**
  * Rounded, translucent bar with a triangle as target marker. Bar and marker are static DOM; the
@@ -14,6 +15,7 @@ export function PiktoBar({
   canvasRef: Ref<HTMLCanvasElement>;
   goldSoon: boolean;
 }) {
+  const t = useT();
   return (
     <div className="relative">
       <div
@@ -30,7 +32,7 @@ export function PiktoBar({
       />
       {goldSoon && (
         <p className="font-title text-stroke absolute -bottom-9 right-4 text-xl text-gold">
-          Gold Move
+          {t("shell.pikto.goldMove")}
         </p>
       )}
     </div>

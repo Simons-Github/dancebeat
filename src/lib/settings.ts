@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { z } from "zod";
 
-import { DIFFICULTIES, type Difficulty } from "./scoring";
+import { DIFFICULTIES, type Difficulty } from "./difficulty";
 
 /** Range and step of the global latency compensation (ms). */
 export const LATENCY_MIN = -500;
@@ -24,6 +24,7 @@ const D = {
   haptics: true,
   danceVideo: true,
   danceVideoLarge: false,
+  language: "de" as "de" | "en",
 };
 
 /**
@@ -58,6 +59,8 @@ export const SettingsSchema = z.object({
   danceVideo: z.boolean().catch(D.danceVideo),
   /** In play, show the dance video large (covers more of the camera image). */
   danceVideoLarge: z.boolean().catch(D.danceVideoLarge),
+  /** UI language; never auto-detected, German unless the player switches (src/lib/i18n). */
+  language: z.enum(["de", "en"]).catch(D.language),
 });
 
 export type Settings = z.output<typeof SettingsSchema>;
@@ -99,6 +102,14 @@ export function saveSettings(patch: Partial<Settings>) {
     // Not persisted; keep running with the in-memory value.
   }
   listeners.forEach((l) => l(s));
+}
+
+/** Subscribes to settings changes (returns the unsubscribe function). */
+export function subscribeSettings(listener: (s: Settings) => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
 }
 
 export function useSettings(): [Settings, (p: Partial<Settings>) => void] {

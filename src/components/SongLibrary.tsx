@@ -7,6 +7,7 @@ import { SongTile, TILE_BOX } from "@/components/SongTile";
 import { useSongTheme } from "@/hooks/useSongTheme";
 import type { SongDetailsPatch } from "@/hooks/useSongLibrary";
 import type { Song } from "@/lib/types";
+import { useT } from "@/lib/i18n";
 
 interface SongLibraryProps {
   songs: Song[];
@@ -32,6 +33,7 @@ export function SongLibrary({
   onExport,
   onAdd,
 }: SongLibraryProps) {
+  const t = useT();
   const [selectedId, setSelectedId] = useState<string>(() => getSettings().lastSongId);
   const { setTheme } = useSongTheme();
   const tileRefs = useRef(new Map<string, HTMLButtonElement>());
@@ -87,13 +89,13 @@ export function SongLibrary({
 
   return (
     <main className="safe-pad flex min-h-0 flex-1 flex-col gap-4 !pt-1 landscape:flex-row landscape:gap-6">
-      <h1 className="sr-only">Song-Bibliothek</h1>
+      <h1 className="sr-only">{t("shell.library.title")}</h1>
       {/* Size container: the tiles take their size from it (TILE_BOX). */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-col justify-center [container-type:size]">
         {loading ? (
           <div
             role="status"
-            aria-label="Songs werden geladen"
+            aria-label={t("shell.library.loading")}
             className="flex h-full items-center gap-5 overflow-hidden px-2 py-6"
           >
             {[0, 1].map((n) => (
@@ -102,13 +104,15 @@ export function SongLibrary({
           </div>
         ) : songs.length === 0 ? (
           <div className="flex h-full flex-col items-start justify-center gap-2 text-paper">
-            <p className="font-title chrome-text chrome-glow text-5xl">Noch keine Songs</p>
-            <p className="text-xl font-bold">Füge unten deinen ersten Song hinzu.</p>
+            <p className="font-title chrome-text chrome-glow text-5xl">
+              {t("shell.library.emptyTitle")}
+            </p>
+            <p className="text-xl font-bold">{t("shell.library.emptyBody")}</p>
           </div>
         ) : (
           <ul
             ref={listRef}
-            aria-label="Songs"
+            aria-label={t("shell.library.list")}
             className="-mx-4 flex h-full snap-x snap-mandatory items-center gap-5 overflow-x-auto overflow-y-hidden px-6 py-6 [scrollbar-width:none] landscape:mr-0 landscape:[mask-image:linear-gradient(to_right,black_calc(100%_-_2.5rem),transparent)]"
           >
             {songs.map((song) => (

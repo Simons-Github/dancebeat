@@ -1,3 +1,5 @@
+import { t } from "@/lib/i18n";
+
 export type CameraErrorKind =
   | "denied"
   | "nocamera"
@@ -15,50 +17,17 @@ export interface CameraError {
   hint: string;
 }
 
-const ERRORS: Record<CameraErrorKind, Omit<CameraError, "kind">> = {
-  denied: {
-    title: "Kamera-Zugriff verweigert",
-    hint: "Erlaube die Kamera in den Browser-Einstellungen (Schloss-Symbol neben der Adresse; auf dem iPhone „aA“ → Website-Einstellungen → Kamera) und tippe dann auf „Erneut versuchen“.",
-  },
-  nocamera: {
-    title: "Keine Kamera gefunden",
-    hint: "Schließe eine Kamera an oder nutze ein Gerät mit Frontkamera. Dann tippe auf „Erneut versuchen“.",
-  },
-  busy: {
-    title: "Kamera wird bereits verwendet",
-    hint: "Schließe andere Apps oder Tabs, die die Kamera nutzen (Videoanruf, Kamera-App), und tippe auf „Erneut versuchen“.",
-  },
-  interrupted: {
-    title: "Die Kamera wurde unterbrochen",
-    hint: "Ein Anruf oder eine andere App hat die Kamera übernommen. Beende sie und tippe auf „Erneut starten“.",
-  },
-  insecure: {
-    title: "Kamera nur über eine sichere Verbindung",
-    hint: "Öffne DanceBeat über HTTPS (oder localhost). Auf dem Handy: „bun run dev:https“ starten und die https-Adresse öffnen.",
-  },
-  overconstrained: {
-    title: "Gewählte Kamera nicht verfügbar",
-    hint: "Wähle eine andere Kamera aus oder tippe auf „Erneut versuchen“, um die Standardkamera zu nutzen.",
-  },
-  model: {
-    title: "Erkennung konnte nicht geladen werden",
-    hint: "Beim Start der Kamera lädt DanceBeat Erkennungsmodell und Laufzeit von der eigenen Adresse der App. Prüfe die Verbindung zur App und tippe auf „Erneut versuchen“.",
-  },
-  unknown: {
-    title: "Kamera konnte nicht gestartet werden",
-    hint: "Lade die Seite neu und tippe auf „Erneut versuchen“. Hilft das nicht, starte den Browser neu.",
-  },
-};
-
+/** Builds the (translated, current language) error for `kind`. */
 export const cameraError = (kind: CameraErrorKind): CameraError => ({
   kind,
-  ...ERRORS[kind],
+  title: t(`settings.camera.error.${kind}.title`),
+  hint: t(`settings.camera.error.${kind}.hint`),
 });
 
 const nameOf = (e: unknown): string =>
   e && typeof e === "object" && "name" in e ? String((e as { name: unknown }).name) : "";
 
-/** Maps a getUserMedia failure to a German message with advice. */
+/** Maps a getUserMedia failure to a translated message with advice. */
 export function mapCameraError(e: unknown): CameraError {
   switch (nameOf(e)) {
     case "NotAllowedError":

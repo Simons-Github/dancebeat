@@ -17,6 +17,7 @@ import {
   SCRIM,
   THEME_FADE_MS,
 } from "@/theme";
+import { useT } from "@/lib/i18n";
 
 /** Full-screen frame: song colors as CSS variables, animated background, header, content slot. */
 export function AppShell({ children }: { children: ReactNode }) {
@@ -65,6 +66,7 @@ function Frame({ children }: { children: ReactNode }) {
 }
 
 function AppHeader() {
+  const t = useT();
   return (
     <header className="safe-pad relative z-20 flex items-center justify-between gap-3 !pb-1">
       {/* Chrome wordmark, slanted like a Y2K logo. */}
@@ -82,7 +84,7 @@ function AppHeader() {
         size="icon"
         className="size-11 rounded-full focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-6"
       >
-        <Link to="/settings" aria-label="Einstellungen">
+        <Link to="/settings" aria-label={t("shell.header.settings")}>
           <Settings aria-hidden />
         </Link>
       </Button>

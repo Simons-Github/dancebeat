@@ -14,6 +14,7 @@ import { fromLandmarks3d } from "./skeleton/fromLandmarks3d";
 import type { Skeleton3D } from "./skeleton/types";
 import type { Angles, Choreography, Frame, Landmark, Landmark3d, Move } from "./types";
 import { SONG_PALETTES } from "@/theme";
+import { t } from "./i18n";
 
 /** Raw pose track from a video analysis (MediaPipe output, per-axis normalized landmarks). */
 export interface PoseTrack {
@@ -644,7 +645,7 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
     skeletons.push(sk && Object.keys(sk.bones).length > 0 ? sk : null);
     frames.push(frame);
   }
-  if (frames.length < 2) throw new Error("Im Video wurde zu selten eine Person erkannt.");
+  if (frames.length < 2) throw new Error(t("songs.video.build.tooFewDetections"));
   // 5b. Break the coach at the long gaps that remain (see LongGapStyle).
   breakLongGaps(frames, skeletons, smoothed, maxGapMs, interval, opts.longGap ?? DEFAULT_LONG_GAP);
 
@@ -671,7 +672,7 @@ export function choreoFromPoseTrack(track: PoseTrack, opts: VideoChoreoOptions):
     iconId: "video",
     gold: false,
   }));
-  if (moves.length < 2) throw new Error("Zu wenige auswertbare Moves im gewählten Abschnitt.");
+  if (moves.length < 2) throw new Error(t("songs.video.build.tooFewMoves"));
 
   // Beat phase goes into choreo.offsetMs (play time = audio − offsetMs): beat pulse and sync
   // test expect moves on k · beat. Times shift back by the phase, the audio alignment stays.

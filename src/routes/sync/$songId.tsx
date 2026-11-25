@@ -4,6 +4,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { PlaceholderPage } from "@/components/PlaceholderPage";
 import { SyncTestScreen } from "@/components/SyncTestScreen";
 import { useSongLibrary } from "@/hooks/useSongLibrary";
+import { useT } from "@/lib/i18n";
 import { useSongTheme } from "@/hooks/useSongTheme";
 
 export const Route = createFileRoute("/sync/$songId")({
@@ -11,6 +12,7 @@ export const Route = createFileRoute("/sync/$songId")({
 });
 
 function Sync() {
+  const t = useT();
   const { songId } = Route.useParams();
   const { songs, loading, save } = useSongLibrary();
   const { setTheme } = useSongTheme();
@@ -28,8 +30,8 @@ function Sync() {
 
   if (!song) {
     return loading ? null : (
-      <PlaceholderPage title="Song nicht gefunden">
-        Dieser Song ist nicht in deiner Bibliothek.
+      <PlaceholderPage title={t("shell.route.noSong.title")}>
+        {t("shell.route.noSong.body")}
       </PlaceholderPage>
     );
   }

@@ -44,6 +44,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useT } from "@/lib/i18n";
 import { StorageFullError, formatMb } from "@/lib/library/storage";
 import type { SongDetailsPatch } from "@/hooks/useSongLibrary";
 import { formatOffsetMs, formatStartOffsetSeconds, parseStartOffsetSeconds } from "@/lib/sync";
@@ -109,6 +110,7 @@ export function EditSongDialog({
   onExport,
   onDeleted,
 }: EditSongDialogProps) {
+  const t = useT();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [target, setTarget] = useState<Song | undefined>(undefined);
@@ -185,7 +187,10 @@ export function EditSongDialog({
     setRegenDone(false);
     if (file.size > VIDEO_BEAT_MAX_BYTES) {
       setVideoError(
-        `Das Video ist zu groß (${formatMb(file.size)}, höchstens ${formatMb(VIDEO_BEAT_MAX_BYTES)}).`,
+        t("editor.edit.videoTooBig", {
+          size: formatMb(file.size),
+          max: formatMb(VIDEO_BEAT_MAX_BYTES),
+        }),
       );
       return;
     }
@@ -193,9 +198,9 @@ export function EditSongDialog({
     try {
       // "Speichern" writes the snapshot, so it must carry the new videoBlobId.
       setTarget(await onSetVideo(target, file));
-      setVideoDone(`Tanzvideo gespeichert. Es belegt ${formatMb(file.size)} in der Bibliothek.`);
+      setVideoDone(t("editor.edit.videoSaved", { size: formatMb(file.size) }));
     } catch (err) {
-      setVideoError(errorText(err, "Das Video konnte nicht gespeichert werden."));
+      setVideoError(errorText(err, t("editor.edit.videoSaveError")));
     } finally {
       setBusy(false);
     }
@@ -211,10 +216,10 @@ export function EditSongDialog({
       videoRemoved.current = true;
       setRemoveVideoOpen(false);
       setVideoError(null);
-      setVideoDone("Tanzvideo entfernt.");
+      setVideoDone(t("editor.edit.videoRemoved"));
       setRegenDone(false);
     } catch (err) {
-      setRemoveVideoError(errorText(err, "Entfernen hat nicht geklappt. Versuch es noch einmal."));
+      setRemoveVideoError(errorText(err, t("editor.edit.videoRemoveError")));
     } finally {
       setBusy(false);
     }
@@ -232,7 +237,7 @@ export function EditSongDialog({
       await onSave(target, { title: trimmedTitle, artist: trimmedArtist, startOffsetMs });
       setOpen(false);
     } catch (err) {
-      setError(errorText(err, "Speichern hat nicht geklappt. Versuch es noch einmal."));
+      setError(errorText(err, t("editor.edit.saveError")));
     } finally {
       setBusy(false);
     }
@@ -256,7 +261,7 @@ export function EditSongDialog({
         setTimeout(() => URL.revokeObjectURL(url), 1000);
       }
     } catch {
-      setError("Die Choreografie konnte nicht exportiert werden.");
+      setError(t("editor.edit.exportError"));
     }
   };
 
@@ -271,7 +276,7 @@ export function EditSongDialog({
       setConfirmOpen(false);
       setOpen(false);
     } catch (err) {
-      setDeleteError(errorText(err, "Löschen hat nicht geklappt. Versuch es noch einmal."));
+      setDeleteError(errorText(err, t("editor.edit.deleteError")));
     } finally {
       setBusy(false);
     }
@@ -291,7 +296,7 @@ export function EditSongDialog({
       setRegenDone(true);
       setVideoDone(null);
     } catch (err) {
-      setRegenError(errorText(err, "Neu erzeugen hat nicht geklappt. Versuch es noch einmal."));
+      setRegenError(errorText(err, t("editor.edit.regenerateError")));
     } finally {
       setBusy(false);
     }
@@ -306,7 +311,7 @@ export function EditSongDialog({
           <Button
             variant="secondary"
             size="icon"
-            aria-label="Song bearbeiten"
+            aria-label={t("editor.edit.trigger")}
             className="btn-pill size-12 shrink-0 focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5"
           >
             <Pencil aria-hidden />
@@ -323,16 +328,13 @@ export function EditSongDialog({
         }}
       >
         <DialogHeader>
-          <DialogTitle>Song bearbeiten</DialogTitle>
-          <DialogDescription>
-            Ändere Titel, Künstler und Startpunkt, prüfe den Takt im Sync-Test, bearbeite die
-            Choreografie oder erzeuge sie neu, hänge ein Tanzvideo an oder lösche den Song.
-          </DialogDescription>
+          <DialogTitle>{t("editor.edit.title")}</DialogTitle>
+          <DialogDescription>{t("editor.edit.description")}</DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-title`} className="text-base">
-              Titel
+              {t("editor.edit.titleLabel")}
             </Label>
             <Input
               id={`${id}-title`}
@@ -347,7 +349,7 @@ export function EditSongDialog({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-artist`} className="text-base">
-              Künstler
+              {t("editor.edit.artistLabel")}
             </Label>
             <Input
               id={`${id}-artist`}
@@ -361,7 +363,7 @@ export function EditSongDialog({
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-start`} className="text-base">
-              Start ab (Sekunden)
+              {t("editor.edit.startLabel")}
             </Label>
             <Input
               id={`${id}-start`}
@@ -377,11 +379,11 @@ export function EditSongDialog({
             />
             {!startValid && (
               <p id={`${id}-start-err`} className={FIELD_ERROR}>
-                Bitte eine Zahl zwischen 0 und 600 Sekunden.
+                {t("editor.edit.startError")}
               </p>
             )}
             <p id={`${id}-start-hint`} className={HINT}>
-              Überspringt ein Intro. Moves davor zählen nicht.
+              {t("editor.edit.startHint")}
             </p>
           </div>
           <Button
@@ -391,18 +393,18 @@ export function EditSongDialog({
             className={BTN}
           >
             <Download aria-hidden />
-            Choreografie exportieren
+            {t("editor.edit.export")}
           </Button>
           {target && (
             <div className="flex flex-wrap items-center gap-3">
               <Button asChild variant="secondary" className={BTN}>
                 <Link to="/sync/$songId" params={{ songId: target.id }}>
                   <AudioWaveform aria-hidden />
-                  Sync-Test
+                  {t("editor.edit.syncTest")}
                 </Link>
               </Button>
               <p className="text-base">
-                Sync-Offset:{" "}
+                {t("editor.edit.syncOffset")}{" "}
                 <span className="tabular-nums">{formatOffsetMs(target.syncOffsetMs)}</span>
               </p>
             </div>
@@ -411,14 +413,14 @@ export function EditSongDialog({
             <Button asChild variant="secondary" className={BTN}>
               <Link to="/edit/$songId" params={{ songId: target.id }}>
                 <ListMusic aria-hidden />
-                Choreografie bearbeiten
+                {t("editor.edit.editChoreo")}
               </Link>
             </Button>
           )}
           {target && (
             <div className="flex flex-col gap-2">
               <Label htmlFor={`${id}-difficulty`} className="text-base">
-                Schwierigkeit
+                {t("editor.edit.difficulty")}
               </Label>
               <select
                 id={`${id}-difficulty`}
@@ -428,13 +430,12 @@ export function EditSongDialog({
                 onChange={(e) => setDifficulty(Number(e.target.value) as 1 | 2 | 3)}
                 className="h-11 rounded-xl border border-input bg-transparent px-3 text-base"
               >
-                <option value={1}>1 – Leicht</option>
-                <option value={2}>2 – Mittel</option>
-                <option value={3}>3 – Schwer</option>
+                <option value={1}>{t("editor.edit.difficulty.1")}</option>
+                <option value={2}>{t("editor.edit.difficulty.2")}</option>
+                <option value={3}>{t("editor.edit.difficulty.3")}</option>
               </select>
               <p id={`${id}-difficulty-hint`} className={HINT}>
-                Erzeugt neue Moves im Takt des Songs. Bei einer Audiodatei wird die Musik dafür neu
-                analysiert.
+                {t("editor.edit.difficultyHint")}
               </p>
               <AlertDialog
                 open={regenOpen}
@@ -447,17 +448,16 @@ export function EditSongDialog({
                 <AlertDialogTrigger asChild>
                   <Button type="button" variant="secondary" disabled={busy} className={BTN}>
                     <Sparkles aria-hidden />
-                    Choreografie neu erzeugen
+                    {t("editor.edit.regenerate")}
                   </Button>
                 </AlertDialogTrigger>
                 <AlertDialogContent className="rounded-3xl">
                   <AlertDialogHeader>
                     <AlertDialogTitle>
-                      Choreografie von „{shownTitle}“ neu erzeugen?
+                      {t("editor.edit.regenerateTitle", { title: shownTitle })}
                     </AlertDialogTitle>
                     <AlertDialogDescription>
-                      Die aktuelle Choreografie wird ersetzt, auch Änderungen aus dem Editor.
-                      Highscore und Sterne bleiben.
+                      {t("editor.edit.regenerateDescription")}
                     </AlertDialogDescription>
                   </AlertDialogHeader>
                   {regenError && (
@@ -467,21 +467,21 @@ export function EditSongDialog({
                   )}
                   <AlertDialogFooter className="gap-3 sm:space-x-0">
                     <AlertDialogCancel disabled={busy} className={cn(BTN, "mt-0")}>
-                      Abbrechen
+                      {t("common.cancel")}
                     </AlertDialogCancel>
                     <AlertDialogAction
                       disabled={busy}
                       onClick={(e) => void confirmRegenerate(e)}
                       className={BTN}
                     >
-                      Neu erzeugen
+                      {t("editor.edit.regenerateConfirm")}
                     </AlertDialogAction>
                   </AlertDialogFooter>
                 </AlertDialogContent>
               </AlertDialog>
               {regenDone && (
                 <p role="status" className="text-base">
-                  Neue Choreografie gespeichert.
+                  {t("editor.edit.regenerateDone")}
                 </p>
               )}
             </div>
@@ -489,18 +489,13 @@ export function EditSongDialog({
           {target && target.source.type !== "youtube" && (
             <section aria-labelledby={`${id}-video`} className="flex flex-col gap-2">
               <h3 id={`${id}-video`} className="text-base font-medium">
-                Tanzvideo
+                {t("editor.edit.video")}
               </h3>
               <p className="text-base">
-                {target.videoBlobId
-                  ? "Angehängt. Es läuft beim Spielen stumm statt des Coachs."
-                  : "Kein Video angehängt."}
+                {target.videoBlobId ? t("editor.edit.videoAttached") : t("editor.edit.videoNone")}
               </p>
               {!target.videoBlobId && musicIsVideo && (
-                <p className={HINT}>
-                  Die Musik ist schon ein Video, es läuft beim Spielen statt des Coachs. Ein
-                  angehängtes Video hat Vorrang.
-                </p>
+                <p className={HINT}>{t("editor.edit.musicIsVideo")}</p>
               )}
               <input
                 ref={videoInput}
@@ -508,7 +503,7 @@ export function EditSongDialog({
                 accept="video/*"
                 hidden
                 tabIndex={-1}
-                aria-label="Tanzvideo wählen"
+                aria-label={t("editor.edit.videoPick")}
                 onChange={(e) => void attachVideo(e)}
               />
               <div className="flex flex-wrap gap-3">
@@ -522,7 +517,9 @@ export function EditSongDialog({
                   className={BTN}
                 >
                   <Film aria-hidden />
-                  {target.videoBlobId ? "Video ersetzen" : "Video anhängen"}
+                  {target.videoBlobId
+                    ? t("editor.edit.videoReplace")
+                    : t("editor.edit.videoAttach")}
                 </Button>
                 {target.videoBlobId && (
                   <AlertDialog
@@ -536,7 +533,7 @@ export function EditSongDialog({
                     <AlertDialogTrigger asChild>
                       <Button type="button" variant="secondary" disabled={busy} className={BTN}>
                         <VideoOff aria-hidden />
-                        Video entfernen
+                        {t("editor.edit.videoRemove")}
                       </Button>
                     </AlertDialogTrigger>
                     <AlertDialogContent
@@ -550,10 +547,11 @@ export function EditSongDialog({
                       }}
                     >
                       <AlertDialogHeader>
-                        <AlertDialogTitle>Tanzvideo von „{shownTitle}“ entfernen?</AlertDialogTitle>
+                        <AlertDialogTitle>
+                          {t("editor.edit.videoRemoveTitle", { title: shownTitle })}
+                        </AlertDialogTitle>
                         <AlertDialogDescription>
-                          Das Video wird von diesem Gerät gelöscht. Musik, Choreografie und
-                          Highscore bleiben.
+                          {t("editor.edit.videoRemoveDescription")}
                         </AlertDialogDescription>
                       </AlertDialogHeader>
                       {removeVideoError && (
@@ -563,7 +561,7 @@ export function EditSongDialog({
                       )}
                       <AlertDialogFooter className="gap-3 sm:space-x-0">
                         <AlertDialogCancel disabled={busy} className={cn(BTN, "mt-0")}>
-                          Abbrechen
+                          {t("common.cancel")}
                         </AlertDialogCancel>
                         <AlertDialogAction
                           disabled={busy}
@@ -573,7 +571,7 @@ export function EditSongDialog({
                             "bg-destructive text-destructive-foreground hover:bg-destructive/90",
                           )}
                         >
-                          Entfernen
+                          {t("editor.edit.videoRemoveConfirm")}
                         </AlertDialogAction>
                       </AlertDialogFooter>
                     </AlertDialogContent>
@@ -581,9 +579,7 @@ export function EditSongDialog({
                 )}
               </div>
               <p id={`${id}-video-hint`} className={HINT}>
-                Das Video muss zur Musik passen und an derselben Stelle beginnen, sonst läuft es
-                versetzt. Es wird auf diesem Gerät gespeichert (höchstens{" "}
-                {formatMb(VIDEO_BEAT_MAX_BYTES)}).
+                {t("editor.edit.videoHint", { max: formatMb(VIDEO_BEAT_MAX_BYTES) })}
               </p>
               {videoError && (
                 <p role="alert" className={ERROR}>
@@ -614,7 +610,7 @@ export function EditSongDialog({
               <AlertDialogTrigger asChild>
                 <Button type="button" variant="destructive" disabled={busy} className={BTN}>
                   <Trash2 aria-hidden />
-                  Song löschen
+                  {t("editor.edit.delete")}
                 </Button>
               </AlertDialogTrigger>
               <AlertDialogContent
@@ -624,9 +620,11 @@ export function EditSongDialog({
                 }}
               >
                 <AlertDialogHeader>
-                  <AlertDialogTitle>„{shownTitle}“ löschen?</AlertDialogTitle>
+                  <AlertDialogTitle>
+                    {t("editor.edit.deleteTitle", { title: shownTitle })}
+                  </AlertDialogTitle>
                   <AlertDialogDescription>
-                    Highscore und Audio werden entfernt. Das kann nicht rückgängig gemacht werden.
+                    {t("editor.edit.deleteDescription")}
                   </AlertDialogDescription>
                 </AlertDialogHeader>
                 {deleteError && (
@@ -636,7 +634,7 @@ export function EditSongDialog({
                 )}
                 <AlertDialogFooter className="gap-3 sm:space-x-0">
                   <AlertDialogCancel disabled={busy} className={cn(BTN, "mt-0")}>
-                    Abbrechen
+                    {t("common.cancel")}
                   </AlertDialogCancel>
                   <AlertDialogAction
                     disabled={busy}
@@ -646,7 +644,7 @@ export function EditSongDialog({
                       "bg-destructive text-destructive-foreground hover:bg-destructive/90",
                     )}
                   >
-                    Löschen
+                    {t("common.delete")}
                   </AlertDialogAction>
                 </AlertDialogFooter>
               </AlertDialogContent>
@@ -656,7 +654,7 @@ export function EditSongDialog({
               disabled={busy || !titleValid || !artistValid || !startValid}
               className={BTN}
             >
-              Speichern
+              {t("common.save")}
             </Button>
           </DialogFooter>
         </form>

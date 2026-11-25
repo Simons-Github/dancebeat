@@ -40,6 +40,7 @@ import { loadMotionPack } from "@/lib/motionPack";
 import type { PoseModel } from "@/lib/mediapipe";
 import type { PoseEstimator } from "@/lib/poseEstimator";
 import type { ChoreoFile, Song } from "@/lib/types";
+import { t as translate, useT, type MessageKey } from "@/lib/i18n";
 import { SONG_PALETTES } from "@/theme";
 
 const BTN =
@@ -89,6 +90,7 @@ const stripExtension = (name: string) => name.replace(/\.[^./\\]+$/, "");
  * imported from a file or built from a dance video.
  */
 export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialogProps) {
+  const t = useT();
   const id = useId();
   const [open, setOpen] = useState(false);
   const [kind, setKind] = useState<Kind>("file");
@@ -248,7 +250,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     if (fromVideo && chosen.size > VIDEO_BEAT_MAX_BYTES) {
       setAnalysis({
         status: "error",
-        message: `Das Video ist zu groß, um seine Musik zu verwenden (höchstens ${formatMb(VIDEO_BEAT_MAX_BYTES)}). Bitte die Musik als Audiodatei wählen.`,
+        message: translate("songs.add.audio.videoTooBig", { max: formatMb(VIDEO_BEAT_MAX_BYTES) }),
       });
       return;
     }
@@ -270,10 +272,10 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       setAnalysis({
         status: "error",
         message: fromVideo
-          ? "Der Ton des Videos kann nicht gelesen werden. Bitte die Musik als Audiodatei wählen."
+          ? translate("songs.add.audio.videoUnreadable")
           : err instanceof Error
             ? err.message
-            : "Die Datei konnte nicht analysiert werden.",
+            : translate("songs.add.audio.analyzeFailed"),
       });
     }
   };
@@ -332,7 +334,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       if (!edited.current.bpm) setBpm(String(parsed.song.bpm));
     } catch (err) {
       if (token !== choreoToken.current) return;
-      setImportError(err instanceof Error ? err.message : "Die Datei konnte nicht gelesen werden.");
+      setImportError(err instanceof Error ? err.message : translate("songs.add.import.readFailed"));
     }
   };
 
@@ -408,9 +410,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
       reset();
       onAdded?.(song);
     } catch (err) {
-      setError(
-        err instanceof StorageFullError ? err.message : "Der Song konnte nicht gespeichert werden.",
-      );
+      setError(err instanceof StorageFullError ? err.message : translate("songs.add.saveFailed"));
     } finally {
       setBusy(false);
     }
@@ -418,7 +418,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
 
   const urlHost = (() => {
     const r = validateAudioUrl(link);
-    return r.ok ? new URL(r.url).host : "der angegebenen Adresse";
+    return r.ok ? new URL(r.url).host : t("songs.add.url.hostFallback");
   })();
 
   const numberField = (
@@ -473,25 +473,25 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
     <>
       {numberField(
         "bpm",
-        "BPM",
+        t("songs.add.bpm.label"),
         bpm,
         setBpm,
         BPM_MIN,
         BPM_MAX,
         errors.bpm,
-        bpmEstimated ? "Geschätzt, bitte prüfen." : undefined,
+        bpmEstimated ? t("songs.add.bpm.estimated") : undefined,
       )}
       {!useVideo &&
         numberField(
           "duration",
-          "Länge in Sekunden",
+          t("songs.add.duration.label"),
           durationS,
           setDurationS,
           DURATION_MIN_S,
           DURATION_MAX_S,
           errors.duration,
           durationClamped
-            ? `Die Choreografie deckt die ersten ${DURATION_MAX_S / 60} Minuten ab.`
+            ? t("songs.add.duration.clamped", { minutes: DURATION_MAX_S / 60 })
             : undefined,
         )}
     </>
@@ -536,16 +536,13 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
           className="btn-pill h-12 min-w-0 flex-1 gap-2 px-5 text-base focus-visible:ring-4 focus-visible:ring-gold [&_svg]:size-5"
         >
           <Plus aria-hidden />
-          Song hinzufügen
+          {t("songs.add.title")}
         </Button>
       </DialogTrigger>
       <DialogContent className="max-h-[calc(100dvh-1rem)] overflow-y-auto rounded-3xl">
         <DialogHeader>
-          <DialogTitle>Song hinzufügen</DialogTitle>
-          <DialogDescription>
-            Wähle die Musik und lass die Choreografie erzeugen, importiere eine eigene oder erstelle
-            sie aus einem Tanzvideo.
-          </DialogDescription>
+          <DialogTitle>{t("songs.add.title")}</DialogTitle>
+          <DialogDescription>{t("songs.add.description")}</DialogDescription>
         </DialogHeader>
         <form onSubmit={(e) => void submit(e)} className="flex flex-col gap-4">
           <Tabs
@@ -559,16 +556,16 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
           >
             <TabsList className="h-12 w-full">
               <TabsTrigger value="file" className={TAB}>
-                Datei
+                {t("songs.add.tab.file")}
               </TabsTrigger>
               <TabsTrigger value="url" className={TAB}>
-                URL
+                {t("songs.add.tab.url")}
               </TabsTrigger>
               <TabsTrigger value="youtube" className={TAB}>
-                YouTube
+                {t("songs.add.tab.youtube")}
               </TabsTrigger>
               <TabsTrigger value="spotify" className={TAB}>
-                Spotify
+                {t("songs.add.tab.spotify")}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="file" className="mt-0 flex flex-col gap-4">
@@ -576,7 +573,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 <div className="flex flex-col gap-1">
                   <div className="flex min-h-11 items-center justify-between gap-3">
                     <Label htmlFor={`${id}-video-music`} className="text-base">
-                      Musik aus dem Tanzvideo
+                      {t("songs.add.videoMusic.label")}
                     </Label>
                     <Switch
                       id={`${id}-video-music`}
@@ -591,8 +588,8 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                   </div>
                   <p id={`${id}-video-music-hint`} className={HINT}>
                     {musicFromVideo
-                      ? "Gespielt wird der Ton des Videos unter „Aus Video“. Dafür wird das Video mit dem Song auf diesem Gerät gespeichert."
-                      : "Einschalten, wenn das Tanzvideo die Musik schon enthält: dann braucht es keine eigene Audiodatei."}
+                      ? t("songs.add.videoMusic.hintOn")
+                      : t("songs.add.videoMusic.hintOff")}
                   </p>
                 </div>
               )}
@@ -600,7 +597,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 {!videoMusic && (
                   <>
                     <Label htmlFor={`${id}-audio`} className="text-base">
-                      Audiodatei
+                      {t("songs.add.audio.label")}
                     </Label>
                     <Input
                       id={`${id}-audio`}
@@ -616,7 +613,9 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 <div id={`${id}-audio-msg`} aria-live="polite">
                   {analysis.status === "busy" && (
                     <p className={HINT}>
-                      {videoMusic ? "Lese den Ton des Videos …" : "Analysiere …"}
+                      {videoMusic
+                        ? t("songs.add.audio.readingVideo")
+                        : t("songs.add.audio.analyzing")}
                     </p>
                   )}
                   {analysis.status === "error" && (
@@ -626,18 +625,15 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                   )}
                   {analysis.status === "idle" && (
                     <p className={HINT}>
-                      {videoMusic
-                        ? "Wähle unten unter „Aus Video“ ein Tanzvideo."
-                        : "MP3, M4A, WAV oder OGG. Die Datei bleibt auf diesem Gerät."}
+                      {videoMusic ? t("songs.add.audio.idleVideo") : t("songs.add.audio.idleFile")}
                     </p>
                   )}
                   {analysis.status === "done" && useVideo && !videoMusic && file && (
-                    <p className={HINT}>Musik: {file.name}</p>
+                    <p className={HINT}>{t("songs.add.audio.music", { name: file.name })}</p>
                   )}
                   {analysis.status === "done" && videoMusic && videoFile && (
                     <p className={HINT}>
-                      Ton des Videos gelesen. Das Video belegt {formatMb(videoFile.size)} in der
-                      Bibliothek.
+                      {t("songs.add.audio.videoRead", { size: formatMb(videoFile.size) })}
                     </p>
                   )}
                 </div>
@@ -646,35 +642,35 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
             </TabsContent>
             <TabsContent value="url" className="mt-0 flex flex-col gap-4">
               {linkField(
-                "Adresse der Audiodatei",
+                t("songs.add.url.label"),
                 "https://…",
                 "url",
-                `Nur eigene oder private Quellen verwenden. Die Musik wird beim Spielen von ${urlHost} geladen.`,
+                t("songs.add.url.hint", { host: urlHost }),
               )}
               {timing}
             </TabsContent>
             <TabsContent value="youtube" className="mt-0 flex flex-col gap-4">
               {linkField(
-                "YouTube-Link oder Video-ID",
+                t("songs.add.youtube.label"),
                 "https://youtu.be/…",
                 "text",
-                "Das Video wird beim Spielen über youtube-nocookie.com geladen.",
+                t("songs.add.youtube.hint"),
               )}
               {timing}
             </TabsContent>
             <TabsContent value="spotify" className="mt-0 flex flex-col gap-4">
               {linkField(
-                "Spotify-Song-Link oder URI",
+                t("songs.add.spotify.label"),
                 "https://open.spotify.com/track/…",
                 "text",
-                "Braucht Spotify Premium. Beim Spielen spricht dein Gerät mit sdk.scdn.co, accounts.spotify.com und api.spotify.com.",
+                t("songs.add.spotify.hint"),
               )}
               {(spotifyState === "disconnected" || spotifyState === "expired") && (
                 <p role="status" className={HINT}>
                   {spotifyState === "expired"
-                    ? "Die Spotify-Anmeldung ist abgelaufen."
-                    : "Noch nicht mit Spotify verbunden."}{" "}
-                  Zum Spielen in den Einstellungen unter „Spotify“ verbinden.
+                    ? t("songs.add.spotify.expired")
+                    : t("songs.add.spotify.notConnected")}{" "}
+                  {t("songs.add.spotify.connectHint")}
                 </p>
               )}
               {timing}
@@ -682,14 +678,18 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
           </Tabs>
 
           <fieldset className="flex flex-col gap-2">
-            <legend className="mb-1 text-base font-medium">Choreografie</legend>
-            <div role="radiogroup" aria-label="Choreografie" className="flex flex-col gap-2">
+            <legend className="mb-1 text-base font-medium">{t("songs.add.choreo.legend")}</legend>
+            <div
+              role="radiogroup"
+              aria-label={t("songs.add.choreo.legend")}
+              className="flex flex-col gap-2"
+            >
               {(
                 [
-                  ["auto", "Automatisch erzeugen"],
-                  ["import", "Aus Datei importieren"],
-                  ["video", "Aus Video"],
-                ] as const
+                  ["auto", "songs.add.choreo.auto"],
+                  ["import", "songs.add.choreo.import"],
+                  ["video", "songs.add.choreo.video"],
+                ] as const satisfies readonly (readonly [string, MessageKey])[]
               ).map(([value, label]) => (
                 <label
                   key={value}
@@ -703,7 +703,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                     onChange={() => chooseChoreoMode(value)}
                     className="size-5 accent-current"
                   />
-                  {label}
+                  {t(label)}
                 </label>
               ))}
             </div>
@@ -723,7 +723,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
               <div className="flex flex-col gap-1">
                 <div className="flex min-h-11 items-center justify-between gap-3">
                   <Label htmlFor={`${id}-keep-video`} className="text-base">
-                    Video behalten
+                    {t("songs.add.keepVideo.label")}
                   </Label>
                   <Switch
                     id={`${id}-keep-video`}
@@ -737,14 +737,15 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                 <div id={`${id}-keep-video-hint`} aria-live="polite">
                   {keptVideoTooBig ? (
                     <p role="alert" className={FIELD_ERROR}>
-                      Das Video ist zu groß, um es zu behalten (höchstens{" "}
-                      {formatMb(VIDEO_BEAT_MAX_BYTES)}). Bitte „Video behalten“ ausschalten.
+                      {t("songs.add.keepVideo.tooBig", { max: formatMb(VIDEO_BEAT_MAX_BYTES) })}
                     </p>
                   ) : (
                     <p className={HINT}>
                       {keepVideo
-                        ? `Beim Spielen läuft das Video stumm statt des Coachs. Dafür wird es mit dem Song auf diesem Gerät gespeichert${videoFile ? ` und belegt ${formatMb(videoFile.size)} in der Bibliothek` : ""}.`
-                        : "Einschalten, um das Video beim Spielen stumm statt des Coachs zu zeigen. Es wird dafür mit dem Song auf diesem Gerät gespeichert."}
+                        ? videoFile
+                          ? t("songs.add.keepVideo.onSize", { size: formatMb(videoFile.size) })
+                          : t("songs.add.keepVideo.on")
+                        : t("songs.add.keepVideo.off")}
                     </p>
                   )}
                 </div>
@@ -753,7 +754,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
             {useImport && (
               <div className="flex flex-col gap-2">
                 <Label htmlFor={`${id}-choreo-file`} className="text-base">
-                  Choreografie-Datei
+                  {t("songs.add.import.label")}
                 </Label>
                 <Input
                   id={`${id}-choreo-file`}
@@ -770,7 +771,11 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
                       {importError}
                     </p>
                   )}
-                  {imported && <p className={HINT}>{imported.choreo.moves.length} Moves</p>}
+                  {imported && (
+                    <p className={HINT}>
+                      {t.tn("songs.add.import.moves", imported.choreo.moves.length)}
+                    </p>
+                  )}
                 </div>
               </div>
             )}
@@ -778,7 +783,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
 
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-title`} className="text-base">
-              Titel
+              {t("songs.add.field.title")}
             </Label>
             <Input
               id={`${id}-title`}
@@ -803,7 +808,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-artist`} className="text-base">
-              Künstler
+              {t("songs.add.field.artist")}
             </Label>
             <Input
               id={`${id}-artist`}
@@ -819,7 +824,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
           </div>
           <div className="flex flex-col gap-2">
             <Label htmlFor={`${id}-difficulty`} className="text-base">
-              Schwierigkeit
+              {t("songs.add.field.difficulty")}
             </Label>
             <select
               id={`${id}-difficulty`}
@@ -830,9 +835,9 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
               }}
               className="h-11 rounded-xl border border-input bg-transparent px-3 text-base"
             >
-              <option value={1}>1 – Leicht</option>
-              <option value={2}>2 – Mittel</option>
-              <option value={3}>3 – Schwer</option>
+              <option value={1}>{t("songs.add.difficulty.1")}</option>
+              <option value={2}>{t("songs.add.difficulty.2")}</option>
+              <option value={3}>{t("songs.add.difficulty.3")}</option>
             </select>
           </div>
           {error && (
@@ -842,7 +847,7 @@ export function AddSongDialog({ onAdd, onAdded, createEstimator }: AddSongDialog
           )}
           <DialogFooter className="gap-3 sm:space-x-0">
             <Button type="submit" disabled={!canSubmit} className={BTN}>
-              Hinzufügen
+              {t("songs.add.submit")}
             </Button>
           </DialogFooter>
         </form>

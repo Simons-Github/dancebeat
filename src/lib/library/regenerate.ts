@@ -1,6 +1,7 @@
 /** Pure logic for "Choreografie neu erzeugen": replaces a song's choreography with a generated one. */
 import { autoChoreo } from "../../data/demo";
 import { analyzeAudio, estimateBeatPhaseMs, type AudioAnalysis } from "../beat";
+import { t } from "../i18n";
 import { SongSchema } from "../schema";
 import type { EnergyCurve } from "../generator";
 import type { Choreography, MotionPack, Song } from "../types";
@@ -20,7 +21,7 @@ export function choreoDurationMs(choreo: Choreography): number {
   const lastFrame = choreo.frames.at(-1)?.timeMs ?? 0;
   const lastMove = choreo.moves.at(-1)?.timeMs ?? 0;
   const duration = Math.max(lastFrame, lastMove);
-  if (!(duration > 0)) throw new Error("Die Choreografie hat keine Länge.");
+  if (!(duration > 0)) throw new Error(t("editor.regenerate.noLength"));
   return duration;
 }
 

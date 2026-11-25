@@ -1158,6 +1158,13 @@ Verfeinerung mit 1 BPM daneben um ~80 ms); so bleibt die Phase am Abschnittsanfa
 unter 50 ms. Ergebnis: erster Beat ab `fromMs` (ganze ms) oder `null` (Stille,
 weniger als zwei Beats im Fenster). Die Feinabstimmung bleibt dem Sync-Test überlassen.
 
+## Sprache (i18n)
+
+UI-Texte liegen in `src/lib/i18n/de/*.ts` (Quelle der Wahrheit) und `src/lib/i18n/en/*.ts`; ein
+fehlender Schlüssel in `en` scheitert am Typecheck. Die Sprache ist die Einstellung `language`
+(Standard `de`, kein Auto-Detect). In Komponenten `useT()`, in Logik `t()` / `tn()` (liest die
+Sprache beim Aufruf, nie auf Modulebene verwenden). Zahlenformate über `localeOf()`.
+
 ## Routing-Konventionen
 
 Dateibasiert in `src/routes/`. Einzige Root-Hülle ist `__root.tsx` (`<Outlet />` darin

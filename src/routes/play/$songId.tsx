@@ -4,6 +4,7 @@ import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { PlaceholderPage } from "@/components/PlaceholderPage";
 import { GameScreen } from "@/components/play/GameScreen";
 import { useSongLibrary } from "@/hooks/useSongLibrary";
+import { useT } from "@/lib/i18n";
 import { useSongTheme } from "@/hooks/useSongTheme";
 import { parseSimParams } from "@/lib/game/simulatedPlayer";
 import { parsePlayMode } from "@/lib/motion";
@@ -13,6 +14,7 @@ export const Route = createFileRoute("/play/$songId")({
 });
 
 function Play() {
+  const t = useT();
   const { songId } = Route.useParams();
   const search = useSearch({ strict: false }) as Record<string, unknown>;
   const { songs, loading } = useSongLibrary();
@@ -35,15 +37,15 @@ function Play() {
 
   if (!song) {
     return loading ? null : (
-      <PlaceholderPage title="Song nicht gefunden">
-        Dieser Song ist nicht in deiner Bibliothek.
+      <PlaceholderPage title={t("shell.route.noSong.title")}>
+        {t("shell.route.noSong.body")}
       </PlaceholderPage>
     );
   }
   if (song.choreo.moves.length === 0) {
     return (
-      <PlaceholderPage title="Keine Choreografie">
-        Für diesen Song gibt es noch keine Moves.
+      <PlaceholderPage title={t("shell.route.noMoves.title")}>
+        {t("shell.route.noMoves.body")}
       </PlaceholderPage>
     );
   }

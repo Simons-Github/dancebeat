@@ -1,5 +1,8 @@
-export const DECODE_ERROR_MESSAGE =
-  "Diese Datei lässt sich nicht abspielen. Bitte MP3, M4A, WAV oder OGG verwenden.";
+import { t } from "@/lib/i18n";
+import { deSettings } from "@/lib/i18n/de/settings";
+
+/** German reference text of the decode error (tests); the thrown error follows the UI language. */
+export const DECODE_ERROR_MESSAGE = deSettings["settings.beat.decodeError"];
 
 /** Minimal view of a decoded buffer; keeps the analysis testable without an AudioContext. */
 export interface DecodedAudio {
@@ -47,7 +50,7 @@ export async function analyzeAudio(
   try {
     buf = await decode(await file.arrayBuffer());
   } catch {
-    throw new Error(DECODE_ERROR_MESSAGE);
+    throw new Error(t("settings.beat.decodeError"));
   }
   const data = buf.getChannelData(0);
   const envelope = onsetEnvelope(data, buf.sampleRate);

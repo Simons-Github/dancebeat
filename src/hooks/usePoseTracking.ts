@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 
+import { t } from "@/lib/i18n";
+
 import { BRIGHTNESS_INTERVAL_MS, createBrightnessMeter, isLowLight } from "@/lib/brightness";
 import {
   cameraError,
@@ -182,7 +184,10 @@ export function usePoseTracking(opts: PoseTrackingOptions) {
         // Without permission the ids are empty; such entries cannot be picked.
         const inputs = all.filter((d) => d.kind === "videoinput" && d.deviceId);
         setCameras(
-          inputs.map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Kamera ${i + 1}` })),
+          inputs.map((d, i) => ({
+            deviceId: d.deviceId,
+            label: d.label || t("settings.camera.fallbackLabel", { n: i + 1 }),
+          })),
         );
         // Unreachable and not even listed any more: gone for good, not just a short drop-out.
         if (fellBack && cameraId && !inputs.some((d) => d.deviceId === cameraId)) {

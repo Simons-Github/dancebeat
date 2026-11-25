@@ -1,3 +1,4 @@
+import { t } from "./i18n";
 import { bodyCheck, isVisible } from "./pose";
 import type { Landmark } from "./types";
 
@@ -52,18 +53,18 @@ export function isCentered(lm: Landmark[] | null): boolean {
 }
 
 export function hintFor(lm: Landmark[] | null, parts: BodyStatus["parts"], ready: boolean): string {
-  if (!lm) return "Stell dich vor die Kamera. Ich sehe dich noch nicht.";
+  if (!lm) return t("settings.body.hint.none");
   if (!parts.ankles || !parts.knees) {
     return parts.ankles
-      ? "Knie nicht im Bild. Geh einen Schritt zurück."
-      : "Füße nicht im Bild. Geh einen Schritt zurück.";
+      ? t("settings.body.hint.kneesMissing")
+      : t("settings.body.hint.feetMissing");
   }
-  if (!parts.shoulders || !parts.hips) return "Oberkörper nicht im Bild. Geh einen Schritt zurück.";
+  if (!parts.shoulders || !parts.hips) return t("settings.body.hint.torsoMissing");
   const distance = distanceOf(lm);
-  if (distance === "near") return "Geh einen Schritt zurück.";
-  if (distance === "far") return "Komm einen Schritt näher.";
-  if (!isCentered(lm)) return "Stell dich in die Bildmitte.";
-  return ready ? "Alles bereit. Los geht's!" : "Super, bleib kurz so stehen.";
+  if (distance === "near") return t("settings.body.hint.near");
+  if (distance === "far") return t("settings.body.hint.far");
+  if (!isCentered(lm)) return t("settings.body.hint.center");
+  return ready ? t("settings.body.hint.ready") : t("settings.body.hint.hold");
 }
 
 /** Stateful body check: feed one landmark set per processed frame. No React, no timers. */
@@ -156,29 +157,29 @@ export interface StatusRow {
 /** Checklist lines for the setup screen. `body` is null until the first frame was analysed. */
 export function statusRows(body: BodyStatus | null, lowLight: boolean): StatusRow[] {
   const seen = body !== null;
-  let bodyRow: StatusRow = { id: "body", state: "pending", label: "Kopf bis Fuß sichtbar" };
+  let bodyRow: StatusRow = { id: "body", state: "pending", label: t("settings.body.row.visible") };
   if (body) {
     if (body.allVisible) bodyRow = { ...bodyRow, state: "ok" };
     else if (!body.parts.ankles)
-      bodyRow = { ...bodyRow, state: "warn", label: "Füße nicht im Bild" };
+      bodyRow = { ...bodyRow, state: "warn", label: t("settings.body.row.feet") };
     else if (!body.parts.knees)
-      bodyRow = { ...bodyRow, state: "warn", label: "Knie nicht im Bild" };
-    else bodyRow = { ...bodyRow, state: "warn", label: "Oberkörper nicht im Bild" };
+      bodyRow = { ...bodyRow, state: "warn", label: t("settings.body.row.knees") };
+    else bodyRow = { ...bodyRow, state: "warn", label: t("settings.body.row.torso") };
   }
   const light: StatusRow = lowLight
-    ? { id: "light", state: "warn", label: "Mehr Licht nötig" }
-    : { id: "light", state: seen ? "ok" : "pending", label: "Genug Licht" };
+    ? { id: "light", state: "warn", label: t("settings.body.row.lightLow") }
+    : { id: "light", state: seen ? "ok" : "pending", label: t("settings.body.row.light") };
   const d = body?.distance ?? "unknown";
   const distance: StatusRow =
     d === "ok"
-      ? { id: "distance", state: "ok", label: "Abstand passt" }
+      ? { id: "distance", state: "ok", label: t("settings.body.row.distanceOk") }
       : d === "near"
-        ? { id: "distance", state: "warn", label: "Zu nah dran" }
+        ? { id: "distance", state: "warn", label: t("settings.body.row.near") }
         : d === "far"
-          ? { id: "distance", state: "warn", label: "Zu weit weg" }
-          : { id: "distance", state: "pending", label: "Abstand passt" };
+          ? { id: "distance", state: "warn", label: t("settings.body.row.far") }
+          : { id: "distance", state: "pending", label: t("settings.body.row.distanceOk") };
   return [bodyRow, light, distance];
 }
 
 /** Extra advice for dark rooms; shown next to the body hint. */
-export const LIGHT_HINT = "Mehr Licht: schalte eine Lampe an oder stell dich vor ein Fenster.";
+export const lightHint = () => t("settings.setup.lightHint");
