@@ -1,0 +1,76 @@
+{
+  "version": 1,
+  "id": "demo-gold-in-my-pocket",
+  "title": "Gold in My Pocket",
+  "artist": "DanceBeat Original",
+  "audio": "Gold_in_My_Pocket.mp3",
+  "palette": 4,
+  "difficulty": 2,
+  "bpm": 121.99,
+  "beatPhaseMs": 310,
+  "durationMs": 173923,
+  "sections": [
+    {
+      "kind": "intro",
+      "beats": 16
+    },
+    {
+      "kind": "verse",
+      "beats": 32
+    },
+    {
+      "kind": "prechorus",
+      "beats": 40
+    },
+    {
+      "kind": "chorus",
+      "beats": 24
+    },
+    {
+      "kind": "verse",
+      "beats": 36
+    },
+    {
+      "kind": "prechorus",
+      "beats": 20
+    },
+    {
+      "kind": "chorus",
+      "beats": 60
+    },
+    {
+      "kind": "bridge",
+      "beats": 28
+    },
+    {
+      "kind": "prechorus",
+      "beats": 16
+    },
+    {
+      "kind": "chorus",
+      "beats": 56
+    },
+    {
+      "kind": "outro",
+      "beats": 16
+    }
+  ],
+  "phrases": {
+    "intro": "auto",
+    "verse": "auto",
+    "prechorus": "auto",
+    "chorus": "auto",
+    "bridge": "auto",
+    "outro": "auto"
+  },
+  "gold": [
+    {
+      "section": 6,
+      "beat": 56
+    },
+    {
+      "section": 9,
+      "beat": 52
+    }
+  ]
+}

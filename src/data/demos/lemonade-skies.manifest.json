@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "id": "demo-lemonade-skies",
+  "title": "Lemonade Skies",
+  "artist": "DanceBeat Original",
+  "audio": "Lemonade_Skies.mp3",
+  "palette": 1,
+  "difficulty": 1,
+  "bpm": 110.96,
+  "beatPhaseMs": 155,
+  "durationMs": 149838,
+  "sections": [
+    {
+      "kind": "intro",
+      "beats": 16
+    },
+    {
+      "kind": "verse",
+      "beats": 48
+    },
+    {
+      "kind": "chorus",
+      "beats": 48
+    },
+    {
+      "kind": "verse",
+      "beats": 44
+    },
+    {
+      "kind": "chorus",
+      "beats": 72
+    },
+    {
+      "kind": "bridge",
+      "beats": 8
+    },
+    {
+      "kind": "chorus",
+      "beats": 28
+    },
+    {
+      "kind": "outro",
+      "beats": 8
+    }
+  ],
+  "phrases": {
+    "intro": "auto",
+    "verse": "auto",
+    "chorus": "auto",
+    "bridge": "auto",
+    "outro": "auto"
+  },
+  "gold": [
+    {
+      "section": 4,
+      "beat": 68
+    },
+    {
+      "section": 6,
+      "beat": 24
+    }
+  ]
+}

@@ -1,0 +1,80 @@
+{
+  "version": 1,
+  "id": "demo-rise-until-the-morning",
+  "title": "Rise Until The Morning",
+  "artist": "DanceBeat Original",
+  "audio": "Rise_Until_The_Morning.mp3",
+  "palette": 3,
+  "difficulty": 3,
+  "bpm": 128,
+  "beatPhaseMs": 120,
+  "durationMs": 173793,
+  "sections": [
+    {
+      "kind": "intro",
+      "beats": 20
+    },
+    {
+      "kind": "prechorus",
+      "beats": 16
+    },
+    {
+      "kind": "chorus",
+      "beats": 28
+    },
+    {
+      "kind": "verse",
+      "beats": 36
+    },
+    {
+      "kind": "chorus",
+      "beats": 32
+    },
+    {
+      "kind": "prechorus",
+      "beats": 32
+    },
+    {
+      "kind": "chorus",
+      "beats": 60
+    },
+    {
+      "kind": "bridge",
+      "beats": 40
+    },
+    {
+      "kind": "chorus",
+      "beats": 32
+    },
+    {
+      "kind": "prechorus",
+      "beats": 32
+    },
+    {
+      "kind": "chorus",
+      "beats": 28
+    },
+    {
+      "kind": "outro",
+      "beats": 8
+    }
+  ],
+  "phrases": {
+    "intro": "auto",
+    "verse": "auto",
+    "prechorus": "auto",
+    "chorus": "auto",
+    "bridge": "auto",
+    "outro": "auto"
+  },
+  "gold": [
+    {
+      "section": 6,
+      "beat": 56
+    },
+    {
+      "section": 10,
+      "beat": 24
+    }
+  ]
+}

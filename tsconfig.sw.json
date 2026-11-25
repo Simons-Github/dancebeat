@@ -1,0 +1,10 @@
+{
+  // Service worker: WebWorker lib instead of DOM (src/sw/sw.ts is excluded from tsconfig.json).
+  "extends": "./tsconfig.json",
+  "include": ["src/sw/**/*.ts"],
+  "exclude": [],
+  "compilerOptions": {
+    "lib": ["ES2022", "WebWorker"],
+    "types": []
+  }
+}
