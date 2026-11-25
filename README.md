@@ -4,7 +4,7 @@
 
 A dance game for one player that runs entirely in the browser. You put your phone down, step back and dance along. The front camera tracks your pose and the game scores every move in real time.
 
-**Live demo:** [dancebeat.berger-labs.com](https://dancebeat.berger-labs.com). No account needed. The interface is in German.
+**Live demo:** [dancebeat.berger-labs.com](https://dancebeat.berger-labs.com). No account needed. The interface is in German or English; switch the language in the settings.
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/screenshots/hero-dark.png">
@@ -19,6 +19,7 @@ A dance game for one player that runs entirely in the browser. You put your phon
 - Setup check for framing, light and full body before each song
 - Motion mode without the camera: hold the phone and the motion sensor measures your movement on the beat
 - Choreography editor, latency calibration, installable and playable offline
+- Interface in German or English
 
 <p>
   <img src="docs/screenshots/setup.png" alt="Setup check before the song" width="32%">
